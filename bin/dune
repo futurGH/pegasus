@@ -1,4 +1,5 @@
 (executable
  (public_name pegasus)
  (name main)
+ (package pegasus)
  (libraries pegasus))

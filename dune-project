@@ -12,6 +12,13 @@
 
 (package
  (name pegasus)
- (synopsis "An atproto Personal Data Server in OCaml")
+ (synopsis "An atproto Personal Data Server implementation")
  (description "Eventually")
+ (allow_empty)
+ (depends ocaml dune))
+
+(package
+ (name mist)
+ (synopsis "A Merkle Search Tree implementation")
+ (allow_empty)
  (depends ocaml dune))
