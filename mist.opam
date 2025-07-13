@@ -9,6 +9,8 @@ bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.14"}
+  "cid" {>= "0.1.0"}
+  "alcotest" {with-test}
   "odoc" {with-doc}
 ]
 build: [

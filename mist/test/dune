@@ -1,3 +1,4 @@
 (test
  (name test_mist)
- (package mist))
+ (package mist)
+ (libraries mist alcotest))

@@ -1,2 +1,4 @@
 (library
- (name mist))
+ (name mist)
+ (modules node util)
+ (libraries cid sha str))

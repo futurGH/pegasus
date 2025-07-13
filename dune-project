@@ -21,4 +21,4 @@
  (name mist)
  (synopsis "A Merkle Search Tree implementation")
  (allow_empty)
- (depends ocaml dune))
+ (depends ocaml dune (cid (>= 0.1.0)) (alcotest :with-test)))
