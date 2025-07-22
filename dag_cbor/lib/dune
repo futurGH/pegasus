@@ -1,0 +1,3 @@
+(library
+ (name dag_cbor)
+ (libraries cid))

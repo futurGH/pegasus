@@ -1,0 +1,4 @@
+(test
+ (name test_dag_cbor)
+ (package dag_cbor)
+ (libraries dag_cbor alcotest))
