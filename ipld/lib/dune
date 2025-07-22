@@ -1,2 +1,3 @@
 (library
- (name ipld))
+ (name ipld)
+ (libraries digestif multibase))

@@ -1,5 +1,5 @@
-open Dag_cbor
-module StringMap = Map.Make (String)
+open Ipld
+module StringMap = Dag_cbor.StringMap
 
 let to_base_16 bytes =
   let hex_of_nibble n =
@@ -21,29 +21,31 @@ let to_base_16 bytes =
 let test_encode_primitives () =
   let cases = Hashtbl.create 9 in
   Hashtbl.add cases
-    (to_base_16 (encode (`String "hello world!")))
+    (to_base_16 (Dag_cbor.encode (`String "hello world!")))
     (Bytes.of_string "6c68656c6c6f20776f726c6421") ;
   Hashtbl.add cases
-    (to_base_16 (encode (`String "おはようございます☀️")))
+    (to_base_16 (Dag_cbor.encode (`String "おはようございます☀️")))
     (Bytes.of_string
        "7821e3818ae381afe38288e38186e38194e38196e38184e381bee38199e29880efb88f" ) ;
   Hashtbl.add cases
-    (to_base_16 (encode (`Integer 42L)))
+    (to_base_16 (Dag_cbor.encode (`Integer 42L)))
     (Bytes.of_string "182a") ;
   Hashtbl.add cases
-    (to_base_16 (encode (`Float 3.14)))
+    (to_base_16 (Dag_cbor.encode (`Float 3.14)))
     (Bytes.of_string "fb40091eb851eb851f") ;
   Hashtbl.add cases
-    (to_base_16 (encode (`Integer 9007199254740991L)))
+    (to_base_16 (Dag_cbor.encode (`Integer 9007199254740991L)))
     (Bytes.of_string "1b001fffffffffffff") ;
   Hashtbl.add cases
-    (to_base_16 (encode (`Integer (-9007199254740991L))))
+    (to_base_16 (Dag_cbor.encode (`Integer (-9007199254740991L))))
     (Bytes.of_string "3b001ffffffffffffe") ;
-  Hashtbl.add cases (to_base_16 (encode (`Boolean true))) (Bytes.of_string "f5") ;
   Hashtbl.add cases
-    (to_base_16 (encode (`Boolean false)))
+    (to_base_16 (Dag_cbor.encode (`Boolean true)))
+    (Bytes.of_string "f5") ;
+  Hashtbl.add cases
+    (to_base_16 (Dag_cbor.encode (`Boolean false)))
     (Bytes.of_string "f4") ;
-  Hashtbl.add cases (to_base_16 (encode `Null)) (Bytes.of_string "f6") ;
+  Hashtbl.add cases (to_base_16 (Dag_cbor.encode `Null)) (Bytes.of_string "f6") ;
   cases
   |> Hashtbl.iter (fun key value ->
          Alcotest.(check bytes)
@@ -58,13 +60,11 @@ let test_round_trip () =
     with
     | Ok cid ->
         cid
-    | Error (`Msg msg) ->
-        failwith ("CID parse error: " ^ msg)
-    | Error (`Unsupported _) ->
-        failwith "CID parse error: unsupported encoding"
+    | Error msg ->
+        failwith msg
   in
   let test_bytes = Bytes.of_string "lorem ipsum sit dolor amet" in
-  let bee_array : value list =
+  let bee_array : Dag_cbor.value list =
     [ `String
         "According to all known laws of aviation, there is no way that a bee \
          should be able to fly."
@@ -125,8 +125,8 @@ let test_round_trip () =
     |> StringMap.add "bee" (`Array bee_array)
   in
   let original = `Map object_map in
-  let encoded = encode original in
-  let decoded = decode encoded in
+  let encoded = Dag_cbor.encode original in
+  let decoded = Dag_cbor.decode encoded in
   Alcotest.(check bool)
     "round trip preserves structure" true (original = decoded)
 
@@ -139,7 +139,7 @@ let test_atproto_post_records () =
     |> StringMap.add "text" (`String "exclusively on bluesky")
   in
   let record1 = `Map record1_map in
-  let encoded1 = encode record1 in
+  let encoded1 = Dag_cbor.encode record1 in
   (* We can't easily test the CID creation without additional dependencies,
      so we'll just verify it encodes without error *)
   Alcotest.(check bool)
@@ -155,7 +155,7 @@ let test_atproto_post_records () =
            "おはようございます☀️\n今日の日の出です\n寒かったけど綺麗でしたよ✨\n\n＃写真\n＃日の出\n＃日常\n＃キリトリセカイ" )
   in
   let record2 = `Map record2_map in
-  let encoded2 = encode record2 in
+  let encoded2 = Dag_cbor.encode record2 in
   Alcotest.(check bool)
     "atproto record 2 encodes" true
     (Bytes.length encoded2 > 0)
@@ -163,10 +163,10 @@ let test_atproto_post_records () =
 let test_invalid_numbers () =
   Alcotest.check_raises "encode rejects out of range positive integer"
     (Invalid_argument "write_uint_53: value out of range (0-9007199254740991)")
-    (fun () -> ignore (encode (`Integer 9007199254740992L)) ) ;
+    (fun () -> ignore (Dag_cbor.encode (`Integer 9007199254740992L)) ) ;
   Alcotest.check_raises "encode rejects out of range negative integer"
     (Invalid_argument "write_uint_53: value out of range (0-9007199254740991)")
-    (fun () -> ignore (encode (`Integer (-9007199254740992L))) )
+    (fun () -> ignore (Dag_cbor.encode (`Integer (-9007199254740992L))) )
 
 let test_invalid_link_and_bytes () =
   let invalid_link_map =
@@ -174,25 +174,25 @@ let test_invalid_link_and_bytes () =
   in
   Alcotest.check_raises "encode rejects non-CID $link value"
     (Invalid_argument "Object contains $link but value is not a cid-link")
-    (fun () -> ignore (encode (`Map invalid_link_map)) ) ;
+    (fun () -> ignore (Dag_cbor.encode (`Map invalid_link_map)) ) ;
   let invalid_bytes_map =
     StringMap.add "$bytes" (`Integer 123L) StringMap.empty
   in
   Alcotest.check_raises "encode rejects non-bytes $bytes value"
     (Invalid_argument "Object contains $bytes but value is not bytes")
-    (fun () -> ignore (encode (`Map invalid_bytes_map)) )
+    (fun () -> ignore (Dag_cbor.encode (`Map invalid_bytes_map)) )
 
 let test_decode_multiple_objects () =
   let obj1 = `Map (StringMap.add "foo" (`Boolean true) StringMap.empty) in
   let obj2 = `Map (StringMap.add "bar" (`Boolean false) StringMap.empty) in
-  let encoded1 = encode obj1 in
-  let encoded2 = encode obj2 in
+  let encoded1 = Dag_cbor.encode obj1 in
+  let encoded2 = Dag_cbor.encode obj2 in
   let combined = Bytes.create (Bytes.length encoded1 + Bytes.length encoded2) in
   Bytes.blit encoded1 0 combined 0 (Bytes.length encoded1) ;
   Bytes.blit encoded2 0 combined (Bytes.length encoded1) (Bytes.length encoded2) ;
   (* Test that we can decode the first object and get remainder *)
-  let decoded1, remainder = decode_first combined in
+  let decoded1, remainder = Dag_cbor.Decoder.decode_first combined in
   Alcotest.(check bool) "first object decoded correctly" true (decoded1 = obj1) ;
-  let decoded2, final_remainder = decode_first remainder in
+  let decoded2, final_remainder = Dag_cbor.Decoder.decode_first remainder in
   Alcotest.(check bool) "second object decoded correctly" true (decoded2 = obj2) ;
   Alcotest.(check int) "no remaining bytes" 0 (Bytes.length final_remainder)

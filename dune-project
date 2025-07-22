@@ -28,4 +28,4 @@
  (synopsis "A DASL-compliant implementation of some IPLD formats")
  (description "Currently includes DAG-CBOR and CID v1")
  (allow_empty)
- (depends ocaml dune (digestif (>= 1.1.4)) (alcotest :with-test)))
+ (depends ocaml dune (digestif (>= 1.2.0)) (multibase (>= 0.1.0)) (alcotest :with-test)))

@@ -1,4 +1,19 @@
 let () =
+  Alcotest.run "cid"
+    [ ( "cid encoding"
+      , [ ("encode", `Quick, Test_cid.test_encode)
+        ; ("encode_empty_string", `Quick, Test_cid.test_encode_empty_string) ]
+      )
+    ; ( "cid decoding"
+      , [ ("decode", `Quick, Test_cid.test_decode)
+        ; ("decode_empty_string", `Quick, Test_cid.test_decode_empty_string) ]
+      )
+    ; ( "cid creation"
+      , [ ("create", `Quick, Test_cid.test_create)
+        ; ("create_empty_string", `Quick, Test_cid.test_create_empty_string) ]
+      ) ]
+
+let () =
   Alcotest.run "dag-cbor"
     [ ( "dag-cbor encoding"
       , [ ("encode_primitives", `Quick, Test_dag_cbor.test_encode_primitives)

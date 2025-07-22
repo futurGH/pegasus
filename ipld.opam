@@ -10,7 +10,8 @@ bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.14"}
-  "digestif" {>= "1.1.4"}
+  "digestif" {>= "1.2.0"}
+  "multibase" {>= "0.1.0"}
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]
