@@ -1,0 +1,4 @@
+(test
+ (name test)
+ (package ipld)
+ (libraries ipld alcotest))

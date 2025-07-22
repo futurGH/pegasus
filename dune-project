@@ -24,7 +24,8 @@
  (depends ocaml dune (cborl (>= 0.1.0)) (cid (>= 0.1.0)) lwt (multihash (>= 0.1.0)) (alcotest :with-test)))
 
 (package
- (name dag_cbor)
- (synopsis "An IPLD DAG-CBOR implementation")
+ (name ipld)
+ (synopsis "A DASL-compliant implementation of some IPLD formats")
+ (description "Currently includes DAG-CBOR and CID v1")
  (allow_empty)
- (depends ocaml dune (cid (>= 0.1.0)) (alcotest :with-test)))
+ (depends ocaml dune (digestif (>= 1.1.4)) (alcotest :with-test)))
