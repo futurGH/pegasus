@@ -248,3 +248,15 @@ let test_create_empty_string () =
   Alcotest.(check int) "codec" 113 cid.codec ;
   Alcotest.(check bytes) "digest" (bytes_from_list []) cid.digest.contents ;
   Alcotest.(check bytes) "bytes" (bytes_from_list [1; 113; 18; 0]) cid.bytes
+
+let () =
+  Alcotest.run "cid"
+    [ ( "cid encoding"
+      , [ ("encode", `Quick, test_encode)
+        ; ("encode_empty_string", `Quick, test_encode_empty_string) ] )
+    ; ( "cid decoding"
+      , [ ("decode", `Quick, test_decode)
+        ; ("decode_empty_string", `Quick, test_decode_empty_string) ] )
+    ; ( "cid creation"
+      , [ ("create", `Quick, test_create)
+        ; ("create_empty_string", `Quick, test_create_empty_string) ] ) ]
