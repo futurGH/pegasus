@@ -1,5 +1,3 @@
-open Ipld
-
 let bytes_from_list ints =
   let buf = Buffer.create (List.length ints) in
   List.iter (Buffer.add_uint8 buf) ints ;

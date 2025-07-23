@@ -1,4 +1,3 @@
-open Ipld
 module StringMap = Dag_cbor.StringMap
 
 let rec stringify_map m =
