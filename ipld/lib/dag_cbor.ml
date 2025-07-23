@@ -144,25 +144,12 @@ module Encoder = struct
         write_type_and_argument t 4 (Int64.of_int len) ;
         Array.iter (write_value t) lst
     | `Map m ->
-        if StringMap.mem "$link" m then
-          match StringMap.find "$link" m with
-          | `Link cid ->
-              write_cid t cid
-          | _ ->
-              invalid_arg "Object contains $link but value is not a cid-link"
-        else if StringMap.mem "$bytes" m then
-          match StringMap.find "$bytes" m with
-          | `Bytes b ->
-              write_bytes t b
-          | _ ->
-              invalid_arg "Object contains $bytes but value is not bytes"
-        else
-          let len = StringMap.cardinal m in
-          write_type_and_argument t 5 (Int64.of_int len) ;
-          ordered_map_keys m
-          |> List.iter (fun k ->
-                 write_string t k ;
-                 write_value t (StringMap.find k m) )
+        let len = StringMap.cardinal m in
+        write_type_and_argument t 5 (Int64.of_int len) ;
+        ordered_map_keys m
+        |> List.iter (fun k ->
+               write_string t k ;
+               write_value t (StringMap.find k m) )
     | `Link cid ->
         write_cid t cid
 

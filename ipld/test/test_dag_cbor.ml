@@ -26,7 +26,10 @@ and stringify_ipld_value (value : Dag_cbor.value) =
         |> List.map (fun v -> Format.sprintf "%s" (stringify_ipld_value v))
         |> String.concat ", " )
   | `Link cid ->
-      Format.sprintf "\"%s\"" (Result.get_ok @@ Cid.to_string cid)
+      Format.sprintf "%s"
+        (stringify_map
+           (StringMap.singleton "$link"
+              (`String (Result.get_ok (Cid.to_string cid))) ) )
   | `Null ->
       Format.sprintf "null"
 
@@ -187,15 +190,6 @@ let test_round_trip () =
     "round trip preserves structure" original decoded
 
 let test_atproto_post_records () =
-  let record1_embed_images_0_image_ref : Dag_cbor.value StringMap.t =
-    StringMap.empty
-    |> StringMap.add "$link"
-         (`Link
-           (Result.get_ok
-              (Cid.of_string
-                 "bafkreic6hvmy3ymbo25wxsvylu77r57uwhtnviu7vmhfsns3ab4xfal5ou" ) )
-           )
-  in
   let record1_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
     StringMap.(
       empty |> add "height" (`Integer 885L) |> add "width" (`Integer 665L) )
@@ -204,7 +198,12 @@ let test_atproto_post_records () =
     StringMap.(
       empty
       |> add "$type" (`String "blob")
-      |> add "ref" (`Map record1_embed_images_0_image_ref)
+      |> add "ref"
+           (`Link
+             (Result.get_ok
+                (Cid.of_string
+                   "bafkreic6hvmy3ymbo25wxsvylu77r57uwhtnviu7vmhfsns3ab4xfal5ou" ) )
+             )
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 645553L) )
   in
@@ -239,16 +238,6 @@ let test_atproto_post_records () =
     "atproto record 1 encodes correctly"
     "bafyreicbb3p4hmtm7iw3k7kiydzqp7qhufq3jdc5sbc4gxa4mxqd6bywba"
     Cid.(create 0x71 encoded1 |> to_string |> Result.get_ok) ;
-  let record2_embed_images_0_image_ref : Dag_cbor.value StringMap.t =
-    StringMap.(
-      empty
-      |> add "$link"
-           (`Link
-             ( Result.get_ok
-             @@ Cid.of_string
-                  "bafkreibdqy5qcefkcuvopnkt2tip5wzouscmp6duz377cneknktnsgfewe"
-             ) ) )
-  in
   let record2_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
     StringMap.(
       empty |> add "height" (`Integer 2000L) |> add "width" (`Integer 1500L) )
@@ -257,7 +246,12 @@ let test_atproto_post_records () =
     StringMap.(
       empty
       |> add "$type" (`String "blob")
-      |> add "ref" (`Map record2_embed_images_0_image_ref)
+      |> add "ref"
+           (`Link
+             ( Result.get_ok
+             @@ Cid.of_string
+                  "bafkreibdqy5qcefkcuvopnkt2tip5wzouscmp6duz377cneknktnsgfewe"
+             ) )
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 531257L) )
   in
@@ -376,20 +370,6 @@ let test_invalid_numbers () =
         9007199254740991])" ) (fun () ->
       ignore (Dag_cbor.encode (`Integer (-9007199254740992L))) )
 
-let test_invalid_link_and_bytes () =
-  let invalid_link_map =
-    StringMap.add "$link" (`Integer 123L) StringMap.empty
-  in
-  Alcotest.check_raises "encode rejects non-CID $link value"
-    (Invalid_argument "Object contains $link but value is not a cid-link")
-    (fun () -> ignore (Dag_cbor.encode (`Map invalid_link_map)) ) ;
-  let invalid_bytes_map =
-    StringMap.add "$bytes" (`Integer 123L) StringMap.empty
-  in
-  Alcotest.check_raises "encode rejects non-bytes $bytes value"
-    (Invalid_argument "Object contains $bytes but value is not bytes")
-    (fun () -> ignore (Dag_cbor.encode (`Map invalid_bytes_map)) )
-
 let test_decode_multiple_objects () =
   let obj1 = `Map (StringMap.add "foo" (`Boolean true) StringMap.empty) in
   let obj2 = `Map (StringMap.add "bar" (`Boolean false) StringMap.empty) in
@@ -411,5 +391,4 @@ let () =
         ; ("round_trip", `Quick, test_round_trip)
         ; ("atproto_records", `Quick, test_atproto_post_records)
         ; ("invalid_numbers", `Quick, test_invalid_numbers)
-        ; ("invalid_link_bytes", `Quick, test_invalid_link_and_bytes)
         ; ("decode_multiple", `Quick, test_decode_multiple_objects) ] ) ]
