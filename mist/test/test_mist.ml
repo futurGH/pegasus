@@ -9,7 +9,7 @@ let test_leading_zeros () =
   cases
   |> Hashtbl.iter (fun key value ->
          Alcotest.(check int)
-           ("same zeros on hash " ^ key)
+           ("leading zeros on hash " ^ key)
            value
            (leading_zeros_on_hash key) )
 
