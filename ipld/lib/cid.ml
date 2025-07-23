@@ -107,11 +107,11 @@ let of_string str =
 let to_string cid =
   match Multibase.encode `Base32 (Bytes.to_string cid.bytes) with
   | Ok str ->
-      Ok str
+      str
   | Error (`Msg msg) ->
-      Error msg
+      failwith msg
   | Error (`Unsupported t) ->
-      Error
+      failwith
         (Printf.sprintf "Unsupported multibase %s"
            (Multibase.Encoding.to_string t) )
 
@@ -130,18 +130,10 @@ let to_bytes cid =
   Buffer.add_bytes buf cid.bytes ;
   Buffer.to_bytes buf
 
-let compare a b =
-  match [to_string a; to_string b] with
-  | [Ok a; Ok b] ->
-      String.compare a b
-  | _ ->
-      failwith "CID comparison failed"
+let as_cid str = Result.get_ok @@ of_string str
 
-let equal a b =
-  match [to_string a; to_string b] with
-  | [Ok a; Ok b] ->
-      String.equal a b
-  | _ ->
-      failwith "CID comparison failed"
+let compare a b = String.compare (to_string a) (to_string b)
+
+let equal a b = String.equal (to_string a) (to_string b)
 
 let hash = Hashtbl.hash

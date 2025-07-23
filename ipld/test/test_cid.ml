@@ -235,10 +235,9 @@ let test_decode_empty_string () =
   Alcotest.(check bytes) "bytes" (bytes_from_list [1; 113; 18; 0]) cid.bytes
 
 let test_create () =
-  let cid = Cid.(create Dcbor (Bytes.of_string "abc")) in
-  let str = Result.get_ok (Cid.to_string cid) in
+  let cid = Cid.(create Dcbor (Bytes.of_string "abc") |> to_string) in
   Alcotest.(check string)
-    "digest" "bafyreif2pall7dybz7vecqka3zo24irdwabwdi4wc55jznaq75q7eaavvu" str
+    "digest" "bafyreif2pall7dybz7vecqka3zo24irdwabwdi4wc55jznaq75q7eaavvu" cid
 
 let test_create_empty_string () =
   let cid = Cid.(create_empty Dcbor) in

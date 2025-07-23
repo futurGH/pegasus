@@ -28,8 +28,7 @@ and stringify_ipld_value (value : Dag_cbor.value) =
   | `Link cid ->
       Format.sprintf "%s"
         (stringify_map
-           (StringMap.singleton "$link"
-              (`String (Result.get_ok (Cid.to_string cid))) ) )
+           (StringMap.singleton "$link" (`String (Cid.to_string cid))) )
   | `Null ->
       Format.sprintf "null"
 
@@ -52,7 +51,7 @@ let rec ipld_value_eq a b =
   | `Array a, `Array b ->
       Array.for_all2 ipld_value_eq a b
   | `Link a, `Link b ->
-      Result.get_ok @@ Cid.to_string a = Result.get_ok @@ Cid.to_string b
+      Cid.to_string a = Cid.to_string b
   | `Null, `Null ->
       true
   | _ ->
@@ -200,10 +199,10 @@ let test_atproto_post_records () =
       |> add "$type" (`String "blob")
       |> add "ref"
            (`Link
-             (Result.get_ok
-                (Cid.of_string
-                   "bafkreic6hvmy3ymbo25wxsvylu77r57uwhtnviu7vmhfsns3ab4xfal5ou" ) )
-             )
+              (Result.get_ok
+                 (Cid.of_string
+                    "bafkreic6hvmy3ymbo25wxsvylu77r57uwhtnviu7vmhfsns3ab4xfal5ou" ) )
+           )
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 645553L) )
   in
@@ -212,8 +211,8 @@ let test_atproto_post_records () =
       empty
       |> add "alt"
            (`String
-             "a photoshopped picture of kit with a microphone. kit is saying \
-              \"meow\"" )
+              "a photoshopped picture of kit with a microphone. kit is saying \
+               \"meow\"" )
       |> add "aspectRatio" (`Map record1_embed_images_0_aspect_ratio)
       |> add "image" (`Map record1_embed_images_0_image) )
   in
@@ -237,7 +236,7 @@ let test_atproto_post_records () =
   Alcotest.(check string)
     "atproto record 1 encodes correctly"
     "bafyreicbb3p4hmtm7iw3k7kiydzqp7qhufq3jdc5sbc4gxa4mxqd6bywba"
-    Cid.(create Dcbor encoded1 |> to_string |> Result.get_ok) ;
+    Cid.(create Dcbor encoded1 |> to_string) ;
   let record2_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
     StringMap.(
       empty |> add "height" (`Integer 2000L) |> add "width" (`Integer 1500L) )
@@ -248,10 +247,10 @@ let test_atproto_post_records () =
       |> add "$type" (`String "blob")
       |> add "ref"
            (`Link
-             ( Result.get_ok
-             @@ Cid.of_string
-                  "bafkreibdqy5qcefkcuvopnkt2tip5wzouscmp6duz377cneknktnsgfewe"
-             ) )
+              ( Result.get_ok
+              @@ Cid.of_string
+                   "bafkreibdqy5qcefkcuvopnkt2tip5wzouscmp6duz377cneknktnsgfewe"
+              ) )
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 531257L) )
   in
@@ -273,64 +272,64 @@ let test_atproto_post_records () =
       empty
       |> add "features"
            (`Array
-             [| `Map
-                  ( StringMap.empty
-                  |> StringMap.add "$type"
-                       (`String "app.bsky.richtext.facet#tag")
-                  |> StringMap.add "tag" (`String "写真") ) |] )
+              [| `Map
+                   ( StringMap.empty
+                   |> StringMap.add "$type"
+                        (`String "app.bsky.richtext.facet#tag")
+                   |> StringMap.add "tag" (`String "写真") ) |] )
       |> add "index"
            (`Map
-             ( StringMap.empty
-             |> StringMap.add "byteEnd" (`Integer 109L)
-             |> StringMap.add "byteStart" (`Integer 100L) ) ) )
+              ( StringMap.empty
+              |> StringMap.add "byteEnd" (`Integer 109L)
+              |> StringMap.add "byteStart" (`Integer 100L) ) ) )
   in
   let record2_facets_1 : Dag_cbor.value StringMap.t =
     StringMap.(
       empty
       |> add "features"
            (`Array
-             [| `Map
-                  ( StringMap.empty
-                  |> StringMap.add "$type"
-                       (`String "app.bsky.richtext.facet#tag")
-                  |> StringMap.add "tag" (`String "日の出") ) |] )
+              [| `Map
+                   ( StringMap.empty
+                   |> StringMap.add "$type"
+                        (`String "app.bsky.richtext.facet#tag")
+                   |> StringMap.add "tag" (`String "日の出") ) |] )
       |> add "index"
            (`Map
-             ( StringMap.empty
-             |> StringMap.add "byteEnd" (`Integer 122L)
-             |> StringMap.add "byteStart" (`Integer 110L) ) ) )
+              ( StringMap.empty
+              |> StringMap.add "byteEnd" (`Integer 122L)
+              |> StringMap.add "byteStart" (`Integer 110L) ) ) )
   in
   let record2_facets_2 : Dag_cbor.value StringMap.t =
     StringMap.(
       empty
       |> add "features"
            (`Array
-             [| `Map
-                  ( StringMap.empty
-                  |> StringMap.add "$type"
-                       (`String "app.bsky.richtext.facet#tag")
-                  |> StringMap.add "tag" (`String "日常") ) |] )
+              [| `Map
+                   ( StringMap.empty
+                   |> StringMap.add "$type"
+                        (`String "app.bsky.richtext.facet#tag")
+                   |> StringMap.add "tag" (`String "日常") ) |] )
       |> add "index"
            (`Map
-             ( StringMap.empty
-             |> StringMap.add "byteEnd" (`Integer 132L)
-             |> StringMap.add "byteStart" (`Integer 123L) ) ) )
+              ( StringMap.empty
+              |> StringMap.add "byteEnd" (`Integer 132L)
+              |> StringMap.add "byteStart" (`Integer 123L) ) ) )
   in
   let record2_facets_3 : Dag_cbor.value StringMap.t =
     StringMap.(
       empty
       |> add "features"
            (`Array
-             [| `Map
-                  ( StringMap.empty
-                  |> StringMap.add "$type"
-                       (`String "app.bsky.richtext.facet#tag")
-                  |> StringMap.add "tag" (`String "キリトリセカイ") ) |] )
+              [| `Map
+                   ( StringMap.empty
+                   |> StringMap.add "$type"
+                        (`String "app.bsky.richtext.facet#tag")
+                   |> StringMap.add "tag" (`String "キリトリセカイ") ) |] )
       |> add "index"
            (`Map
-             ( StringMap.empty
-             |> StringMap.add "byteEnd" (`Integer 157L)
-             |> StringMap.add "byteStart" (`Integer 133L) ) ) )
+              ( StringMap.empty
+              |> StringMap.add "byteEnd" (`Integer 157L)
+              |> StringMap.add "byteStart" (`Integer 133L) ) ) )
   in
   let record2_facets =
     [| `Map record2_facets_0
@@ -346,8 +345,8 @@ let test_atproto_post_records () =
       |> add "langs" (`Array [|`String "ja"|])
       |> add "text"
            (`String
-             "おはようございます☀️\n今日の日の出です\n寒かったけど綺麗でしたよ✨\n\n＃写真\n＃日の出\n＃日常\n＃キリトリセカイ"
-             )
+              "おはようございます☀️\n今日の日の出です\n寒かったけど綺麗でしたよ✨\n\n＃写真\n＃日の出\n＃日常\n＃キリトリセカイ"
+           )
       |> add "embed" (`Map record2_embed)
       |> add "facets" (`Array record2_facets) )
   in
@@ -356,7 +355,7 @@ let test_atproto_post_records () =
   Alcotest.(check string)
     "atproto record 2 encodes correctly"
     "bafyreiarjuvb3oppjnouaiasitt2tekkhhge6qsd4xegutblzgmihmnrhi"
-    Cid.(create Dcbor encoded2 |> to_string |> Result.get_ok)
+    Cid.(create Dcbor encoded2 |> to_string)
 
 let test_invalid_numbers () =
   Alcotest.check_raises "encode rejects out of range positive integer"
