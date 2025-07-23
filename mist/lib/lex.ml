@@ -71,3 +71,9 @@ let rec of_ipld (v : Dag_cbor.value) : value =
       `Link l
   | `Null ->
       `Null
+
+let to_cbor_block obj =
+  let ipld = to_ipld obj in
+  let encoded = Dag_cbor.encode ipld in
+  let cid = Cid.create Dcbor encoded in
+  (cid, encoded)
