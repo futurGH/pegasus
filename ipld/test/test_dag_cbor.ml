@@ -237,7 +237,7 @@ let test_atproto_post_records () =
   Alcotest.(check string)
     "atproto record 1 encodes correctly"
     "bafyreicbb3p4hmtm7iw3k7kiydzqp7qhufq3jdc5sbc4gxa4mxqd6bywba"
-    Cid.(create 0x71 encoded1 |> to_string |> Result.get_ok) ;
+    Cid.(create Dcbor encoded1 |> to_string |> Result.get_ok) ;
   let record2_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
     StringMap.(
       empty |> add "height" (`Integer 2000L) |> add "width" (`Integer 1500L) )
@@ -356,7 +356,7 @@ let test_atproto_post_records () =
   Alcotest.(check string)
     "atproto record 2 encodes correctly"
     "bafyreiarjuvb3oppjnouaiasitt2tekkhhge6qsd4xegutblzgmihmnrhi"
-    Cid.(create 0x71 encoded2 |> to_string |> Result.get_ok)
+    Cid.(create Dcbor encoded2 |> to_string |> Result.get_ok)
 
 let test_invalid_numbers () =
   Alcotest.check_raises "encode rejects out of range positive integer"

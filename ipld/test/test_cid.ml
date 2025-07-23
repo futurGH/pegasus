@@ -15,7 +15,7 @@ let test_encode () =
         failwith msg
   in
   Alcotest.(check int) "version" 1 cid.version ;
-  Alcotest.(check int) "codec" 113 cid.codec ;
+  Alcotest.(check bool) "codec" true (cid.codec = Cid.Dcbor) ;
   Alcotest.(check bytes)
     "digest"
     (bytes_from_list
@@ -102,7 +102,7 @@ let test_encode_empty_string () =
         failwith msg
   in
   Alcotest.(check int) "version" 1 cid.version ;
-  Alcotest.(check int) "codec" 113 cid.codec ;
+  Alcotest.(check bool) "codec" true (cid.codec = Cid.Dcbor) ;
   Alcotest.(check bytes) "digest" (bytes_from_list []) cid.digest.contents ;
   Alcotest.(check bytes) "bytes" (bytes_from_list [1; 113; 18; 0]) cid.bytes
 
@@ -148,7 +148,7 @@ let test_decode () =
   in
   let cid = Cid.decode buf in
   Alcotest.(check int) "version" 1 cid.version ;
-  Alcotest.(check int) "codec" 113 cid.codec ;
+  Alcotest.(check bool) "codec" true (cid.codec = Cid.Dcbor) ;
   Alcotest.(check bytes)
     "digest"
     (bytes_from_list
@@ -230,20 +230,20 @@ let test_decode_empty_string () =
   let buf = bytes_from_list [1; 113; 18; 0] in
   let cid = Cid.decode buf in
   Alcotest.(check int) "version" 1 cid.version ;
-  Alcotest.(check int) "codec" 113 cid.codec ;
+  Alcotest.(check bool) "codec" true (cid.codec = Cid.Dcbor) ;
   Alcotest.(check bytes) "digest" (bytes_from_list []) cid.digest.contents ;
   Alcotest.(check bytes) "bytes" (bytes_from_list [1; 113; 18; 0]) cid.bytes
 
 let test_create () =
-  let cid = Cid.create 113 (Bytes.of_string "abc") in
+  let cid = Cid.(create Dcbor (Bytes.of_string "abc")) in
   let str = Result.get_ok (Cid.to_string cid) in
   Alcotest.(check string)
     "digest" "bafyreif2pall7dybz7vecqka3zo24irdwabwdi4wc55jznaq75q7eaavvu" str
 
 let test_create_empty_string () =
-  let cid = Cid.create_empty 113 in
+  let cid = Cid.(create_empty Dcbor) in
   Alcotest.(check int) "version" 1 cid.version ;
-  Alcotest.(check int) "codec" 113 cid.codec ;
+  Alcotest.(check bool) "codec" true (cid.codec = Cid.Dcbor) ;
   Alcotest.(check bytes) "digest" (bytes_from_list []) cid.digest.contents ;
   Alcotest.(check bytes) "bytes" (bytes_from_list [1; 113; 18; 0]) cid.bytes
 

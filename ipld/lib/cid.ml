@@ -2,7 +2,7 @@ type t =
   { (* We only implement CIDv1 *)
     version: int
   ; (* Multicodec type for the data; 0x55 for raw data or 0x71 for DAG-CBOR *)
-    codec: int
+    codec: codec
   ; (* Digest of the data *)
     digest: digest
   ; (* CID bytes *)
@@ -14,6 +14,8 @@ and digest =
   ; (* Hash bytes *)
     contents: bytes }
 
+and codec = Raw | Dcbor
+
 let version = 1
 
 let hash_sha256 = 0x12
@@ -22,10 +24,14 @@ let codec_raw = 0x55
 
 let codec_dcbor = 0x71
 
+let codec_byte = function Raw -> codec_raw | Dcbor -> codec_dcbor
+
+let codec_of_byte b = if b = codec_raw then Raw else Dcbor
+
 let create codec data =
   let buf = Buffer.create 36 in
   Buffer.add_uint8 buf version ;
-  Buffer.add_uint8 buf codec ;
+  Buffer.add_uint8 buf @@ codec_byte codec ;
   Buffer.add_uint8 buf hash_sha256 ;
   Buffer.add_uint8 buf 32 ;
   let digest = Digestif.SHA256.(data |> digest_bytes |> to_raw_string) in
@@ -39,7 +45,7 @@ let create codec data =
 let create_empty codec =
   let buf = Buffer.create 4 in
   Buffer.add_uint8 buf version ;
-  Buffer.add_uint8 buf codec ;
+  Buffer.add_uint8 buf @@ codec_byte codec ;
   Buffer.add_uint8 buf hash_sha256 ;
   Buffer.add_uint8 buf 0 ;
   let bytes = Buffer.to_bytes buf in
@@ -64,7 +70,7 @@ let decode_first bytes =
   if Bytes.length bytes < 4 + digest_length then
     failwith (Printf.sprintf "CID too short %d" (Bytes.length bytes)) ;
   ( { version
-    ; codec
+    ; codec= codec_of_byte codec
     ; digest= {codec= digest_codec; contents= Bytes.sub bytes 4 digest_length}
     ; bytes= Bytes.sub bytes 0 (digest_length + 4) }
   , Bytes.sub bytes (digest_length + 4) (Bytes.length bytes - digest_length - 4)
@@ -123,3 +129,19 @@ let to_bytes cid =
   Buffer.add_uint8 buf 0 ;
   Buffer.add_bytes buf cid.bytes ;
   Buffer.to_bytes buf
+
+let compare a b =
+  match [to_string a; to_string b] with
+  | [Ok a; Ok b] ->
+      String.compare a b
+  | _ ->
+      failwith "CID comparison failed"
+
+let equal a b =
+  match [to_string a; to_string b] with
+  | [Ok a; Ok b] ->
+      String.equal a b
+  | _ ->
+      failwith "CID comparison failed"
+
+let hash = Hashtbl.hash
