@@ -147,3 +147,9 @@ let compare a b = String.compare (to_string a) (to_string b)
 let equal a b = String.equal (to_string a) (to_string b)
 
 let hash = Hashtbl.hash
+
+module Set = Set.Make (struct
+  type nonrec t = t
+
+  let compare = compare
+end)
