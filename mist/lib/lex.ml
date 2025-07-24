@@ -77,3 +77,11 @@ let to_cbor_block obj =
   let encoded = Dag_cbor.encode ipld in
   let cid = Cid.create Dcbor encoded in
   (cid, encoded)
+
+let of_cbor encoded : repo_record =
+  let decoded = Dag_cbor.decode encoded in
+  match of_ipld decoded with
+  | `LexMap m ->
+      m
+  | _ ->
+      raise (Failure "Decoded non-record value")

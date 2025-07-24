@@ -6,21 +6,21 @@ type with_missing = {blocks: t; missing: Cid.t list}
 
 let empty = Cid_map.empty
 
-let add m value =
+let add value m =
   let cid, bytes = Lex.to_cbor_block value in
   (Cid_map.add cid bytes m, cid)
 
-let set m cid bytes = Cid_map.add cid bytes m
+let set = Cid_map.add
 
-let get m cid = Cid_map.find_opt cid m
+let get = Cid_map.find_opt
 
-let remove m cid = Cid_map.remove cid m
+let remove = Cid_map.remove
 
-let get_many m cids =
+let get_many cids m =
   let blocks, missing =
     List.fold_left
       (fun (b, mis) cid ->
-        match get m cid with
+        match get cid m with
         | Some bytes ->
             (Cid_map.add cid bytes b, mis)
         | None ->

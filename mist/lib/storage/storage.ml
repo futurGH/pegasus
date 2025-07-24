@@ -1,35 +1,27 @@
 module Block_map = Block_map
+module Blob_store = Blob_store
 
-type commit_data =
-  { cid: Cid.t
-  ; rev: string
-  ; since: string option
-  ; prev: Cid.t option
-  ; relevant_blocks: Block_map.t
-  ; removed_cids: Cid.Set.t }
+module type Readable_blockstore = Repo_store.Readable
 
-module type S = sig
-  type t
+module type Writable_blockstore = Repo_store.Writable
 
-  val get_root : t -> Cid.t option Lwt.t
+module Memory_blockstore = struct
+  module Impl = Memory_store.Make ()
+  include Impl
 
-  val put_block : t -> Cid.t -> bytes -> rev:string -> unit Lwt.t
+  module Readable : Repo_store.Readable with type t = Impl.t = Impl
 
-  val put_many : t -> Block_map.t -> unit Lwt.t
-
-  val update_root : t -> Cid.t -> rev:string -> unit Lwt.t
-
-  val apply_commit : t -> commit_data -> unit Lwt.t
-
-  val get_bytes : t -> Cid.t -> bytes option Lwt.t
-
-  val has : t -> Cid.t -> bool Lwt.t
-
-  val get_blocks : t -> Cid.t list -> Block_map.with_missing Lwt.t
-
-  val read_obj_and_bytes : t -> Cid.t -> (Dag_cbor.value * bytes) option Lwt.t
-
-  val read_obj : t -> Cid.t -> Dag_cbor.value option Lwt.t
-
-  val read_record : t -> Cid.t -> Lex.repo_record
+  module Writable : Repo_store.Writable with type t = Impl.t = Impl
 end
+
+module Overlay_blockstore
+    (Top : Repo_store.Readable)
+    (Bottom : Repo_store.Readable) =
+struct
+  module Impl = Overlay_store.Make (Top) (Bottom)
+  include Impl
+
+  module Readable : Repo_store.Readable with type t = Impl.t = Impl
+end
+
+type commit_data = Repo_store.commit_data
