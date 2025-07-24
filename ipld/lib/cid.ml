@@ -132,6 +132,16 @@ let to_bytes cid =
 
 let as_cid str = Result.get_ok @@ of_string str
 
+let to_yojson cid = `Assoc [("$link", `String (to_string cid))]
+
+let of_yojson = function
+  | `Assoc [("$link", `String str)] ->
+      of_string str
+  | `String str ->
+      of_string str
+  | _ ->
+      Error "CID must be a string"
+
 let compare a b = String.compare (to_string a) (to_string b)
 
 let equal a b = String.equal (to_string a) (to_string b)

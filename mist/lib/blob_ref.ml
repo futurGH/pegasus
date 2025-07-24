@@ -15,11 +15,7 @@ let of_yojson json =
     if List.mem_assoc "$type" assoc then
       let type' = assoc |> List.assoc "$type" |> to_string in
       if type' = "blob" then
-        let cid_str =
-          assoc |> List.assoc "ref" |> to_assoc |> List.assoc "$link"
-          |> to_string
-        in
-        let ref = Result.get_ok @@ Cid.of_string cid_str in
+        let ref = assoc |> List.assoc "ref" |> Cid.of_yojson |> Result.get_ok in
         let mime_type = assoc |> List.assoc "mimeType" |> to_string in
         let maybe_size = assoc |> List.assoc "size" in
         let size =
@@ -47,7 +43,7 @@ let to_yojson blob =
     | Typed {type'; ref; mime_type; size} ->
         `Assoc
           [ ("$type", `String type')
-          ; ("ref", `Assoc [("$link", `String (Cid.to_string ref))])
+          ; ("ref", Cid.to_yojson ref)
           ; ("mimeType", `String mime_type)
           ; ("size", `Int size) ]
     | Untyped {cid; mime_type} ->
