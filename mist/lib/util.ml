@@ -1,5 +1,5 @@
 let leading_zeros_on_hash (key : string) : int =
-  let digest : string = Sha256.string key |> Sha256.to_bin in
+  let digest = Digestif.SHA256.(digest_string key |> to_raw_string) in
   let rec loop idx zeros =
     if idx >= String.length digest then zeros
     else
@@ -41,10 +41,3 @@ let is_valid_mst_key (key : string) : bool =
 
 let ensure_valid_key (key : string) : unit =
   if not (is_valid_mst_key key) then raise (Invalid_argument "Invalid MST key")
-
-let encode_cbor_block (data : string) : bytes =
-  let cbor_data = Cbor.encode_string data in
-  let cbor_length = Bytes.length cbor_data in
-  let length_bytes = Bytes.create 4 in
-  Bytes.set_int32_le length_bytes 0 (Int32.of_int cbor_length) ;
-  Bytes.cat length_bytes cbor_data

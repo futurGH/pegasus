@@ -19,13 +19,13 @@
 
 (package
  (name mist)
- (synopsis "A Merkle Search Tree implementation")
+ (synopsis "Atproto repo functionality")
  (allow_empty)
  (depends ocaml dune (cborl (>= 0.1.0)) (cid (>= 0.1.0)) lwt (multihash (>= 0.1.0)) (yojson (>= 3.0.0)) (alcotest :with-test)))
 
 (package
  (name ipld)
  (synopsis "A DASL-compliant implementation of some IPLD formats")
- (description "Currently includes DAG-CBOR and CID v1")
+ (description "Currently includes DAG-CBOR and CIDv1")
  (allow_empty)
  (depends ocaml dune (digestif (>= 1.2.0)) (multibase (>= 0.1.0)) (alcotest :with-test)))

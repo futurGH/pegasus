@@ -1,4 +1,4 @@
 (library
  (name mist)
- (libraries ipld lwt multihash str yojson ppx_deriving_yojson.runtime)
+ (libraries digestif ipld lwt multihash str yojson ppx_deriving_yojson.runtime)
  (preprocess (pps ppx_deriving_yojson)))
