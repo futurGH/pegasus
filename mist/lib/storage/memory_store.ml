@@ -1,5 +1,3 @@
-open Lwt.Infix
-
 module Make () = struct
   type t =
     { mutable blocks: Block_map.t
@@ -13,26 +11,6 @@ module Make () = struct
   let has s cid = Lwt.return (Block_map.has cid s.blocks)
 
   let get_blocks s cids = Lwt.return (Block_map.get_many cids s.blocks)
-
-  let read_obj_and_bytes s cid =
-    get_bytes s cid
-    >|= function
-    | Some b ->
-        let v = Dag_cbor.decode b in
-        Some (v, b)
-    | None ->
-        None
-
-  let read_obj s cid = read_obj_and_bytes s cid >|= Option.map fst
-
-  let read_record s cid =
-    match Block_map.get cid s.blocks with
-    | Some b ->
-        Lwt.return (Lex.of_cbor b)
-    | None ->
-        raise (Failure "Missing block")
-
-  let get_root s = Lwt.return s.root
 
   let put_block s cid bytes ~rev =
     s.blocks <- Block_map.set cid bytes s.blocks ;

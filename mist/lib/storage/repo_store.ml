@@ -14,20 +14,12 @@ module type Readable = sig
   val has : t -> Cid.t -> bool Lwt.t
 
   val get_blocks : t -> Cid.t list -> Block_map.with_missing Lwt.t
-
-  val read_obj_and_bytes : t -> Cid.t -> (Dag_cbor.value * bytes) option Lwt.t
-
-  val read_obj : t -> Cid.t -> Dag_cbor.value option Lwt.t
-
-  val read_record : t -> Cid.t -> Lex.repo_record Lwt.t
 end
 
 module type Writable = sig
   type t
 
   include Readable with type t := t
-
-  val get_root : t -> Cid.t option Lwt.t
 
   val put_block : t -> Cid.t -> bytes -> rev:string -> unit Lwt.t
 
