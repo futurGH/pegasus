@@ -1,6 +1,8 @@
 (library
  (name mist)
  (libraries
+  core_unix.time_stamp_counter
+  core_unix.time_ns_unix
   digestif
   hacl-star
   ipld
