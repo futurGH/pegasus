@@ -43,6 +43,8 @@
  (depends
   ocaml
   dune
+  (base64 (>= 3.5.1))
   (digestif (>= 1.2.0))
   (multibase (>= 0.1.0))
+  (yojson (>= 3.0.0))
   (alcotest :with-test)))

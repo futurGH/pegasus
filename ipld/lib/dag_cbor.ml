@@ -27,6 +27,54 @@ type value =
   | `Map of value StringMap.t
   | `Link of Cid.t ]
 
+let rec of_yojson (json : Yojson.Safe.t) : value =
+  match json with
+  | `Assoc [("$bytes", `String s)] ->
+      `Bytes (Bytes.of_string (Base64.decode_exn s))
+  | `Assoc [("$link", `String s)] ->
+      `Link (Result.get_ok (Cid.of_string s))
+  | `Assoc assoc_list ->
+      `Map
+        (StringMap.of_list
+           (List.map (fun (k, v) -> (k, of_yojson v)) assoc_list) )
+  | `List lst ->
+      `Array (Array.of_list (List.map of_yojson lst))
+  | `Bool b ->
+      `Boolean b
+  | `Int i ->
+      `Integer (Int64.of_int i)
+  | `Intlit s ->
+      `Integer (Int64.of_string s)
+  | `Float f ->
+      `Float f
+  | `String s ->
+      `String s
+  | `Null ->
+      `Null
+
+let rec to_yojson (value : value) : Yojson.Safe.t =
+  match value with
+  | `Map map ->
+      `Assoc (StringMap.to_list map |> List.map (fun (k, v) -> (k, to_yojson v)))
+  | `Array arr ->
+      `List (Array.to_list arr |> List.map to_yojson)
+  | `Bytes bytes ->
+      `Assoc
+        [ ( "$bytes"
+          , `String (Base64.encode_exn ~pad:false (Bytes.to_string bytes)) ) ]
+  | `Link cid ->
+      `Assoc [("$link", `String (Cid.to_string cid))]
+  | `Boolean b ->
+      `Bool b
+  | `Integer i ->
+      `Intlit (Int64.to_string i)
+  | `Float f ->
+      `Float f
+  | `String s ->
+      `String s
+  | `Null ->
+      `Null
+
 module Encoder = struct
   type t = {mutable buf: Buffer.t; mutable pos: int}
 
@@ -159,6 +207,8 @@ module Encoder = struct
     if encoder.pos < Buffer.length encoder.buf then
       Buffer.truncate encoder.buf encoder.pos ;
     Buffer.to_bytes encoder.buf
+
+  let encode_yojson (v : Yojson.Safe.t) : bytes = of_yojson v |> encode
 end
 
 module Decoder = struct
@@ -357,8 +407,16 @@ module Decoder = struct
         (Printf.sprintf "decode: extra bytes after valid CBOR data (%d)"
            (Bytes.length remainder) ) ;
     value
+
+  let decode_to_yojson buf =
+    let value = decode buf in
+    to_yojson value
 end
 
 let encode = Encoder.encode
 
 let decode = Decoder.decode
+
+let encode_yojson = Encoder.encode_yojson
+
+let decode_to_yojson = Decoder.decode_to_yojson

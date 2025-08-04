@@ -1,4 +1,4 @@
 (library
  (name ipld)
  (wrapped false)
- (libraries digestif multibase))
+ (libraries base64 digestif multibase yojson))

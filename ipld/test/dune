@@ -1,4 +1,4 @@
 (tests
  (names test_cid test_dag_cbor)
  (package ipld)
- (libraries ipld alcotest))
+ (libraries ipld str alcotest))

@@ -3,8 +3,8 @@ module StringMap = Dag_cbor.StringMap
 let rec stringify_map m =
   StringMap.bindings m
   |> List.map (fun (k, v) ->
-         Format.sprintf "%s: %s" k (stringify_ipld_value v) )
-  |> String.concat ", " |> Format.sprintf "{ %s }"
+         Format.sprintf "\"%s\": %s" k (stringify_ipld_value v) )
+  |> String.concat ", " |> Format.sprintf "{%s}"
 
 and stringify_ipld_value (value : Dag_cbor.value) =
   match value with
@@ -15,7 +15,8 @@ and stringify_ipld_value (value : Dag_cbor.value) =
   | `Float f ->
       Format.sprintf "%f" f
   | `String s ->
-      Format.sprintf "\"%s\"" s
+      Format.sprintf "\"%s\""
+        (Str.global_replace (Str.regexp_string {|"|}) {|\"|} s)
   | `Bytes b ->
       Format.sprintf "%s" (Bytes.to_string b)
   | `Map m ->
@@ -58,6 +59,8 @@ let rec ipld_value_eq a b =
       false
 
 let ipld_testable = Alcotest.testable pprint_ipld_value ipld_value_eq
+
+let yojson_testable = Alcotest.testable Yojson.Safe.pp Yojson.Safe.equal
 
 let to_base_16 bytes =
   let hex_of_nibble n =
@@ -383,6 +386,43 @@ let test_decode_multiple_objects () =
   Alcotest.(check bool) "second object decoded correctly" true (decoded2 = obj2) ;
   Alcotest.(check int) "no remaining bytes" 0 (Bytes.length final_remainder)
 
+let test_yojson_roundtrip () =
+  let record_embed_images_0_aspect_ratio : Yojson.Safe.t =
+    `Assoc [("height", `Intlit "885"); ("width", `Intlit "665")]
+  in
+  let record_embed_images_0_image : Yojson.Safe.t =
+    `Assoc
+      [ ("height", `Intlit "885")
+      ; ("width", `Intlit "665")
+      ; ("mimeType", `String "image/jpeg")
+      ; ("size", `Intlit "645553") ]
+  in
+  let record_embed_images_0 : Yojson.Safe.t =
+    `Assoc
+      [ ( "alt"
+        , `String
+            "a photoshopped picture of kit with a microphone. kit is saying \
+             \"meow\"" )
+      ; ("aspectRatio", record_embed_images_0_aspect_ratio)
+      ; ("image", record_embed_images_0_image) ]
+  in
+  let record_embed : Yojson.Safe.t =
+    `Assoc
+      [ ("$type", `String "app.bsky.embed.images")
+      ; ("images", `List [record_embed_images_0]) ]
+  in
+  let record : Yojson.Safe.t =
+    `Assoc
+      [ ("$type", `String "app.bsky.feed.post")
+      ; ("createdAt", `String "2024-08-13T01:16:06.453Z")
+      ; ("langs", `List [`String "en"])
+      ; ("text", `String "exclusively on bluesky")
+      ; ("embed", record_embed) ]
+  in
+  let encoded = Dag_cbor.encode_yojson record in
+  let decoded = Dag_cbor.decode_to_yojson encoded in
+  Alcotest.(check yojson_testable) "yojson roundtrip" record decoded
+
 let () =
   Alcotest.run "dag-cbor"
     [ ( "dag-cbor encoding"
@@ -390,4 +430,5 @@ let () =
         ; ("round_trip", `Quick, test_round_trip)
         ; ("atproto_records", `Quick, test_atproto_post_records)
         ; ("invalid_numbers", `Quick, test_invalid_numbers)
-        ; ("decode_multiple", `Quick, test_decode_multiple_objects) ] ) ]
+        ; ("decode_multiple", `Quick, test_decode_multiple_objects)
+        ; ("yojson_roundtrip", `Quick, test_yojson_roundtrip) ] ) ]

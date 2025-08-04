@@ -10,8 +10,10 @@ bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.14"}
+  "base64" {>= "3.5.1"}
   "digestif" {>= "1.2.0"}
   "multibase" {>= "0.1.0"}
+  "yojson" {>= "3.0.0"}
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]
