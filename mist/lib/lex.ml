@@ -85,3 +85,7 @@ let of_cbor encoded : repo_record =
       m
   | _ ->
       raise (Failure "Decoded non-record value")
+
+let of_yojson (v : Yojson.Safe.t) : value = of_ipld (Dag_cbor.of_yojson v)
+
+let to_yojson (v : value) : Yojson.Safe.t = Dag_cbor.to_yojson (to_ipld v)
