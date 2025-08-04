@@ -27,7 +27,7 @@ let test_shared_prefix_length () =
            value (shared_prefix_length a b) )
 
 let () =
-  Alcotest.run "mist"
-    [ ( "mst utils"
+  Alcotest.run "util"
+    [ ( "repo utils"
       , [ ("leading_zeros", `Quick, test_leading_zeros)
         ; ("shared_prefix_length", `Quick, test_shared_prefix_length) ] ) ]

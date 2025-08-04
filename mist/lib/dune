@@ -7,6 +7,7 @@
   lwt
   mtime.clock
   multihash
+  re
   str
   yojson
   ppx_deriving_yojson.runtime)

@@ -21,7 +21,7 @@
  (name mist)
  (synopsis "Atproto repo functionality")
  (allow_empty)
- (depends ocaml dune (cborl (>= 0.1.0)) (cid (>= 0.1.0)) (hacl-star (>= 0.7.2)) lwt (mtime (>= 2.1.0)) (multihash (>= 0.1.0)) (yojson (>= 3.0.0)) (alcotest :with-test)))
+ (depends ocaml dune (cborl (>= 0.1.0)) (cid (>= 0.1.0)) (hacl-star (>= 0.7.2)) lwt (mtime (>= 2.1.0)) (multihash (>= 0.1.0)) (re (>= 1.13.2)) (yojson (>= 3.0.0)) (alcotest :with-test)))
 
 (package
  (name ipld)

@@ -8,13 +8,13 @@ let leading_zeros_on_hash (key : string) : int =
       let zeros' =
         zeros
         +
-        if byte = 0x0 then 4
-        else if byte < 0x04 then 3
-        else if byte < 0x10 then 2
-        else if byte < 0x40 then 1
+        if byte = 0 then 4
+        else if byte < 4 then 3
+        else if byte < 16 then 2
+        else if byte < 64 then 1
         else 0
       in
-      if byte = 0x0 then loop (idx + 1) zeros' else zeros'
+      if byte = 0 then loop (idx + 1) zeros' else zeros'
   in
   loop 0 0
 
@@ -26,18 +26,22 @@ let shared_prefix_length (a : string) (b : string) : int =
   in
   loop 0
 
-let valid_key_char_regex = Str.regexp "^[a-zA-Z0-9_~\\-:.]*$"
+let shared_prefix (a : string) (b : string) : string =
+  let len = shared_prefix_length a b in
+  String.sub a 0 len
+
+let valid_key_char_regex = Re.Pcre.regexp "^[a-zA-Z0-9_~\\-:.]*$"
 
 let is_valid_mst_key (key : string) : bool =
   match String.split_on_char '/' key with
   | [coll; rkey]
     when String.length key <= 1024
          && coll <> "" && rkey <> ""
-         && Str.string_match valid_key_char_regex coll 0
-         && Str.string_match valid_key_char_regex rkey 0 ->
+         && Re.execp valid_key_char_regex coll
+         && Re.execp valid_key_char_regex rkey ->
       true
   | _ ->
       false
 
 let ensure_valid_key (key : string) : unit =
-  if not (is_valid_mst_key key) then raise (Invalid_argument "Invalid MST key")
+  if not (is_valid_mst_key key) then raise (Invalid_argument "invalid mst key")

@@ -1,4 +1,4 @@
-(test
- (name test_mist)
+(tests
+ (names test_tid test_util)
  (package mist)
  (libraries mist alcotest))
