@@ -153,3 +153,9 @@ module Set = Set.Make (struct
 
   let compare = compare
 end)
+
+module Map = Map.Make (struct
+  type nonrec t = t
+
+  let compare = compare
+end)

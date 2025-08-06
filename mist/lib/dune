@@ -7,13 +7,15 @@
   hacl-star
   ipld
   lwt
+  lwt.unix
   mtime.clock
   multihash
   re
   str
   yojson
+  lwt_ppx
   ppx_deriving_yojson.runtime)
  (preprocess
-  (pps ppx_deriving_yojson)))
+  (pps lwt_ppx ppx_deriving_yojson)))
 
 (include_subdirs qualified)

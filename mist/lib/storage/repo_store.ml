@@ -21,11 +21,11 @@ module type Writable = sig
 
   include Readable with type t := t
 
-  val put_block : t -> Cid.t -> bytes -> rev:string -> unit Lwt.t
+  val put_block : t -> ?rev:string -> Cid.t -> bytes -> unit Lwt.t
 
   val put_many : t -> Block_map.t -> unit Lwt.t
 
-  val update_root : t -> Cid.t -> rev:string -> unit Lwt.t
+  val update_root : t -> ?rev:string -> Cid.t -> unit Lwt.t
 
   val apply_commit : t -> commit_data -> unit Lwt.t
 end

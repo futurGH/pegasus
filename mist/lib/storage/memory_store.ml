@@ -12,18 +12,18 @@ module Make () = struct
 
   let get_blocks s cids = Lwt.return (Block_map.get_many cids s.blocks)
 
-  let put_block s cid bytes ~rev =
+  let put_block s ?rev cid bytes =
     s.blocks <- Block_map.set cid bytes s.blocks ;
-    s.rev <- Some rev ;
+    s.rev <- rev ;
     Lwt.return_unit
 
   let put_many s blocks =
     s.blocks <- Block_map.merge s.blocks blocks ;
     Lwt.return_unit
 
-  let update_root s cid ~rev =
+  let update_root s ?rev cid =
     s.root <- Some cid ;
-    s.rev <- Some rev ;
+    s.rev <- rev ;
     Lwt.return_unit
 
   let apply_commit s (c : Repo_store.commit_data) =
