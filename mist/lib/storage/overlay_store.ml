@@ -9,17 +9,22 @@ end = struct
 
   let create top bottom = {top; bottom}
 
+  let get_root {top; bottom} =
+    match%lwt Top.get_root top with
+    | Some _ as res ->
+        Lwt.return res
+    | None ->
+        Bottom.get_root bottom
+
   let get_bytes {top; bottom} cid =
-    let* from_top = Top.get_bytes top cid in
-    match from_top with
+    match%lwt Top.get_bytes top cid with
     | Some _ as res ->
         Lwt.return res
     | None ->
         Bottom.get_bytes bottom cid
 
   let has {top; bottom} cid =
-    let* from_top = Top.has top cid in
-    match from_top with
+    match%lwt Top.has top cid with
     | true ->
         Lwt.return_true
     | false ->

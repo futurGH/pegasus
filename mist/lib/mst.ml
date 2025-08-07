@@ -3,7 +3,7 @@ module StringMap = Dag_cbor.StringMap
 type node_raw =
   { (* link to lower level left subtree with all keys sorting before this node *)
     l: Cid.t option
-  ; (* ordered list of entries below this node *)
+  ; (* ordered list of entries in this node *)
     e: entry_raw list }
 
 and entry_raw =
@@ -38,6 +38,66 @@ type node_hydrated =
 and entry_hydrated =
   {layer: int; key: string; value: Cid.t; right: node_hydrated option}
 
+(* figures out where to put an entry in or below a hydrated node, returns new node *)
+let rec insert_entry node entry : node_hydrated Lwt.t =
+  let entry_layer = Util.leading_zeros_on_hash entry.key in
+  (* as long as node layer <= entry layer, create a new node above node
+     until we have a node at the correct height for the entry to be inserted *)
+  let rec build_insert_node node layer =
+    if layer >= entry_layer then node
+    else
+      build_insert_node
+        {layer= layer + 1; left= Some node; entries= []}
+        (layer + 1)
+  in
+  let insert_node = build_insert_node node node.layer in
+  (* if entry is below node, recursively insert into node's left subtree *)
+  if entry_layer < insert_node.layer then
+    match (insert_node.entries, insert_node.left) with
+    | [], None ->
+        failwith "found totally empty mst node"
+    | [], Some left ->
+        node.left <- Some (Lwt_main.run (insert_entry left entry)) ;
+        Lwt.return insert_node
+    | _ ->
+        Lwt.return insert_node
+  else (
+    (* if entry is at this node's layer, append it to node's entries,
+       checking that its key occurs after the last existing entry *)
+    assert (node.layer = entry_layer) ;
+    ( match Util.last node.entries with
+    | Some last ->
+        (* we can assert this because hydrate_from_map calls this function
+           while iterating over keys in sorted order *)
+        assert (entry.key > last.key)
+    | None ->
+        () ) ;
+    node.entries <- node.entries @ [entry] ;
+    Lwt.return node )
+
+(* helper to find the entry with a given key in a hydrated node *)
+let find_entry_nonrec node key =
+  let rec aux entries =
+    match entries with
+    | [] ->
+        None
+    | e :: es ->
+        if e.key = key then Some e else if e.key > key then None else aux es
+  in
+  aux node.entries
+
+(* hydrates a list of entries with their keys; layer and right value are placeholders *)
+let hydrate_entries_keys_only node =
+  node.e
+  |> List.fold_left
+       (fun (prev_path, entries) entry ->
+         let prefix = String.sub prev_path 0 entry.p in
+         let path = String.concat "" [prefix; Bytes.to_string entry.k] in
+         Util.ensure_valid_key path ;
+         (path, entries @ [{layer= 0; key= path; value= entry.v; right= None}]) )
+       ("", [])
+  |> snd
+
 module Make (Store : Storage.Writable_blockstore) = struct
   type bs = Store.t
 
@@ -45,6 +105,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
 
   let create blockstore root = {blockstore; root}
 
+  (* decodes a node retrieved from the blockstore *)
   let decode_block b : node_raw =
     match Dag_cbor.decode b with
     | `Map node ->
@@ -96,6 +157,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | _ ->
         raise (Invalid_argument "invalid block")
 
+  (* retrieves & decodes a node by cid *)
   let retrieve_node t cid : node_raw option Lwt.t =
     match%lwt Store.get_bytes t.blockstore cid with
     | Some bytes ->
@@ -103,6 +165,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | None ->
         Lwt.return_none
 
+  (* returns the layer of a node *)
   let rec get_node_height t node : int Lwt.t =
     match (node.l, node.e) with
     | None, [] ->
@@ -121,6 +184,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
       | _ ->
           failwith "first node entry has nonzero p value" )
 
+  (* calls fn with each entry's key and cid *)
   let traverse t fn : unit Lwt.t =
     let rec traverse node =
       let%lwt () =
@@ -149,6 +213,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | None ->
         failwith "root cid not found in repo store"
 
+  (* returns a map of key -> cid *)
   let build_map t : Cid.t StringMap.t Lwt.t =
     let map = StringMap.empty in
     let%lwt () =
@@ -156,38 +221,8 @@ module Make (Store : Storage.Writable_blockstore) = struct
     in
     Lwt.return map
 
-  let rec insert_entry node entry : node_hydrated Lwt.t =
-    let entry_layer = Util.leading_zeros_on_hash entry.key in
-    (* as long as node layer <= entry layer, create a new node above node
-       until we have a node at the correct height for the entry to be inserted *)
-    let rec build_insert_node node layer =
-      if layer >= entry_layer then node
-      else
-        build_insert_node
-          {layer= layer + 1; left= Some node; entries= []}
-          (layer + 1)
-    in
-    let insert_node = build_insert_node node node.layer in
-    (* if entry is below node, recursively insert into node's left subtree *)
-    if entry_layer < insert_node.layer then
-      match (insert_node.entries, insert_node.left) with
-      | [], None ->
-          failwith "found totally empty mst node"
-      | [], Some left ->
-          node.left <- Some (Lwt_main.run (insert_entry left entry)) ;
-          Lwt.return insert_node
-      | _ ->
-          Lwt.return insert_node
-    else (
-      (* if entry is at this node's layer, append it to node's entries,
-         checking that its key occurs after the last existing entry *)
-      assert (node.layer = entry_layer) ;
-      if List.length node.entries > 0 then
-        assert (entry.key > (List.rev node.entries |> List.hd).key) ;
-      node.entries <- node.entries @ [entry] ;
-      Lwt.return node )
-
-  let hydrate_from_map t map =
+  (* produces a hydrated mst from a map of key -> cid *)
+  let hydrate_from_map t map : Cid.t Lwt.t =
     let keys =
       map |> StringMap.bindings |> List.map fst |> List.sort String.compare
     in
@@ -241,4 +276,154 @@ module Make (Store : Storage.Writable_blockstore) = struct
       Lwt.return cid
     in
     finalize root
+
+  (* returns cids and blocks that form the path from a given node to a given entry *)
+  let rec path_to_entry t node key : (Cid.t * bytes) list Lwt.t =
+    let%lwt root_bytes = Store.get_bytes t node in
+    let%lwt root =
+      match root_bytes with
+      | None ->
+          Lwt.return_none
+      | Some bytes ->
+          Lwt.return_some (decode_block bytes)
+    in
+    let path_tail = [(node, Option.get root_bytes)] in
+    (* if there is a left child, try to find a path through the left subtree *)
+    let%lwt path_through_left =
+      match root with
+      | None ->
+          Lwt.return_some []
+      | Some root -> (
+        match root.l with
+        | None ->
+            Lwt.return_none
+        | Some left -> (
+            match%lwt path_to_entry t left key with
+            | [] ->
+                Lwt.return_none
+            | path ->
+                (* Option.get is safe because root is Some only when root_bytes is Some *)
+                Lwt.return_some (path @ path_tail) ) )
+    in
+    match path_through_left with
+    | Some path ->
+        Lwt.return path
+    | None -> (
+        (* if a left subtree path couldn't be found, find the entry whose right subtree this key would belong to *)
+        let root' = Option.get root in
+        let entries_keys = hydrate_entries_keys_only root' in
+        let entries_len = List.length root'.e in
+        let entry_index =
+          match List.find_index (fun e -> e.key >= key) entries_keys with
+          | Some index ->
+              index
+          | None ->
+              entries_len
+        in
+        (* entry_index here is actually the entry to the right of the subtree the key would belong to *)
+        match entry_index with
+        | _
+        (* because entries[entry_index] might turn out to be the entry we're looking for *)
+          when entry_index < entries_len
+               && (List.nth entries_keys entry_index).key = key ->
+            Lwt.return path_tail
+        | _ -> (
+          (* otherwise, we continue down the right subtree of the entry before entry_index *)
+          match Util.last root'.e with
+          | Some last when last.t != None ->
+              let%lwt path_through_right =
+                path_to_entry t (Option.get last.t) key
+              in
+              Lwt.return (path_through_right @ path_tail)
+          | _ ->
+              Lwt.return path_tail ) )
+
+  (* returns all mst entries in order for a car stream *)
+  let to_car_stream t : (Cid.t * bytes) Seq.t =
+    let module M = struct
+      type stage =
+        | Nodes of
+            (* currently walking nodes *)
+            
+            { next: Cid.t list (* next cids to fetch *)
+            ; fetched: (Cid.t * bytes) list (* fetched cids and their bytes *)
+            ; leaves: Cid.Set.t (* seen leaf cids *) }
+        | Leaves of
+            (* done walking nodes, streaming accumulated leaves *)
+            (Cid.t * bytes) list
+        | Done
+    end in
+    let open M in
+    let init_state =
+      Nodes {next= [t.root]; fetched= []; leaves= Cid.Set.empty}
+    in
+    let rec step = function
+      | Done ->
+          None
+      (* node has been fetched, can now be yielded *)
+      | Nodes ({fetched= (cid, bytes) :: rest; _} as s) ->
+          Some ((cid, bytes), Nodes {s with fetched= rest})
+      (* need to fetch next nodes *)
+      | Nodes {next; fetched= []; leaves} ->
+          if List.is_empty next then (
+            (* finished traversing nodes, time to switch to leaves *)
+            let leaves_list = Cid.Set.to_list leaves in
+            let leaves_bm =
+              Lwt_main.run (Store.get_blocks t.blockstore leaves_list)
+            in
+            if leaves_bm.missing <> [] then failwith "missing mst leaf blocks" ;
+            let leaves_nodes = Storage.Block_map.entries leaves_bm.blocks in
+            match leaves_nodes with
+            | [] ->
+                (* with Done, we don't care about the first pair element *)
+                Some (Obj.magic (), Done)
+            | _ ->
+                (* it's leafin time *)
+                step (Leaves leaves_nodes) )
+          else
+            (* go ahead and fetch the next nodes *)
+            let bm = Lwt_main.run (Store.get_blocks t.blockstore next) in
+            if bm.missing <> [] then failwith "missing mst nodes" ;
+            let fetched, next', leaves' =
+              List.fold_left
+                (fun (acc, nxt, lvs) cid ->
+                  let bytes =
+                    (* we should be safe to do this since we just got the cids from the blockmap *)
+                    Storage.Block_map.get cid bm.blocks |> Option.get
+                  in
+                  let node = decode_block bytes in
+                  let nxt' =
+                    List.fold_left
+                      (* node.entries.map(e => e.right) *)
+                      (fun n e -> match e.t with Some c -> c :: n | None -> n )
+                      (* start with [node.left, ...nxt] if node has a left subtree *)
+                      ( match node.l with
+                      | Some l ->
+                          l :: nxt
+                      | None ->
+                          nxt )
+                      node.e
+                  in
+                  let lvs' =
+                    (* add each entry in this node to the list of seen leaves *)
+                    List.fold_left (fun s e -> Cid.Set.add e.v s) lvs node.e
+                  in
+                  (* prepending is O(1) per prepend + one O(n) to reverse, vs. O(n) per append = O(n^2) total *)
+                  ((cid, bytes) :: acc, nxt', lvs') )
+                ([], [], leaves) next
+            in
+            step
+              (Nodes
+                 { next= List.rev next'
+                 ; fetched= List.rev fetched
+                 ; leaves= leaves' } )
+      (* if we're onto yielding leaves, do that *)
+      | Leaves ((cid, bytes) :: rest) ->
+          let next = if rest = [] then Done else Leaves rest in
+          Some ((cid, bytes), next)
+      (* once we're out of leaves, we're done *)
+      | Leaves [] ->
+          Some (Obj.magic (), Done)
+    in
+    Seq.unfold step init_state
 end

@@ -9,6 +9,8 @@ type commit_data =
 module type Readable = sig
   type t
 
+  val get_root : t -> Cid.t option Lwt.t
+
   val get_bytes : t -> Cid.t -> bytes option Lwt.t
 
   val has : t -> Cid.t -> bool Lwt.t

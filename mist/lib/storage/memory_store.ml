@@ -6,6 +6,13 @@ module Make () = struct
 
   let create ?(blocks = Block_map.empty) () = {blocks; root= None; rev= None}
 
+  let get_root s =
+    match s.root with
+    | Some root ->
+        Lwt.return_some root
+    | None ->
+        Lwt.return_none
+
   let get_bytes s cid = Lwt.return (Block_map.get cid s.blocks)
 
   let has s cid = Lwt.return (Block_map.has cid s.blocks)

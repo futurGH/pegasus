@@ -45,3 +45,6 @@ let is_valid_mst_key (key : string) : bool =
 
 let ensure_valid_key (key : string) : unit =
   if not (is_valid_mst_key key) then raise (Invalid_argument "invalid mst key")
+
+let rec last (lst : 'a list) : 'a option =
+  match lst with [] -> None | [x] -> Some x | _ :: xs -> last xs
