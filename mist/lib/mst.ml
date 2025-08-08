@@ -1,3 +1,4 @@
+open Storage
 module StringMap = Dag_cbor.StringMap
 
 type node_raw =
@@ -37,6 +38,8 @@ type node =
 
 and entry =
   {layer: int; key: string; value: Cid.t; right: node option Lwt.t Lazy.t}
+
+type node_or_entry = Node of node | Entry of entry
 
 let ( let*? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
@@ -85,31 +88,69 @@ let rec insert_entry node entry : node Lwt.t =
     node.entries <- node.entries @ [entry] ;
     Lwt.return node )
 
-(* helper to find the entry with a given key in a hydrated node *)
-let find_entry_nonrec node key =
-  let rec aux entries =
+(* returns the index of the first entry in an interspersed list that's gte a given key *)
+let find_gte_entry_index entries key : int =
+  let rec aux entries index =
     match entries with
     | [] ->
-        None
-    | e :: es ->
-        if e.key = key then Some e else if e.key > key then None else aux es
+        (* will be entries length when not found *)
+        index
+    | e :: es -> (
+      match e with
+      | Entry entry when entry.key >= key ->
+          index
+      | _ ->
+          aux es (index + 1) )
   in
-  aux node.entries
+  aux entries 0
 
-(* from a list of raw entries, produces a list of their keys *)
-let entries_to_keys entries =
-  entries
-  |> List.fold_left
-       (fun keys entry ->
-         let prefix =
-           match keys with [] -> "" | prev :: _ -> String.sub prev 0 entry.p
-         in
-         let path = String.concat "" [prefix; Bytes.to_string entry.k] in
-         Util.ensure_valid_key path ; path :: keys )
-       []
-  |> List.rev
+(* produces a cid and cbor-encoded bytes for a given tree *)
+let serialize node : (Cid.t * bytes) Lwt.t =
+  let sorted_entries =
+    List.sort (fun a b -> String.compare a.key b.key) node.entries
+  in
+  let rec aux node =
+    let%lwt left =
+      node.left
+      >>? function
+      | Some l ->
+          let%lwt cid, _ = aux l in
+          Lwt.return_some cid
+      | None ->
+          Lwt.return_none
+    in
+    let last_key = ref "" in
+    let%lwt mst_entries =
+      Lwt_list.map_s
+        (fun entry ->
+          let%lwt right =
+            entry.right
+            >>? function
+            | Some r ->
+                let%lwt cid, _ = aux r in
+                Lwt.return (Some cid)
+            | None ->
+                Lwt.return None
+          in
+          let prefix_len = Util.shared_prefix_length !last_key entry.key in
+          last_key := entry.key ;
+          Lwt.return
+            { k=
+                Bytes.of_string
+                  (String.sub entry.key prefix_len
+                     (String.length entry.key - prefix_len) )
+            ; p= prefix_len
+            ; v= entry.value
+            ; t= right } )
+        node.entries
+    in
+    let encoded = Dag_cbor.encode (encode_node_raw {l= left; e= mst_entries}) in
+    let cid = Cid.create Dcbor encoded in
+    Lwt.return (cid, encoded)
+  in
+  aux {node with entries= sorted_entries}
 
-module Make (Store : Storage.Writable_blockstore) = struct
+module Make (Store : Writable_blockstore) = struct
   type bs = Store.t
 
   type t = {blockstore: bs; root: Cid.t}
@@ -168,6 +209,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | _ ->
         raise (Invalid_argument "invalid block")
 
+  (* retrieves a raw node by cid *)
   let retrieve_node_raw t cid : node_raw option Lwt.t =
     match%lwt Store.get_bytes t.blockstore cid with
     | Some bytes ->
@@ -175,7 +217,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | None ->
         Lwt.return_none
 
-  (* retrieves & decodes a node by cid *)
+  (* retrieves & hydrates a node by cid *)
   let rec retrieve_node t cid : node option Lwt.t =
     match%lwt retrieve_node_raw t cid with
     | Some raw ->
@@ -183,6 +225,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
     | None ->
         Lwt.return_none
 
+  (* lazy version of retrieve_node *)
   and retrieve_node_lazy t cid = lazy (retrieve_node t cid)
 
   (* hydrates a raw node *)
@@ -262,86 +305,30 @@ module Make (Store : Storage.Writable_blockstore) = struct
     in
     Lwt.return map
 
-  (* produces a cid and cbor-encoded bytes for this mst *)
-  let serialize t map : (Cid.t * bytes) Lwt.t =
-    let keys =
-      map |> StringMap.bindings |> List.map fst |> List.sort String.compare
-    in
-    let entry_for_key key =
-      let value = StringMap.find key map in
-      let height = Util.leading_zeros_on_hash key in
-      {layer= height; key; value; right= lazy Lwt.return_none}
-    in
-    let root =
-      { layer= keys |> List.hd |> Util.leading_zeros_on_hash
-      ; entries= []
-      ; left= lazy Lwt.return_none }
-    in
-    List.iter
-      (fun key -> ignore (insert_entry root (entry_for_key key)))
-      (List.tl keys) ;
-    let rec finalize node : (Cid.t * bytes) Lwt.t =
-      let%lwt left =
-        node.left
-        >>? function
-        | Some l ->
-            let%lwt cid, _ = finalize l in
-            Lwt.return_some cid
-        | None ->
-            Lwt.return_none
-      in
-      let last_key = ref "" in
-      let%lwt mst_entries =
-        Lwt_list.map_s
-          (fun entry ->
-            let%lwt right =
-              entry.right
-              >>? function
-              | Some r ->
-                  let%lwt cid, _ = finalize r in
-                  Lwt.return (Some cid)
-              | None ->
-                  Lwt.return None
-            in
-            let prefix_len = Util.shared_prefix_length !last_key entry.key in
-            last_key := entry.key ;
-            Lwt.return
-              { k=
-                  Bytes.of_string
-                    (String.sub entry.key prefix_len
-                       (String.length entry.key - prefix_len) )
-              ; p= prefix_len
-              ; v= entry.value
-              ; t= right } )
-          node.entries
-      in
-      let encoded =
-        Dag_cbor.encode (encode_node_raw {l= left; e= mst_entries})
-      in
-      let cid = Cid.create Dcbor encoded in
-      let%lwt () = Store.put_block t.blockstore cid encoded in
-      Lwt.return (cid, encoded)
-    in
-    finalize root
-
   (* returns cids and blocks that form the path from a given node to a given entry *)
   let rec path_to_entry t node key : (Cid.t * bytes) list Lwt.t =
     let%lwt root_bytes = Store.get_bytes t.blockstore node in
-    let%lwt root =
+    let%lwt root_raw =
       match root_bytes with
       | None ->
           Lwt.return_none
       | Some bytes ->
           Lwt.return_some (decode_block_raw bytes)
     in
-    let path_tail = [(node, Option.get root_bytes)] in
+    let%lwt root =
+      match root_raw with
+      | None ->
+          Lwt.return_none
+      | Some root ->
+          hydrate_node t root |> Lwt.map Option.some
+    in
     (* if there is a left child, try to find a path through the left subtree *)
     let%lwt path_through_left =
-      match root with
+      match root_raw with
       | None ->
           Lwt.return_some []
-      | Some root -> (
-        match root.l with
+      | Some raw -> (
+        match raw.l with
         | None ->
             Lwt.return_none
         | Some left -> (
@@ -350,35 +337,40 @@ module Make (Store : Storage.Writable_blockstore) = struct
                 Lwt.return_none
             | path ->
                 (* Option.get is safe because root is Some only when root_bytes is Some *)
-                Lwt.return_some (path @ path_tail) ) )
+                Lwt.return_some (path @ [(node, Option.get root_bytes)]) ) )
     in
     match path_through_left with
     | Some path ->
         Lwt.return path
     | None -> (
         (* if a left subtree path couldn't be found, find the entry whose right subtree this key would belong to *)
-        let entries = (Option.get root).e in
-        let entries_keys = entries_to_keys entries in
+        (* this branch is only reached when root/root_raw/root_bytes are not None;
+        if they were, path_through_left would be Some [] *)
+        let entries = (Option.get root).entries in
         let entries_len = List.length entries in
         let entry_index =
-          match List.find_index (fun e -> e >= key) entries_keys with
+          match List.find_index (fun e -> e.key >= key) entries with
           | Some index ->
               index
           | None ->
               entries_len
         in
+        (* path_through_left is None -> root_bytes is Some *)
+        let path_tail = [(node, Option.get root_bytes)] in
         (* entry_index here is actually the entry to the right of the subtree the key would belong to *)
         match entry_index with
         | _
         (* because entries[entry_index] might turn out to be the entry we're looking for *)
           when entry_index < entries_len
-               && List.nth entries_keys entry_index = key ->
+               && (List.nth entries entry_index).key = key ->
             Lwt.return path_tail
         | _ -> (
           (* otherwise, we continue down the right subtree of the entry before entry_index *)
-          match Util.last entries with
-          | Some last when last.t != None ->
+          (* path_through_left is None -> root_raw is Some *)
+          match Util.last (Option.get root_raw).e with
+          | Some last when last.t <> None ->
               let%lwt path_through_right =
+                (* when last.t <> None *)
                 path_to_entry t (Option.get last.t) key
               in
               Lwt.return (path_through_right @ path_tail)
@@ -415,7 +407,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
             let leaves_list = Cid.Set.to_list leaves in
             let%lwt leaves_bm = Store.get_blocks t.blockstore leaves_list in
             if leaves_bm.missing <> [] then failwith "missing mst leaf blocks" ;
-            let leaves_nodes = Storage.Block_map.entries leaves_bm.blocks in
+            let leaves_nodes = Block_map.entries leaves_bm.blocks in
             match leaves_nodes with
             | [] ->
                 (* with Done, we don't care about the first pair element *)
@@ -432,7 +424,7 @@ module Make (Store : Storage.Writable_blockstore) = struct
                 (fun (acc, nxt, lvs) cid ->
                   let bytes =
                     (* we should be safe to do this since we just got the cids from the blockmap *)
-                    Storage.Block_map.get cid bm.blocks |> Option.get
+                    Block_map.get cid bm.blocks |> Option.get
                   in
                   let node = decode_block_raw bytes in
                   let nxt' =
@@ -470,4 +462,112 @@ module Make (Store : Storage.Writable_blockstore) = struct
           Lwt.return_some (Obj.magic (), Done)
     in
     Lwt_seq.unfold_lwt step init_state
+
+  (* returns all mst nodes needed to prove the value of a given key *)
+  let rec proof_for_key t root key : Block_map.t Lwt.t =
+    let e_rev = List.rev root.entries in
+    (* iterate in reverse because if the key doesn't exist at this level,
+       we need to search the "previous" node's right subtree *)
+    let rec find_proof entries_rev =
+      match entries_rev with
+      | [] ->
+          Lwt.return Block_map.empty
+      | e :: rest -> (
+          if e.key > key then find_proof rest
+          else if e.key = key then Lwt.return Block_map.empty
+          else
+            let*? right = e.right in
+            match right with
+            | Some r ->
+                proof_for_key t r key
+            | None ->
+                Lwt.return Block_map.empty )
+    in
+    let%lwt bm = find_proof e_rev in
+    let%lwt root_cid, root_bytes = serialize root in
+    Lwt.return (Block_map.set root_cid root_bytes bm)
+
+  (* returns all mst nodes needed to prove the value of a given key's left sibling *)
+  let rec proof_for_left_sibling t root key : Block_map.t Lwt.t =
+    let e_rev = List.rev root.entries in
+    (* iterate in reverse for the same reason as proof_for_key *)
+    let rec find_proof entries_rev =
+      match entries_rev with
+      | [] ->
+          Lwt.return Block_map.empty
+      | e :: rest -> (
+          if e.key >= key then find_proof rest
+          else
+            let*? right = e.right in
+            match right with
+            | Some r ->
+                proof_for_left_sibling t r key
+            | None ->
+                Lwt.return Block_map.empty )
+    in
+    let%lwt bm = find_proof e_rev in
+    let%lwt root_cid, root_bytes = serialize root in
+    Lwt.return (Block_map.set root_cid root_bytes bm)
+
+  (* returns all mst nodes needed to prove the value of a given key's right sibling *)
+  let rec proof_for_right_sibling t root key : Block_map.t Lwt.t =
+    (* unlike the other two, this doesn't iterate in reverse
+       because we can stop as soon as we're past the key *)
+    let rec find_proof ?(prev = None) entries =
+      match entries with
+      | [] -> (
+        (* end of entries, right sibling must be in the last entry's right subtree *)
+        match prev with
+        | Some e -> (
+            let*? right = e.right in
+            match right with
+            | Some r ->
+                proof_for_right_sibling t r key
+            | None ->
+                Lwt.return Block_map.empty )
+        | None ->
+            Lwt.return Block_map.empty )
+      | e :: rest ->
+          if e.key > key then
+            (* we're past target key; right sibling is in previous entry's right subtree *)
+            match prev with
+            | Some p -> (
+                let*? right = p.right in
+                match right with
+                | Some r ->
+                    proof_for_right_sibling t r key
+                (* I don't think this should ever happen? *)
+                | None ->
+                    Lwt.return Block_map.empty )
+            (* first entry is already greater than key; we're inside the sibling *)
+            | None ->
+                Lwt.return Block_map.empty
+          else if e.key = key then
+            (* found the entry, right sibling is in its right subtree *)
+            let*? right = e.right in
+            match right with
+            | Some r ->
+                proof_for_right_sibling t r key
+            | None ->
+                Lwt.return Block_map.empty
+          else (* e.key < key, keep searching *)
+            find_proof ~prev:(Some e) rest
+    in
+    let%lwt bm = find_proof root.entries in
+    let%lwt root_cid, root_bytes = serialize root in
+    Lwt.return (Block_map.set root_cid root_bytes bm)
+
+  (* a covering proof is all mst nodes needed to prove the value of a given leaf
+    and its siblings to its immediate right and left (if applicable) *)
+  let get_covering_proof t root key : Block_map.t Lwt.t =
+    let%lwt proofs =
+      Lwt.all
+        [ proof_for_key t root key
+        ; proof_for_left_sibling t root key
+        ; proof_for_right_sibling t root key ]
+    in
+    Lwt.return
+      (List.fold_left
+         (fun acc proof -> Block_map.merge acc proof)
+         Block_map.empty proofs )
 end
