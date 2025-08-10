@@ -1,4 +1,6 @@
 (library
  (name ipld)
  (wrapped false)
- (libraries base64 digestif multibase yojson))
+ (libraries base64 digestif lwt multibase yojson lwt_ppx)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson)))

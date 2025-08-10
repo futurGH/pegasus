@@ -40,13 +40,15 @@
 (package
  (name ipld)
  (synopsis "A DASL-compliant implementation of some IPLD formats")
- (description "Currently includes DAG-CBOR and CIDv1")
+ (description "Currently includes DAG-CBOR, CIDv1, and CARv1")
  (allow_empty)
  (depends
   ocaml
   dune
   (base64 (>= 3.5.1))
   (digestif (>= 1.2.0))
+  lwt
   (multibase (>= 0.1.0))
   (yojson (>= 3.0.0))
+  (lwt_ppx (>= 5.9.1))
   (alcotest :with-test)))
