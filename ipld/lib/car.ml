@@ -70,10 +70,9 @@ let blocks_to_stream (root : Cid.t option) (blocks : (Cid.t * bytes) Lwt_seq.t)
   let seq = Lwt_seq.of_list [Varint.encode (Bytes.length header); header] in
   Lwt_seq.append seq
     (Lwt_seq.flat_map
-       (fun (cid, block) ->
+       (fun ((cid, block) : Cid.t * bytes) ->
          Lwt_seq.of_list
-           [ Varint.encode
-               ((cid |> Cid.to_bytes |> Bytes.length) + Bytes.length block)
+           [ Varint.encode (Bytes.length cid.bytes + Bytes.length block)
            ; cid.bytes
            ; block ] )
        blocks )

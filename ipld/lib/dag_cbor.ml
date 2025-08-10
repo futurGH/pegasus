@@ -30,7 +30,7 @@ type value =
 let rec of_yojson (json : Yojson.Safe.t) : value =
   match json with
   | `Assoc [("$bytes", `String s)] ->
-      `Bytes (Bytes.of_string (Base64.decode_exn s))
+      `Bytes (Bytes.of_string (Base64.decode_exn ~pad:false s))
   | `Assoc [("$link", `String s)] ->
       `Link (Result.get_ok (Cid.of_string s))
   | `Assoc assoc_list ->
@@ -67,7 +67,7 @@ let rec to_yojson (value : value) : Yojson.Safe.t =
   | `Boolean b ->
       `Bool b
   | `Integer i ->
-      `Intlit (Int64.to_string i)
+      `Int (Int64.to_int i)
   | `Float f ->
       `Float f
   | `String s ->

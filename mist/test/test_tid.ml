@@ -2,7 +2,7 @@ module Tid = Mist.Tid
 
 let test_create () =
   Alcotest.(check string)
-    "tid" "3kztsgrxhzsje"
+    "tid" "3kztsgrxiyxje"
     (Tid.of_timestamp_ms 1723819911723L ~clockid:490)
 
 let test_invalid_create () =

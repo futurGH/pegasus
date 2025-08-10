@@ -139,8 +139,8 @@ let of_yojson = function
       of_string str
   | `String str ->
       of_string str
-  | _ ->
-      Error "CID must be a string"
+  | s ->
+      Error (Printf.sprintf "invalid CID: %s" (Yojson.Safe.to_string s))
 
 let compare a b = String.compare (to_string a) (to_string b)
 

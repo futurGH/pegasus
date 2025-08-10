@@ -388,14 +388,14 @@ let test_decode_multiple_objects () =
 
 let test_yojson_roundtrip () =
   let record_embed_images_0_aspect_ratio : Yojson.Safe.t =
-    `Assoc [("height", `Intlit "885"); ("width", `Intlit "665")]
+    `Assoc [("height", `Int 885); ("width", `Int 665)]
   in
   let record_embed_images_0_image : Yojson.Safe.t =
     `Assoc
-      [ ("height", `Intlit "885")
-      ; ("width", `Intlit "665")
+      [ ("height", `Int 885)
+      ; ("width", `Int 665)
       ; ("mimeType", `String "image/jpeg")
-      ; ("size", `Intlit "645553") ]
+      ; ("size", `Int 645553) ]
   in
   let record_embed_images_0 : Yojson.Safe.t =
     `Assoc

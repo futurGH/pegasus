@@ -1,4 +1,8 @@
 (tests
- (names test_tid test_util)
+ (names test_mst test_tid test_util)
  (package mist)
- (libraries mist alcotest))
+ (libraries ipld mist lwt lwt_ppx alcotest)
+ (deps
+  (file %{project_root}/mist/test/sample.car))
+ (preprocess
+  (pps lwt_ppx)))

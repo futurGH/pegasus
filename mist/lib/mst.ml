@@ -161,6 +161,8 @@ module Make (Store : Writable_blockstore) = struct
   let decode_block_raw b : node_raw =
     match Dag_cbor.decode b with
     | `Map node ->
+        Yojson.Safe.pretty_print Format.std_formatter
+          (Dag_cbor.to_yojson (`Map node)) ;
         if not (StringMap.mem "e" node) then
           raise (Invalid_argument "mst node missing 'e'") ;
         let l =
@@ -378,21 +380,23 @@ module Make (Store : Writable_blockstore) = struct
               Lwt.return path_tail ) )
 
   (* returns all mst entries in order for a car stream *)
-  let to_blocks_seq t : (Cid.t * bytes) Lwt_seq.t =
+  let to_blocks_stream t : (Cid.t * bytes) Lwt_seq.t =
     let module M = struct
       type stage =
         (* currently walking nodes *)
         | Nodes of
             { next: Cid.t list (* next cids to fetch *)
             ; fetched: (Cid.t * bytes) list (* fetched cids and their bytes *)
-            ; leaves: Cid.Set.t (* seen leaf cids *) }
+            ; leaves_seen: Cid.Set.t (* seen leaf cids for dedupe *)
+            ; leaves_rev: Cid.t list (* reversed encounter order of leaves *) }
         (* done walking nodes, streaming accumulated leaves *)
         | Leaves of (Cid.t * bytes) list
         | Done
     end in
     let open M in
     let init_state =
-      Nodes {next= [t.root]; fetched= []; leaves= Cid.Set.empty}
+      Nodes
+        {next= [t.root]; fetched= []; leaves_seen= Cid.Set.empty; leaves_rev= []}
     in
     let rec step = function
       | Done ->
@@ -401,13 +405,21 @@ module Make (Store : Writable_blockstore) = struct
       | Nodes ({fetched= (cid, bytes) :: rest; _} as s) ->
           Lwt.return_some ((cid, bytes), Nodes {s with fetched= rest})
       (* need to fetch next nodes *)
-      | Nodes {next; fetched= []; leaves} ->
+      | Nodes {next; fetched= []; leaves_seen; leaves_rev} ->
           if List.is_empty next then (
             (* finished traversing nodes, time to switch to leaves *)
-            let leaves_list = Cid.Set.to_list leaves in
+            let leaves_list = List.rev leaves_rev in
             let%lwt leaves_bm = Store.get_blocks t.blockstore leaves_list in
             if leaves_bm.missing <> [] then failwith "missing mst leaf blocks" ;
-            let leaves_nodes = Block_map.entries leaves_bm.blocks in
+            let leaves_nodes =
+              List.map
+                (fun cid ->
+                  let bytes =
+                    Block_map.get cid leaves_bm.blocks |> Option.get
+                  in
+                  (cid, bytes) )
+                leaves_list
+            in
             match leaves_nodes with
             | [] ->
                 (* with Done, we don't care about the first pair element *)
@@ -419,9 +431,9 @@ module Make (Store : Writable_blockstore) = struct
             (* go ahead and fetch the next nodes *)
             let%lwt bm = Store.get_blocks t.blockstore next in
             if bm.missing <> [] then failwith "missing mst nodes" ;
-            let fetched, next', leaves' =
+            let fetched, next', leaves_seen', leaves_rev' =
               List.fold_left
-                (fun (acc, nxt, lvs) cid ->
+                (fun (acc, nxt, seen, rev) cid ->
                   let bytes =
                     (* we should be safe to do this since we just got the cids from the blockmap *)
                     Block_map.get cid bm.blocks |> Option.get
@@ -440,19 +452,25 @@ module Make (Store : Writable_blockstore) = struct
                           nxt )
                       node.e
                   in
-                  let lvs' =
-                    (* add each entry in this node to the list of seen leaves *)
-                    List.fold_left (fun s e -> Cid.Set.add e.v s) lvs node.e
+                  let seen', rev' =
+                    (* add each entry in this node to the seen set and record encounter order *)
+                    List.fold_left
+                      (fun (s, r) e ->
+                        if Cid.Set.mem e.v s then (s, r)
+                        else (Cid.Set.add e.v s, e.v :: r) )
+                      (seen, rev) node.e
                   in
                   (* prepending is O(1) per prepend + one O(n) to reverse, vs. O(n) per append = O(n^2) total *)
-                  ((cid, bytes) :: acc, nxt', lvs') )
-                ([], [], leaves) next
+                  ((cid, bytes) :: acc, nxt', seen', rev') )
+                ([], [], leaves_seen, leaves_rev)
+                next
             in
             step
               (Nodes
                  { next= List.rev next'
                  ; fetched= List.rev fetched
-                 ; leaves= leaves' } )
+                 ; leaves_seen= leaves_seen'
+                 ; leaves_rev= leaves_rev' } )
       (* if we're onto yielding leaves, do that *)
       | Leaves ((cid, bytes) :: rest) ->
           let next = if rest = [] then Done else Leaves rest in
@@ -462,6 +480,14 @@ module Make (Store : Writable_blockstore) = struct
           Lwt.return_some (Obj.magic (), Done)
     in
     Lwt_seq.unfold_lwt step init_state
+
+  (* returns a car v1 formatted stream containing the mst *)
+  let to_car_stream t : bytes Lwt_seq.t =
+    t |> to_blocks_stream |> Car.blocks_to_stream (Some t.root)
+
+  (* returns a car archive containing the mst *)
+  let to_car t : bytes Lwt.t =
+    t |> to_blocks_stream |> Car.blocks_to_car (Some t.root)
 
   (* returns all mst nodes needed to prove the value of a given key *)
   let rec proof_for_key t root key : Block_map.t Lwt.t =
@@ -743,4 +769,74 @@ module Make (Store : Writable_blockstore) = struct
         let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
         Lwt.return
           {adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
+
+  (* checks that two msts are identical by recursively comparing their entries *)
+  let equal (t1 : t) (t2 : t) : bool Lwt.t =
+    let rec nodes_equal (n1 : node) (n2 : node) : bool Lwt.t =
+      if n1.layer <> n2.layer then Lwt.return false
+      else if List.length n1.entries <> List.length n2.entries then
+        Lwt.return false
+      else
+        let%lwt left_equal =
+          n1.left
+          >>? function
+          | Some l1 -> (
+              n2.left
+              >>? function
+              | Some l2 ->
+                  nodes_equal l1 l2
+              | None ->
+                  Lwt.return false )
+          | None -> (
+              n2.left
+              >>? function
+              | Some _ ->
+                  Lwt.return false
+              | None ->
+                  Lwt.return true )
+        in
+        if not left_equal then Lwt.return false
+        else
+          let rec entries_equal (e1s : entry list) (e2s : entry list) =
+            match (e1s, e2s) with
+            | [], [] ->
+                Lwt.return true
+            | e1 :: rest1, e2 :: rest2 ->
+                if
+                  e1.layer <> e2.layer || e1.key <> e2.key
+                  || not (Cid.equal e1.value e2.value)
+                then Lwt.return false
+                else
+                  let%lwt right_equal =
+                    e1.right
+                    >>? function
+                    | Some r1 -> (
+                        e2.right
+                        >>? function
+                        | Some r2 ->
+                            nodes_equal r1 r2
+                        | None ->
+                            Lwt.return false )
+                    | None -> (
+                        e2.right
+                        >>? function
+                        | Some _ ->
+                            Lwt.return false
+                        | None ->
+                            Lwt.return true )
+                  in
+                  if not right_equal then Lwt.return false
+                  else entries_equal rest1 rest2
+            | _ ->
+                Lwt.return false
+          in
+          entries_equal n1.entries n2.entries
+    in
+    match%lwt Lwt.all [retrieve_node t1 t1.root; retrieve_node t2 t2.root] with
+    | [Some r1; Some r2] ->
+        nodes_equal r1 r2
+    | [None; None] ->
+        Lwt.return true
+    | _ ->
+        Lwt.return false
 end
