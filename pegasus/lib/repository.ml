@@ -1,3 +1,5 @@
+open Mist
+
 type commit =
   { did: string
   ; version: int (* always 3 *)
@@ -36,13 +38,5 @@ type signed_commit =
 type signing_key = P256 of bytes | K256 of bytes
 
 module Make (Store : Storage.Writable_blockstore) = struct
-  type store = Store.t
-
-  let read_commit store cid : (signed_commit, string) Lwt_result.t =
-    let%lwt bytes = Store.get_bytes store cid in
-    match bytes with
-    | Some b ->
-        b |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson |> Lwt.return
-    | None ->
-        Lwt.return_error ("commit not found in blockstore: " ^ Cid.to_string cid)
+  type t = {store: Store.t; key: signing_key}
 end

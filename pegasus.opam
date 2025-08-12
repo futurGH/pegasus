@@ -10,6 +10,12 @@ bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.14"}
+  "lwt"
+  "re" {>= "1.13.2"}
+  "yojson" {>= "3.0.0"}
+  "lwt_ppx" {>= "5.9.1"}
+  "ppx_deriving_yojson" {>= "3.9.1"}
+  "alcotest" {with-test}
   "odoc" {with-doc}
 ]
 build: [

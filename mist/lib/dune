@@ -4,12 +4,9 @@
   core_unix.time_stamp_counter
   core_unix.time_ns_unix
   digestif
-  hacl-star
   ipld
   lwt
   lwt.unix
-  mtime.clock
-  multihash
   re
   str
   yojson

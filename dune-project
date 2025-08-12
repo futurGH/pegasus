@@ -15,7 +15,15 @@
  (synopsis "An atproto Personal Data Server implementation")
  (description "Eventually")
  (allow_empty)
- (depends ocaml dune))
+ (depends
+  ocaml
+  dune
+  lwt
+  (re (>= 1.13.2))
+  (yojson (>= 3.0.0))
+  (lwt_ppx (>= 5.9.1))
+  (ppx_deriving_yojson (>= 3.9.1))
+  (alcotest :with-test)))
 
 (package
  (name mist)
@@ -24,13 +32,8 @@
  (depends
   ocaml
   dune
-  (core_unix (>= 0.17.1))
-  (cborl (>= 0.1.0))
-  (cid (>= 0.1.0))
-  (hacl-star (>= 0.7.2))
   lwt
-  (mtime (>= 2.1.0))
-  (multihash (>= 0.1.0))
+  (core_unix (>= 0.17.1))
   (re (>= 1.13.2))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
@@ -45,10 +48,8 @@
  (depends
   ocaml
   dune
-  (base64 (>= 3.5.1))
-  (digestif (>= 1.2.0))
   lwt
-  (multibase (>= 0.1.0))
+  (digestif (>= 1.2.0))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (alcotest :with-test)))

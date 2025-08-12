@@ -1,2 +1,16 @@
 (library
- (name pegasus))
+ (name pegasus)
+ (libraries
+  ipld
+  lwt
+  lwt.unix
+  mist
+  re
+  str
+  yojson
+  lwt_ppx
+  ppx_deriving_yojson.runtime)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson)))
+
+(include_subdirs qualified)

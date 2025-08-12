@@ -1,7 +1,6 @@
 open Mist
 open Lwt.Infix
 module MemMst = Mst.Make (Storage.Memory_blockstore)
-module MemRepo = Repository.Make (Storage.Memory_blockstore)
 module StringMap = Dag_cbor.StringMap
 
 let cid_of_string_exn s =
@@ -826,10 +825,24 @@ let test_roundtrip () =
     in
     let store = Storage.Memory_blockstore.create ~blocks:bm () in
     let%lwt commit =
-      MemRepo.read_commit store root
-      >|= function Ok commit -> commit | Error msg -> failwith msg
+      match%lwt Storage.Memory_blockstore.get_bytes store root with
+      | Some b -> (
+        match Dag_cbor.decode b with
+        | `Map commit ->
+            Lwt.return commit
+        | _ ->
+            failwith "non-object commit" )
+      | None ->
+          failwith "root not found in blockstore"
     in
-    let mst = MemMst.create store commit.data in
+    let mst =
+      MemMst.create store
+        ( match StringMap.find "data" commit with
+        | `Link cid ->
+            cid
+        | _ ->
+            failwith "non-cid data in commit" )
+    in
     Lwt.return (commit, mst)
   in
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.input "sample.car" in
@@ -837,9 +850,7 @@ let test_roundtrip () =
   let%lwt () = Lwt_io.close ic in
   let%lwt commit, mst = mst_of_car_bytes car in
   let mst_stream = MemMst.to_blocks_stream mst in
-  let commit_bytes =
-    Dag_cbor.encode_yojson (Repository.signed_commit_to_yojson commit)
-  in
+  let commit_bytes = Dag_cbor.encode (`Map commit) in
   let commit_cid = Cid.create Dcbor commit_bytes in
   let%lwt car' =
     Car.blocks_to_car (Some commit_cid)
