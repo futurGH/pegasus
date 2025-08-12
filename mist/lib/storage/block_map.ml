@@ -4,7 +4,7 @@ type t = bytes Cid_map.t
 
 type with_missing = {blocks: t; missing: Cid.t list}
 
-let empty = Cid_map.empty
+let empty : t = Cid_map.empty
 
 let add value m =
   let cid, bytes = Lex.to_cbor_block value in

@@ -1,6 +1,9 @@
 (library
  (name pegasus)
  (libraries
+  caqti
+  caqti-lwt
+  caqti-driver-sqlite3
   ipld
   lwt
   lwt.unix
@@ -9,8 +12,9 @@
   str
   yojson
   lwt_ppx
-  ppx_deriving_yojson.runtime)
+  ppx_deriving_yojson.runtime
+  ppx_rapper_lwt)
  (preprocess
-  (pps lwt_ppx ppx_deriving_yojson)))
+  (pps lwt_ppx ppx_deriving_yojson ppx_rapper)))
 
 (include_subdirs qualified)
