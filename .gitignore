@@ -2,6 +2,7 @@ _opam
 _build
 _boot
 _test_boot
+dune.lock
 
 .DS_Store
 .vscode/

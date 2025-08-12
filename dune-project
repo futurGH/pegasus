@@ -19,10 +19,15 @@
   ocaml
   dune
   lwt
+  (caqti (>= 1.9.0))
+  (caqti-driver-sqlite3 (>= 1.9.0))
+  (caqti-lwt (>= 1.9.0))
   (re (>= 1.13.2))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (ppx_deriving_yojson (>= 3.9.1))
+  (ppx_rapper (>= 3.0.0))
+  (ppx_rapper_lwt (>= 3.0.0))
   (alcotest :with-test)))
 
 (package
@@ -33,7 +38,7 @@
   ocaml
   dune
   lwt
-  (core_unix (>= 0.17.1))
+  (core_unix (>= 0.16.0))
   (re (>= 1.13.2))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
@@ -50,6 +55,7 @@
   dune
   lwt
   (digestif (>= 1.2.0))
+  (multibase (>= 0.1.0))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (alcotest :with-test)))
