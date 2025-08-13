@@ -49,52 +49,6 @@ let ( >>? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
 
-(* produces a cid and cbor-encoded bytes for a given tree *)
-let serialize node : (Cid.t * bytes) Lwt.t =
-  let sorted_entries =
-    List.sort (fun a b -> String.compare a.key b.key) node.entries
-  in
-  let rec aux node =
-    let%lwt left =
-      node.left
-      >>? function
-      | Some l ->
-          let%lwt cid, _ = aux l in
-          Lwt.return_some cid
-      | None ->
-          Lwt.return_none
-    in
-    let last_key = ref "" in
-    let%lwt mst_entries =
-      Lwt_list.map_s
-        (fun entry ->
-          let%lwt right =
-            entry.right
-            >>? function
-            | Some r ->
-                let%lwt cid, _ = aux r in
-                Lwt.return (Some cid)
-            | None ->
-                Lwt.return None
-          in
-          let prefix_len = Util.shared_prefix_length !last_key entry.key in
-          last_key := entry.key ;
-          Lwt.return
-            { k=
-                Bytes.of_string
-                  (String.sub entry.key prefix_len
-                     (String.length entry.key - prefix_len) )
-            ; p= prefix_len
-            ; v= entry.value
-            ; t= right } )
-        node.entries
-    in
-    let encoded = Dag_cbor.encode (encode_node_raw {l= left; e= mst_entries}) in
-    let cid = Cid.create Dcbor encoded in
-    Lwt.return (cid, encoded)
-  in
-  aux {node with entries= sorted_entries}
-
 module Make (Store : Writable_blockstore) = struct
   type bs = Store.t
 
@@ -432,6 +386,59 @@ module Make (Store : Writable_blockstore) = struct
   let to_car t : bytes Lwt.t =
     t |> to_blocks_stream |> Car.blocks_to_car (Some t.root)
 
+  (* produces a cid and cbor-encoded bytes for a given tree *)
+  let serialize t node : (Cid.t * bytes, exn) Lwt_result.t =
+    let sorted_entries =
+      List.sort (fun a b -> String.compare a.key b.key) node.entries
+    in
+    let rec aux node : (Cid.t * bytes) Lwt.t =
+      let%lwt left =
+        node.left
+        >>? function
+        | Some l ->
+            let%lwt cid, _ = aux l in
+            Lwt.return_some cid
+        | None ->
+            Lwt.return_none
+      in
+      let last_key = ref "" in
+      let%lwt mst_entries =
+        Lwt_list.map_s
+          (fun entry ->
+            let%lwt right =
+              entry.right
+              >>? function
+              | Some r ->
+                  let%lwt cid, _ = aux r in
+                  Lwt.return_some cid
+              | None ->
+                  Lwt.return_none
+            in
+            let prefix_len = Util.shared_prefix_length !last_key entry.key in
+            last_key := entry.key ;
+            Lwt.return
+              { k=
+                  Bytes.of_string
+                    (String.sub entry.key prefix_len
+                       (String.length entry.key - prefix_len) )
+              ; p= prefix_len
+              ; v= entry.value
+              ; t= right } )
+          node.entries
+      in
+      let encoded =
+        Dag_cbor.encode (encode_node_raw {l= left; e= mst_entries})
+      in
+      let cid = Cid.create Dcbor encoded in
+      match%lwt Store.put_block t.blockstore cid encoded with
+      | Ok _ ->
+          Lwt.return (cid, encoded)
+      | Error e ->
+          raise e
+    in
+    try%lwt Lwt.map Result.ok (aux {node with entries= sorted_entries})
+    with e -> Lwt.return_error e
+
   (* raw-node helpers for covering proofs: operate on stored bytes, not re-serialization *)
   type interleaved_entry =
     | Tree of Cid.t
@@ -728,11 +735,11 @@ module Make (Store : Writable_blockstore) = struct
     Lwt.return sorted
 
   (* creates and persists an empty mst *)
-  let create_empty blockstore : t Lwt.t =
+  let create_empty blockstore : (t, exn) Lwt_result.t =
     let encoded = Dag_cbor.encode (encode_node_raw {l= None; e= []}) in
     let cid = Cid.create Dcbor encoded in
-    let%lwt () = Store.put_block blockstore cid encoded in
-    Lwt.return {blockstore; root= cid}
+    Lwt_result.bind (Store.put_block blockstore cid encoded) (fun _ ->
+        Lwt.return_ok {blockstore; root= cid} )
 
   (* returns the cid for a given key, if it exists *)
   let get_cid t key : Cid.t option Lwt.t =
@@ -795,7 +802,7 @@ module Make (Store : Writable_blockstore) = struct
       | [] ->
           let encoded = Dag_cbor.encode (encode_node_raw {l= None; e= []}) in
           let cid = Cid.create Dcbor encoded in
-          Store.put_block blockstore cid encoded >|= fun () -> (cid, 0)
+          Store.put_block blockstore cid encoded >|= fun _ -> (cid, 0)
       | _ ->
           let with_layers =
             List.map (fun (k, v) -> (k, v, Util.leading_zeros_on_hash k)) pairs
@@ -833,7 +840,7 @@ module Make (Store : Writable_blockstore) = struct
                     in
                     let cid' = Cid.create Dcbor encoded in
                     Store.put_block blockstore cid' encoded
-                    >>= fun () -> wrap cid' (layer + 1)
+                    >>= fun _ -> wrap cid' (layer + 1)
                 in
                 wrap cid child_layer >|= fun c -> Some c
           in
@@ -874,7 +881,7 @@ module Make (Store : Writable_blockstore) = struct
                         in
                         let cid' = Cid.create Dcbor encoded in
                         Store.put_block blockstore cid' encoded
-                        >>= fun () -> wrap cid' (layer + 1)
+                        >>= fun _ -> wrap cid' (layer + 1)
                     in
                     wrap cid child_layer >|= fun c -> Some c )
               rights
@@ -895,7 +902,7 @@ module Make (Store : Writable_blockstore) = struct
           let node_raw = {l= l_cid; e= entries_raw} in
           let encoded = Dag_cbor.encode (encode_node_raw node_raw) in
           let cid = Cid.create Dcbor encoded in
-          Store.put_block blockstore cid encoded >|= fun () -> (cid, root_layer)
+          Store.put_block blockstore cid encoded >|= fun _ -> (cid, root_layer)
     in
     persist_from_sorted sorted >|= fun (root, _) -> {blockstore; root}
 

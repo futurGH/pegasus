@@ -11,20 +11,20 @@ module Make () = struct
 
   let put_block s cid bytes =
     s.blocks <- Block_map.set cid bytes s.blocks ;
-    Lwt.return_unit
+    Lwt.return_ok true
 
   let put_many s blocks =
     s.blocks <- Block_map.merge s.blocks blocks ;
-    Lwt.return_unit
+    Lwt.return_ok (Block_map.size blocks)
 
   let delete_block s cid =
     s.blocks <- Block_map.remove cid s.blocks ;
-    Lwt.return_unit
+    Lwt.return_ok true
 
   let delete_many s cids =
     s.blocks <-
       List.fold_left
         (fun blocks cid -> Block_map.remove cid blocks)
         s.blocks cids ;
-    Lwt.return_unit
+    Lwt.return_ok (List.length cids)
 end

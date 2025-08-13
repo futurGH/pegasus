@@ -13,11 +13,11 @@ module type Writable = sig
 
   include Readable with type t := t
 
-  val put_block : t -> Cid.t -> bytes -> unit Lwt.t
+  val put_block : t -> Cid.t -> bytes -> (bool, exn) Lwt_result.t
 
-  val put_many : t -> Block_map.t -> unit Lwt.t
+  val put_many : t -> Block_map.t -> (int, exn) Lwt_result.t
 
-  val delete_block : t -> Cid.t -> unit Lwt.t
+  val delete_block : t -> Cid.t -> (bool, exn) Lwt_result.t
 
-  val delete_many : t -> Cid.t list -> unit Lwt.t
+  val delete_many : t -> Cid.t list -> (int, exn) Lwt_result.t
 end
