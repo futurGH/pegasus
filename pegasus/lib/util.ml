@@ -91,6 +91,9 @@ let connect_sqlite db_uri =
       let$! () =
         [%rapper execute {sql| PRAGMA synchronous=NORMAL; |sql} syntax_off] () c
       in
+      let$! () =
+        [%rapper execute {sql| PRAGMA foreign_keys=ON; |sql} syntax_off] () c
+      in
       Lwt.return c
   | Error e ->
       raise (Caqti_error.Exn e)
