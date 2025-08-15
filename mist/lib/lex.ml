@@ -6,8 +6,6 @@ type value =
   | `LexArray of value Array.t
   | `LexMap of value StringMap.t ]
 
-type repo_record = value StringMap.t
-
 let rec to_ipld (v : value) : Dag_cbor.value =
   match v with
   | `BlobRef r -> (
@@ -78,6 +76,22 @@ let to_cbor_block obj =
   let cid = Cid.create Dcbor encoded in
   (cid, encoded)
 
+let of_yojson (v : Yojson.Safe.t) : value = of_ipld (Dag_cbor.of_yojson v)
+
+let to_yojson (v : value) : Yojson.Safe.t = Dag_cbor.to_yojson (to_ipld v)
+
+type repo_record =
+  (value StringMap.t
+  [@of_yojson
+    fun v ->
+      match of_yojson v with
+      | `LexMap m ->
+          Ok m
+      | _ ->
+          Error "decoded non-map value"]
+  [@to_yojson fun v -> to_yojson (`LexMap v)] )
+[@@deriving yojson]
+
 let of_cbor encoded : repo_record =
   let decoded = Dag_cbor.decode encoded in
   match of_ipld decoded with
@@ -85,7 +99,3 @@ let of_cbor encoded : repo_record =
       m
   | _ ->
       raise (Failure "Decoded non-record value")
-
-let of_yojson (v : Yojson.Safe.t) : value = of_ipld (Dag_cbor.of_yojson v)
-
-let to_yojson (v : value) : Yojson.Safe.t = Dag_cbor.to_yojson (to_ipld v)

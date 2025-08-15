@@ -1,10 +1,19 @@
 module Syntax = struct
+  (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( let$! ) m f =
     match%lwt m with Ok x -> f x | Error e -> raise (Caqti_error.Exn e)
+
+  (* unwraps an Lwt result, raising an exception if there's an error *)
+  let ( >$! ) m f =
+    match%lwt m with
+    | Ok x ->
+        Lwt.return (f x)
+    | Error e ->
+        raise (Caqti_error.Exn e)
 end
 
 module Rapper = struct
-  module Cid : Rapper.CUSTOM with type t = Cid.t = struct
+  module CID : Rapper.CUSTOM with type t = Cid.t = struct
     type t = Cid.t
 
     let t =
@@ -28,6 +37,50 @@ module Rapper = struct
   end
 end
 
+(* turns a caqti error into an exception *)
+let caqti_result_exn = function
+  | Ok x ->
+      Ok x
+  | Error caqti_err ->
+      Error (Caqti_error.Exn caqti_err)
+
+(* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
+let multi_query connection
+    (queries : (unit -> ('a, Caqti_error.t) Lwt_result.t) list) =
+  let open Syntax in
+  let module C = (val connection : Caqti_lwt.CONNECTION) in
+  let$! () = C.start () in
+  let is_ignorable_error e =
+    match (e : Caqti_error.t) with
+    | `Request_failed qe | `Response_failed qe -> (
+      match Caqti_error.cause (`Request_failed qe) with
+      | `Not_null_violation | `Unique_violation ->
+          true
+      | _ ->
+          false )
+    | _ ->
+        false
+  in
+  let rec aux acc queries =
+    match acc with
+    | Error e ->
+        Lwt.return_error e
+    | Ok count -> (
+      match queries with
+      | [] ->
+          Lwt.return (Ok count)
+      | query :: rest -> (
+          let%lwt result = query () in
+          match result with
+          | Ok _ ->
+              aux (Ok (count + 1)) rest
+          | Error e ->
+              if is_ignorable_error e then aux (Ok count) rest
+              else Lwt.return_error e ) )
+  in
+  aux (Ok 0) queries
+
+(* opens an sqlite connection *)
 let connect_sqlite db_uri =
   let open Syntax in
   match%lwt Caqti_lwt.connect (Uri.of_string db_uri) with
