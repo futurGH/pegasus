@@ -1,31 +1,6 @@
+open Util.Rapper
 open Util.Syntax
-include Caqti_type.Std
-include Caqti_request.Infix
-include Lwt_result.Syntax
 module Block_map = Mist.Storage.Block_map
-
-module Cid : Rapper.CUSTOM with type t = Cid.t = struct
-  type t = Cid.t
-
-  let t =
-    let encode cid =
-      try Ok (Cid.to_string cid) with e -> Error (Printexc.to_string e)
-    in
-    Caqti_type.(custom ~encode ~decode:Cid.of_string string)
-end
-
-module Blob : Rapper.CUSTOM with type t = bytes = struct
-  type t = bytes
-
-  let t =
-    let encode blob =
-      try Ok (Bytes.to_string blob) with e -> Error (Printexc.to_string e)
-    in
-    let decode blob =
-      try Ok (Bytes.of_string blob) with e -> Error (Printexc.to_string e)
-    in
-    Caqti_type.(custom ~encode ~decode string)
-end
 
 type t = {connection: Caqti_lwt.connection}
 
@@ -117,6 +92,11 @@ let multi_query connection
   in
   aux (Ok 0) queries
 
+let connect db_uri =
+  let%lwt connection = Util.connect_sqlite db_uri in
+  let$! () = Queries.create_table connection in
+  Lwt.return {connection}
+
 let get_bytes t cid =
   let$! b_opt = Queries.get_block cid t.connection in
   match b_opt with
@@ -163,8 +143,3 @@ let delete_block t cid =
 let delete_many t cids =
   let$! deleted = Queries.delete_blocks cids t.connection in
   Lwt.return_ok (List.length deleted)
-
-let connect db_uri =
-  let%lwt connection = Util.connect_sqlite db_uri in
-  let$! () = Queries.create_table connection in
-  Lwt.return {connection}
