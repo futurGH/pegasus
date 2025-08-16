@@ -46,7 +46,8 @@ let caqti_result_exn = function
 
 (* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
 let multi_query connection
-    (queries : (unit -> ('a, Caqti_error.t) Lwt_result.t) list) =
+    (queries : (unit -> ('a, Caqti_error.t) Lwt_result.t) list) :
+    (int, exn) Lwt_result.t =
   let open Syntax in
   let module C = (val connection : Caqti_lwt.CONNECTION) in
   let$! () = C.start () in
@@ -76,7 +77,7 @@ let multi_query connection
               aux (Ok (count + 1)) rest
           | Error e ->
               if is_ignorable_error e then aux (Ok count) rest
-              else Lwt.return_error e ) )
+              else Lwt.return_error (Caqti_error.Exn e) ) )
   in
   aux (Ok 0) queries
 
