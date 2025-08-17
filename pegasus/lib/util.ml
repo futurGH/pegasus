@@ -1,3 +1,7 @@
+module Exceptions = struct
+  exception XrpcError of (string * string)
+end
+
 module Syntax = struct
   (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( let$! ) m f =
@@ -44,6 +48,24 @@ let caqti_result_exn = function
   | Error caqti_err ->
       Error (Caqti_error.Exn caqti_err)
 
+(* opens an sqlite connection *)
+let connect_sqlite db_uri =
+  let open Syntax in
+  match%lwt Caqti_lwt.connect (Uri.of_string db_uri) with
+  | Ok c ->
+      let$! () =
+        [%rapper execute {sql| PRAGMA journal_mode=WAL; |sql} syntax_off] () c
+      in
+      let$! () =
+        [%rapper execute {sql| PRAGMA synchronous=NORMAL; |sql} syntax_off] () c
+      in
+      let$! () =
+        [%rapper execute {sql| PRAGMA foreign_keys=ON; |sql} syntax_off] () c
+      in
+      Lwt.return c
+  | Error e ->
+      raise (Caqti_error.Exn e)
+
 (* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
 let multi_query connection
     (queries : (unit -> ('a, Caqti_error.t) Lwt_result.t) list) :
@@ -81,20 +103,10 @@ let multi_query connection
   in
   aux (Ok 0) queries
 
-(* opens an sqlite connection *)
-let connect_sqlite db_uri =
-  let open Syntax in
-  match%lwt Caqti_lwt.connect (Uri.of_string db_uri) with
-  | Ok c ->
-      let$! () =
-        [%rapper execute {sql| PRAGMA journal_mode=WAL; |sql} syntax_off] () c
-      in
-      let$! () =
-        [%rapper execute {sql| PRAGMA synchronous=NORMAL; |sql} syntax_off] () c
-      in
-      let$! () =
-        [%rapper execute {sql| PRAGMA foreign_keys=ON; |sql} syntax_off] () c
-      in
-      Lwt.return c
-  | Error e ->
-      raise (Caqti_error.Exn e)
+(* returns all blob refs in a record *)
+let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
+  List.fold_left
+    (fun acc (_, value) ->
+      match value with `BlobRef blob -> blob :: acc | _ -> acc )
+    []
+    (Mist.Lex.StringMap.bindings record)

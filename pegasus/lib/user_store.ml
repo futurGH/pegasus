@@ -11,6 +11,8 @@ type record = {path: string; cid: Cid.t; value: Lex.repo_record; since: Tid.t}
 
 type blob = {id: int; cid: Cid.t; mimetype: string; data: Blob.t}
 
+type t = (module Rapper_helper.CONNECTION)
+
 module Queries = struct
   (* mst storage *)
   let create_mst_table =
@@ -90,7 +92,7 @@ module Queries = struct
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path LIKE %string{collection}/%
       |sql}]
 
-  let write_record =
+  let put_record =
     [%rapper
       execute
         {sql| INSERT INTO records (path, cid, data, since)
@@ -148,11 +150,27 @@ module Queries = struct
         {sql| SELECT @CID{cid} FROM blobs WHERE id > %int{cursor} ORDER BY id LIMIT %int{limit} |sql}]
       ~limit ~cursor
 
-  let write_blob cid mimetype data =
+  let put_blob cid mimetype data =
     [%rapper
       get_one
         {sql| INSERT INTO blobs (cid, mimetype, data) VALUES (%CID{cid}, %string{mimetype}, %Blob{data}) RETURNING @int{id} |sql}]
       ~cid ~mimetype ~data
+
+  let list_blob_refs path =
+    [%rapper
+      get_many
+        {sql| SELECT @CID{cid} FROM blobs WHERE path LIKE %string{path} |sql}]
+      ~path
+
+  let put_blob_ref cid path =
+    [%rapper
+      execute
+        {sql| INSERT INTO blobs_records (blob_id, record_path) VALUES (
+                (SELECT id FROM blobs WHERE cid = %CID{cid} LIMIT 1),
+                %string{path}
+              )
+        |sql}]
+      ~cid ~path
 end
 
 let init conn : unit Lwt.t =
@@ -225,11 +243,11 @@ let list_records conn collection : record list Lwt.t =
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return
 
-let write_record conn record path : unit Lwt.t =
+let put_record conn record path : Cid.t Lwt.t =
   let cid, data = Lex.to_cbor_block record in
   let since = Tid.now () in
-  let$! () = Queries.write_record ~path ~cid ~data ~since conn in
-  Lwt.return_unit
+  let$! () = Queries.put_record ~path ~cid ~data ~since conn in
+  Lwt.return cid
 
 (* blobs *)
 
@@ -241,6 +259,21 @@ let list_blobs conn ~limit ~cursor : Cid.t list Lwt.t =
   let$! blobs = Queries.list_blobs conn ~limit ~cursor in
   Lwt.return blobs
 
-let write_blob conn cid mimetype data : int Lwt.t =
-  let$! blob_id = Queries.write_blob conn cid mimetype data in
+let put_blob conn cid mimetype data : int Lwt.t =
+  let$! blob_id = Queries.put_blob cid mimetype data conn in
   Lwt.return blob_id
+
+let list_blob_refs conn path : Cid.t list Lwt.t =
+  let$! blob_refs = Queries.list_blob_refs path conn in
+  Lwt.return blob_refs
+
+let put_blob_ref conn path cid : unit Lwt.t =
+  let$! () = Queries.put_blob_ref path cid conn in
+  Lwt.return_unit
+
+let put_blob_refs conn path cids : (unit, exn) Lwt_result.t =
+  Lwt_result.map (fun _ -> ())
+  @@ Util.multi_query conn
+       (List.map
+          (fun cid -> fun () -> Queries.put_blob_ref cid path conn)
+          cids )

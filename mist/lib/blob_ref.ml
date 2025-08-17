@@ -28,7 +28,7 @@ let of_yojson json =
               0L
         in
         Typed {type'; ref; mime_type; size}
-      else invalid_arg "of_yojson: invalid blob ref $type"
+      else failwith "invalid $type"
     else
       let cid = assoc |> List.assoc "cid" |> to_string in
       let mime_type = assoc |> List.assoc "mimeType" |> to_string in
