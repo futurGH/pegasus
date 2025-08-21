@@ -171,6 +171,15 @@ module Queries = struct
               )
         |sql}]
       ~cid ~path
+
+  let clear_blob_refs path cids =
+    [%rapper
+      execute
+        {sql| DELETE FROM blobs_records WHERE record_path LIKE %string{path} AND blob_id IN (
+                    SELECT id FROM blobs WHERE cid IN (%list{%CID{cids}})
+                  )
+            |sql}]
+      ~path ~cids
 end
 
 let init conn : unit Lwt.t =
@@ -277,3 +286,7 @@ let put_blob_refs conn path cids : (unit, exn) Lwt_result.t =
        (List.map
           (fun cid -> fun () -> Queries.put_blob_ref cid path conn)
           cids )
+
+let clear_blob_refs conn path cids : unit Lwt.t =
+  let$! () = Queries.clear_blob_refs path cids conn in
+  Lwt.return_unit

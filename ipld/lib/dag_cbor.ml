@@ -37,7 +37,7 @@ let rec of_yojson (json : Yojson.Safe.t) : value =
       `Map
         (StringMap.of_list
            (List.map (fun (k, v) -> (k, of_yojson v)) assoc_list) )
-  | `List lst ->
+  | `List lst | `Tuple lst ->
       `Array (Array.of_list (List.map of_yojson lst))
   | `Bool b ->
       `Boolean b
@@ -49,6 +49,8 @@ let rec of_yojson (json : Yojson.Safe.t) : value =
       `Float f
   | `String s ->
       `String s
+  | `Variant (_, value) -> (
+    match value with Some v -> of_yojson v | None -> `Null )
   | `Null ->
       `Null
 

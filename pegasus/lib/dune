@@ -5,6 +5,7 @@
   caqti-lwt
   caqti-driver-sqlite3
   ipld
+  kleidos
   lwt
   lwt.unix
   mist
