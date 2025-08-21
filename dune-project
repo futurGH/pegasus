@@ -59,3 +59,12 @@
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (alcotest :with-test)))
+
+(package
+ (name kleidos)
+ (synopsis "Atproto-flavour k256 and p256 signing and verification")
+ (allow_empty)
+ (depends
+  ocaml
+  dune
+  (hacl-star (>= 0.7.2))))
