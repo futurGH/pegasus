@@ -134,19 +134,27 @@ type t =
   ; did: string
   ; db: Caqti_lwt.connection
   ; mutable block_map: Cid.t StringMap.t option
-  ; mutable root: Cid.t }
+  ; mutable commit: Cid.t option }
 
-let get_map t mst_root : Cid.t StringMap.t Lwt.t =
+let get_map t : Cid.t StringMap.t Lwt.t =
+  let%lwt root, commit =
+    match%lwt User_store.get_commit t.db with
+    | Some (r, c) ->
+        Lwt.return (r, c)
+    | None ->
+        failwith ("failed to retrieve commit for " ^ t.did)
+  in
   match t.block_map with
-  | Some map ->
+  | Some map when Some root = t.commit ->
       Lwt.return map
-  | None ->
-      let%lwt map = Mst.build_map {blockstore= t.db; root= mst_root} in
+  | _ ->
+      let%lwt map = Mst.build_map {blockstore= t.db; root= commit.data} in
+      t.commit <- Some root ;
       t.block_map <- Some map ;
       Lwt.return map
 
 let get_record_cid t path : Cid.t option Lwt.t =
-  let%lwt map = get_map t t.root in
+  let%lwt map = get_map t in
   Lwt.return @@ StringMap.find_opt path map
 
 let get_record t path : record option Lwt.t =
@@ -154,7 +162,7 @@ let get_record t path : record option Lwt.t =
 
 let list_collections t : string list Lwt.t =
   let module Set = Set.Make (String) in
-  let%lwt map = get_map t t.root in
+  let%lwt map = get_map t in
   StringMap.bindings map
   |> List.fold_left
        (fun (acc : Set.t) (path, _) ->
@@ -164,7 +172,7 @@ let list_collections t : string list Lwt.t =
   |> Set.to_list |> Lwt.return
 
 let list_records t collection : (string * Cid.t * record) list Lwt.t =
-  let%lwt map = get_map t t.root in
+  let%lwt map = get_map t in
   StringMap.bindings map
   |> List.filter (fun (path, _) ->
          String.starts_with ~prefix:(path ^ "/") collection )
@@ -217,6 +225,7 @@ let put_commit t ?(previous : signed_commit option = None) mst_root :
   let%lwt commit_cid =
     User_store.put_commit t.db signed |> Lwt_result.get_exn
   in
+  t.commit <- Some commit_cid ;
   Lwt.return (commit_cid, signed)
 
 let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
@@ -232,16 +241,17 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     | Some (_, commit) ->
         Lwt.return commit
     | None ->
-        failwith "failed to find commit for repo"
+        failwith ("failed to retrieve commit for " ^ t.did)
   in
-  if swap_commit <> None && swap_commit <> Some t.root then
+  if swap_commit <> None && swap_commit <> t.commit then
     raise
       (XrpcError
          ( "InvalidSwap"
-         , Format.sprintf "swapRecord cid %s did not match commit cid %s"
+         , Format.sprintf "swapCommit cid %s did not match last commit cid %s"
              (Cid.to_string (Option.get swap_commit))
-             (Cid.to_string t.root) ) ) ;
-  let%lwt block_map = Lwt.map ref (get_map t commit.data) in
+             (match t.commit with Some c -> Cid.to_string c | None -> "null") )
+      ) ;
+  let%lwt block_map = Lwt.map ref (get_map t) in
   let%lwt results =
     List.map
       (fun (w : repo_write) ->
