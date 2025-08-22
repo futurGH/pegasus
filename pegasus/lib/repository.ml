@@ -1,51 +1,9 @@
+open User_store.Types
 open Util.Exceptions
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
 module StringMap = Lex.StringMap
 module Tid = Mist.Tid
-
-let cid_link_of_yojson = function
-  | `Assoc link ->
-      link |> List.assoc "$link" |> Cid.of_yojson
-      |> Result.map (fun cid -> Some cid)
-  | `Null ->
-      Ok None
-  | _ ->
-      Error "commit prev not a valid cid"
-
-let cid_link_to_yojson = function
-  | Some cid ->
-      Cid.to_yojson cid
-  | None ->
-      `Null
-
-type commit =
-  { did: string
-  ; version: int (* always 3 *)
-  ; data: Cid.t [@of_yojson Cid.of_yojson] [@to_yojson Cid.to_yojson]
-  ; rev: Tid.t
-  ; prev: Cid.t option
-        [@of_yojson cid_link_of_yojson] [@to_yojson cid_link_to_yojson] }
-[@@deriving yojson]
-
-type signed_commit =
-  { did: string
-  ; version: int (* always 3 *)
-  ; data: Cid.t [@of_yojson Cid.of_yojson] [@to_yojson Cid.to_yojson]
-  ; rev: Tid.t
-  ; prev: Cid.t option
-        [@of_yojson cid_link_of_yojson] [@to_yojson cid_link_to_yojson]
-  ; signature: bytes
-        [@key "sig"]
-        [@of_yojson
-          fun x ->
-            match Dag_cbor.of_yojson x with
-            | `Bytes b ->
-                Ok b
-            | _ ->
-                Error "commit sig not a valid bytes value"]
-        [@to_yojson fun x -> Dag_cbor.to_yojson (`Bytes x)] }
-[@@deriving yojson]
 
 type signing_key = P256 of bytes | K256 of bytes
 
@@ -173,17 +131,52 @@ type write_result =
 
 type t =
   { key: signing_key
+  ; did: string
   ; db: Caqti_lwt.connection
-  ; mutable block_map: Cid.t Mist.Mst.StringMap.t option }
+  ; mutable block_map: Cid.t StringMap.t option
+  ; mutable root: Cid.t }
 
-let get_map t root =
+let get_map t mst_root : Cid.t StringMap.t Lwt.t =
   match t.block_map with
   | Some map ->
       Lwt.return map
   | None ->
-      let%lwt map = Mst.build_map {blockstore= t.db; root} in
+      let%lwt map = Mst.build_map {blockstore= t.db; root= mst_root} in
       t.block_map <- Some map ;
       Lwt.return map
+
+let get_record_cid t path : Cid.t option Lwt.t =
+  let%lwt map = get_map t t.root in
+  Lwt.return @@ StringMap.find_opt path map
+
+let get_record t path : record option Lwt.t =
+  User_store.get_record_by_path t.db path
+
+let list_collections t : string list Lwt.t =
+  let module Set = Set.Make (String) in
+  let%lwt map = get_map t t.root in
+  StringMap.bindings map
+  |> List.fold_left
+       (fun (acc : Set.t) (path, _) ->
+         let collection = String.split_on_char '/' path |> List.hd in
+         Set.add collection acc )
+       Set.empty
+  |> Set.to_list |> Lwt.return
+
+let list_records t collection : (string * Cid.t * record) list Lwt.t =
+  let%lwt map = get_map t t.root in
+  StringMap.bindings map
+  |> List.filter (fun (path, _) ->
+         String.starts_with ~prefix:(path ^ "/") collection )
+  |> Lwt_list.fold_left_s
+       (fun acc (path, cid) ->
+         match%lwt User_store.get_record_by_cid t.db cid with
+         | Some record ->
+             Lwt.return
+               ((Format.sprintf "at://%s/%s" t.did path, cid, record) :: acc)
+         | None ->
+             Lwt.return acc )
+       []
 
 let sign_commit t commit : signed_commit =
   let sign_fn, privkey =
@@ -202,20 +195,53 @@ let sign_commit t commit : signed_commit =
   ; prev= commit.prev
   ; signature }
 
-let get_record_cid t 
+let put_commit t ?(previous : signed_commit option = None) mst_root :
+    (Cid.t * signed_commit) Lwt.t =
+  let tid_now = Tid.now () in
+  let rev =
+    match previous with
+    | Some c when c.rev >= tid_now -> (
+      try
+        let ts, clockid = Tid.to_timestamp_us c.rev in
+        Tid.of_timestamp_us ~clockid (Int64.succ ts)
+      with _ ->
+        failwith
+          (Format.sprintf
+             "unable to produce commit rev greater than current %s; now is %s"
+             c.rev tid_now ) )
+    | _ ->
+        tid_now
+  in
+  let commit = {version= 3; did= t.did; prev= None; rev; data= mst_root} in
+  let signed = sign_commit t commit in
+  let%lwt commit_cid =
+    User_store.put_commit t.db signed |> Lwt_result.get_exn
+  in
+  Lwt.return (commit_cid, signed)
 
-let apply_writes (t : t) (commit_cid : Cid.t)
-    ({did; data= mst_root; rev= commit_rev; _} : commit)
-    (writes : repo_write list) (swap_commit : Cid.t option) : write_result Lwt.t
-    =
-  if swap_commit <> None && swap_commit <> Some commit_cid then
+let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
+  let%lwt commit = User_store.get_commit t.db in
+  if commit <> None then failwith ("commit already exists for " ^ t.did) ;
+  let%lwt {root; _} = Mst.create_empty t.db |> Lwt_result.get_exn in
+  put_commit t root
+
+let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
+    : write_result Lwt.t =
+  let%lwt commit =
+    match%lwt User_store.get_commit t.db with
+    | Some (_, commit) ->
+        Lwt.return commit
+    | None ->
+        failwith "failed to find commit for repo"
+  in
+  if swap_commit <> None && swap_commit <> Some t.root then
     raise
       (XrpcError
          ( "InvalidSwap"
          , Format.sprintf "swapRecord cid %s did not match commit cid %s"
              (Cid.to_string (Option.get swap_commit))
-             (Cid.to_string commit_cid) ) ) ;
-  let%lwt block_map = Lwt.map ref (get_map t mst_root) in
+             (Cid.to_string t.root) ) ) ;
+  let%lwt block_map = Lwt.map ref (get_map t commit.data) in
   let%lwt results =
     List.map
       (fun (w : repo_write) ->
@@ -223,7 +249,7 @@ let apply_writes (t : t) (commit_cid : Cid.t)
         | Create {collection; rkey; value; _} ->
             let rkey = Option.value rkey ~default:(Tid.now ()) in
             let path = Format.sprintf "%s/%s" collection rkey in
-            let uri = Format.sprintf "at://%s/%s" did path in
+            let uri = Format.sprintf "at://%s/%s" t.did path in
             let%lwt () =
               match StringMap.find_opt path !block_map with
               | Some cid ->
@@ -256,7 +282,7 @@ let apply_writes (t : t) (commit_cid : Cid.t)
               )
         | Update {collection; rkey; value; swap_record; _} ->
             let path = Format.sprintf "%s/%s" collection rkey in
-            let uri = Format.sprintf "at://%s/%s" did path in
+            let uri = Format.sprintf "at://%s/%s" t.did path in
             let old_cid = StringMap.find_opt path !block_map in
             ( if
                 (swap_record <> None && swap_record <> old_cid)
@@ -333,25 +359,7 @@ let apply_writes (t : t) (commit_cid : Cid.t)
       writes
     |> Lwt.all
   in
-  let%lwt () = User_store.clear_mst t.db in
+  let%lwt () = User_store.clear_blocks t.db in
   let%lwt {root; _} = Mst.of_assoc t.db (StringMap.bindings !block_map) in
-  let tid_now = Tid.now () in
-  let rev =
-    if tid_now > commit_rev then tid_now
-    else
-      try
-        let ts, clockid = Tid.to_timestamp_us commit_rev in
-        Tid.of_timestamp_us ~clockid (Int64.succ ts)
-      with _ ->
-        failwith
-          (Format.sprintf
-             "unable to produce commit rev greater than current %s; now is %s"
-             commit_rev tid_now )
-  in
-  let commit = {version= 3; did; prev= None; rev; data= root} in
-  let signed = sign_commit t commit in
-  let commit_cid =
-    signed |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
-    |> Cid.create Dcbor
-  in
-  Lwt.return {commit= (commit_cid, signed); results}
+  let%lwt commit = put_commit t root ~previous:(Some commit) in
+  Lwt.return {commit; results}

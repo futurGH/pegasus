@@ -5,61 +5,137 @@ module Block_map = Mist.Storage.Block_map
 module Lex = Mist.Lex
 module Tid = Mist.Tid
 
-type block = {cid: Cid.t; data: Blob.t}
+module Types = struct
+  open struct
+    let cid_link_of_yojson = function
+      | `Assoc link ->
+          link |> List.assoc "$link" |> Cid.of_yojson
+          |> Result.map (fun cid -> Some cid)
+      | `Null ->
+          Ok None
+      | _ ->
+          Error "commit prev not a valid cid"
 
-type record = {path: string; cid: Cid.t; value: Lex.repo_record; since: Tid.t}
+    let cid_link_to_yojson = function
+      | Some cid ->
+          Cid.to_yojson cid
+      | None ->
+          `Null
+  end
 
-type blob = {id: int; cid: Cid.t; mimetype: string; data: Blob.t}
+  type commit =
+    { did: string
+    ; version: int (* always 3 *)
+    ; data: Cid.t [@of_yojson Cid.of_yojson] [@to_yojson Cid.to_yojson]
+    ; rev: Tid.t
+    ; prev: Cid.t option
+          [@of_yojson cid_link_of_yojson] [@to_yojson cid_link_to_yojson] }
+  [@@deriving yojson]
 
-type t = (module Rapper_helper.CONNECTION)
+  type signed_commit =
+    { did: string
+    ; version: int (* always 3 *)
+    ; data: Cid.t [@of_yojson Cid.of_yojson] [@to_yojson Cid.to_yojson]
+    ; rev: Tid.t
+    ; prev: Cid.t option
+          [@of_yojson cid_link_of_yojson] [@to_yojson cid_link_to_yojson]
+    ; signature: bytes
+          [@key "sig"]
+          [@of_yojson
+            fun x ->
+              match Dag_cbor.of_yojson x with
+              | `Bytes b ->
+                  Ok b
+              | _ ->
+                  Error "commit sig not a valid bytes value"]
+          [@to_yojson fun x -> Dag_cbor.to_yojson (`Bytes x)] }
+  [@@deriving yojson]
+
+  type block = {cid: Cid.t; data: Blob.t}
+
+  type record = {path: string; cid: Cid.t; value: Lex.repo_record; since: Tid.t}
+
+  type blob = {id: int; cid: Cid.t; mimetype: string; data: Blob.t}
+end
+
+open Types
 
 module Queries = struct
-  (* mst storage *)
-  let create_mst_table =
-    [%rapper
-      execute
-        {sql| CREATE TABLE IF NOT EXISTS mst (
+  (* block storage *)
+  let create_blocks_tables conn =
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS blocks (
                 cid TEXT NOT NULL PRIMARY KEY,
                 data BLOB NOT NULL
               );
         |sql}]
-      ()
+        () conn
+    in
+    [%rapper
+      execute
+        {sql| CREATE TABLE IF NOT EXISTS named_blocks (
+                name TEXT NOT NULL UNIQUE,
+                cid TEXT NOT NULL UNIQUE,
+                FOREIGN KEY (cid) REFERENCES blocks (cid)
+              );
+        |sql}]
+      () conn
 
   let get_block cid =
     [%rapper
       get_opt
-        {sql| SELECT @CID{cid}, @Blob{data} FROM mst WHERE cid = %CID{cid} |sql}
+        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks WHERE cid = %CID{cid} |sql}
         record_out]
       ~cid
 
   let get_blocks cids =
     [%rapper
       get_many
-        {sql| SELECT @CID{cid}, @Blob{data} FROM mst WHERE cid IN (%list{%CID{cids}}) |sql}
+        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks WHERE cid IN (%list{%CID{cids}}) |sql}
         record_out]
       ~cids
 
   let has_block cid =
     [%rapper
-      get_opt {sql| SELECT @CID{cid} FROM mst WHERE cid = %CID{cid} |sql}]
+      get_opt {sql| SELECT @CID{cid} FROM blocks WHERE cid = %CID{cid} |sql}]
       ~cid
 
   let put_block cid block =
     [%rapper
       get_opt
-        {sql| INSERT INTO mst (cid, data) VALUES (%CID{cid}, %Blob{block}) ON CONFLICT DO NOTHING RETURNING @CID{cid} |sql}]
+        {sql| INSERT INTO blocks (cid, data) VALUES (%CID{cid}, %Blob{block}) ON CONFLICT DO NOTHING RETURNING @CID{cid} |sql}]
       ~cid ~block
 
   let delete_block cid =
-    [%rapper execute {sql| DELETE FROM mst WHERE cid = %CID{cid} |sql}] ~cid
+    [%rapper execute {sql| DELETE FROM blocks WHERE cid = %CID{cid} |sql}] ~cid
 
   let delete_blocks cids =
     [%rapper
       get_many
-        {sql| DELETE FROM mst WHERE cid IN (%list{%CID{cids}}) RETURNING @CID{cid} |sql}]
+        {sql| DELETE FROM blocks WHERE cid IN (%list{%CID{cids}}) RETURNING @CID{cid} |sql}]
       ~cids
 
-  let clear_mst = [%rapper execute {sql| DELETE FROM mst |sql}] ()
+  let clear_blocks = [%rapper execute {sql| DELETE FROM blocks |sql}] ()
+
+  let get_commit =
+    [%rapper
+      get_opt
+        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks
+              LEFT JOIN named_blocks ON blocks.cid = named_blocks.cid
+              WHERE blocks.name = 'commit'
+        |sql}]
+      ()
+
+  let put_commit cid block conn =
+    let$! _ = put_block cid block conn in
+    [%rapper
+      execute
+        {sql| INSERT INTO named_blocks (cid, name) VALUES (%CID{cid}, 'commit')
+              ON CONFLICT DO UPDATE SET cid = %CID{cid}
+        |sql}]
+      ~cid conn
 
   (* record storage *)
   let create_records_table =
@@ -71,33 +147,32 @@ module Queries = struct
                 data BLOB NOT NULL,
                 since TEXT NOT NULL
               );
+              CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
         |sql}]
       ()
 
   let get_record_by_path =
     [%rapper
       get_opt
-        {sql| SELECT @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path = %string{path}
-      |sql}]
+        {sql| SELECT @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path = %string{path} |sql}]
 
   let get_record_by_cid =
     [%rapper
       get_opt
-        {sql| SELECT @string{path}, @Blob{data}, @string{since} FROM records WHERE cid = %CID{cid}
-      |sql}]
+        {sql| SELECT @string{path}, @Blob{data}, @string{since} FROM records WHERE cid = %CID{cid} |sql}]
 
   let list_records =
     [%rapper
       get_many
-        {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path LIKE %string{collection}/%
-      |sql}]
+        {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path LIKE %string{collection}/% |sql}]
 
   let put_record =
     [%rapper
       execute
         {sql| INSERT INTO records (path, cid, data, since)
-                VALUES (%string{path}, %CID{cid}, %Blob{data}, %string{since})
-          |sql}]
+              VALUES (%string{path}, %CID{cid}, %Blob{data}, %string{since})
+              ON CONFLICT (path) DO UPDATE SET cid = excluded.cid, data = excluded.data, since = excluded.since
+        |sql}]
 
   (* blob storage *)
   let create_blobs_tables conn =
@@ -153,7 +228,11 @@ module Queries = struct
   let put_blob cid mimetype data =
     [%rapper
       get_one
-        {sql| INSERT INTO blobs (cid, mimetype, data) VALUES (%CID{cid}, %string{mimetype}, %Blob{data}) RETURNING @int{id} |sql}]
+        {sql| INSERT INTO blobs (cid, mimetype, data)
+              VALUES (%CID{cid}, %string{mimetype}, %Blob{data})
+              ON CONFLICT (cid) DO UPDATE SET mimetype = excluded.mimetype, data = excluded.data
+              RETURNING @int{id}
+        |sql}]
       ~cid ~mimetype ~data
 
   let list_blob_refs path =
@@ -169,6 +248,7 @@ module Queries = struct
                 (SELECT id FROM blobs WHERE cid = %CID{cid} LIMIT 1),
                 %string{path}
               )
+              ON CONFLICT DO NOTHING
         |sql}]
       ~cid ~path
 
@@ -178,17 +258,19 @@ module Queries = struct
         {sql| DELETE FROM blobs_records WHERE record_path LIKE %string{path} AND blob_id IN (
                     SELECT id FROM blobs WHERE cid IN (%list{%CID{cids}})
                   )
-            |sql}]
+        |sql}]
       ~path ~cids
 end
 
+type t = (module Rapper_helper.CONNECTION)
+
 let init conn : unit Lwt.t =
-  let$! () = Queries.create_mst_table conn in
+  let$! () = Queries.create_blocks_tables conn in
   let$! () = Queries.create_records_table conn in
   let$! () = Queries.create_blobs_tables conn in
   Lwt.return_unit
 
-(* mst *)
+(* blocks *)
 
 let get_bytes conn cid : Blob.t option Lwt.t =
   Queries.get_block cid conn
@@ -228,9 +310,22 @@ let delete_block conn cid : (bool, exn) Lwt_result.t =
 let delete_many conn cids : (int, exn) Lwt_result.t =
   Queries.delete_blocks cids conn >$! List.length >>= Lwt.return_ok
 
-let clear_mst conn : unit Lwt.t =
-  let$! () = Queries.clear_mst conn in
+let clear_blocks conn : unit Lwt.t =
+  let$! () = Queries.clear_blocks conn in
   Lwt.return_unit
+
+let get_commit conn : (Cid.t * signed_commit) option Lwt.t =
+  Queries.get_commit conn
+  >$! Option.map (fun (cid, data) ->
+          ( cid
+          , data |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
+            |> Result.get_ok ) )
+
+let put_commit conn commit : (Cid.t, exn) Lwt_result.t =
+  let data = commit |> signed_commit_to_yojson |> Dag_cbor.encode_yojson in
+  let cid = Cid.create Dcbor data in
+  let$! () = Queries.put_commit cid data conn in
+  Lwt.return_ok cid
 
 (* records *)
 
