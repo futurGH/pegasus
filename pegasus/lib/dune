@@ -4,6 +4,7 @@
   caqti
   caqti-lwt
   caqti-driver-sqlite3
+  dream
   ipld
   kleidos
   lwt

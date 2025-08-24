@@ -22,6 +22,7 @@
   (caqti (>= 1.9.0))
   (caqti-driver-sqlite3 (>= 1.9.0))
   (caqti-lwt (>= 1.9.0))
+  (dream (>= 1.0.0~alpha5))
   (re (>= 1.13.2))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
