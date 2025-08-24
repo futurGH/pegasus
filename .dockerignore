@@ -1,0 +1,14 @@
+.idea/
+.zed/
+.vscode/
+
+.git/
+.gitignore
+
+_opam/
+_build/
+*.lock
+*.locks
+
+Dockerfile
+docker-compose.yml

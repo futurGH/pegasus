@@ -1,0 +1,6 @@
+services:
+    pegasus:
+        build: .
+        ports:
+            - "8008:8008"
+        restart: always

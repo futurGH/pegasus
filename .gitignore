@@ -3,6 +3,7 @@ _build
 _boot
 _test_boot
 dune.lock
+dev-tools.locks
 
 .DS_Store
 .vscode/
