@@ -24,6 +24,7 @@
   (caqti-lwt (>= 1.9.0))
   (dream (>= 1.0.0~alpha5))
   (re (>= 1.13.2))
+  (safepass (>= 3.1))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (ppx_deriving_yojson (>= 3.9.1))

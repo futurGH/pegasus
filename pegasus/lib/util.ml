@@ -39,6 +39,21 @@ module Rapper = struct
       in
       Caqti_type.(custom ~encode ~decode string)
   end
+
+  module Json : Rapper.CUSTOM with type t = Yojson.Safe.t = struct
+    type t = Yojson.Safe.t
+
+    let t =
+      let encode json =
+        try Ok (Yojson.Safe.to_string json ~std:true)
+        with e -> Error (Printexc.to_string e)
+      in
+      let decode json =
+        try Ok (Yojson.Safe.from_string json)
+        with e -> Error (Printexc.to_string e)
+      in
+      Caqti_type.(custom ~encode ~decode string)
+  end
 end
 
 (* turns a caqti error into an exception *)
