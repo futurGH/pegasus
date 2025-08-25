@@ -66,7 +66,7 @@ let caqti_result_exn = function
 (* opens an sqlite connection *)
 let connect_sqlite db_uri =
   let open Syntax in
-  match%lwt Caqti_lwt.connect (Uri.of_string db_uri) with
+  match%lwt Caqti_lwt_unix.connect (Uri.of_string db_uri) with
   | Ok c ->
       let$! () =
         [%rapper execute {sql| PRAGMA journal_mode=WAL; |sql} syntax_off] () c

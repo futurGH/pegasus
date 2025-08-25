@@ -10,6 +10,18 @@
 
 (license MPL-2.0)
 
+(pin
+ (url "git+https://github.com/aantron/dream.git")
+ (package (name dream)))
+
+(pin
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git")
+ (package (name ppx_rapper)))
+
+(pin
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git")
+ (package (name ppx_rapper_lwt)))
+
 (package
  (name pegasus)
  (synopsis "An atproto Personal Data Server implementation")
@@ -22,14 +34,14 @@
   (caqti (>= 1.9.0))
   (caqti-driver-sqlite3 (>= 1.9.0))
   (caqti-lwt (>= 1.9.0))
-  (dream (>= 1.0.0~alpha5))
+  dream
   (re (>= 1.13.2))
   (safepass (>= 3.1))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (ppx_deriving_yojson (>= 3.9.1))
-  (ppx_rapper (>= 3.0.0))
-  (ppx_rapper_lwt (>= 3.0.0))
+  ppx_rapper
+  ppx_rapper_lwt
   (alcotest :with-test)))
 
 (package

@@ -3,6 +3,7 @@
  (libraries
   caqti
   caqti-lwt
+  caqti-lwt.unix
   caqti-driver-sqlite3
   dream
   ipld
