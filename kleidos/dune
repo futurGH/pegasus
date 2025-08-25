@@ -1,3 +1,3 @@
 (library
  (name kleidos)
- (libraries hacl-star multibase))
+ (libraries hacl-star mirage-crypto-ec multibase))

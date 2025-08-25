@@ -69,4 +69,6 @@
  (depends
   ocaml
   dune
-  (hacl-star (>= 0.7.2))))
+  (hacl-star (>= 0.7.2))
+  (mirage-crypto-ec (>= 2.0.1))
+  (multibase (>= 0.1.0))))

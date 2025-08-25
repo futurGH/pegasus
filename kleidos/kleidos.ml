@@ -35,6 +35,8 @@ module type CURVE = sig
 
   val derive_pubkey : privkey:bytes -> bytes
 
+  val generate_keypair : unit -> bytes * bytes
+
   val privkey_to_multikey : bytes -> string
 
   val pubkey_to_multikey : bytes -> string
@@ -89,6 +91,13 @@ module K256 : CURVE = struct
         K256.raw_to_compressed pubkey
     | None ->
         failwith "failed to derive public key"
+
+  let generate_keypair () : bytes * bytes =
+    (* P256 is fine for generating a privkey for either curve,
+       but the accompanying public key won't work K256 *)
+    let open Mirage_crypto_ec.P256.Dsa in
+    let privkey = generate () |> fst |> priv_to_octets |> Bytes.of_string in
+    (privkey, derive_pubkey ~privkey)
 
   let pubkey_to_multikey pubkey : string =
     to_multikey pubkey ~prefix:public_prefix
@@ -146,6 +155,13 @@ module P256 : CURVE = struct
         P256.raw_to_compressed pubkey
     | None ->
         failwith "failed to derive public key"
+
+  let generate_keypair () : bytes * bytes =
+    (* don't know why but the pubkey returned by generate () fails to validate
+       so we derive our own *)
+    let open Mirage_crypto_ec.P256.Dsa in
+    let privkey = generate () |> fst |> priv_to_octets |> Bytes.of_string in
+    (privkey, derive_pubkey ~privkey)
 
   let pubkey_to_multikey pubkey : string =
     to_multikey pubkey ~prefix:public_prefix
