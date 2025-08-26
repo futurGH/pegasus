@@ -21,6 +21,8 @@ open struct
 end
 
 module type CURVE = sig
+  val name : string
+
   val public_prefix : bytes
 
   val private_prefix : bytes
@@ -44,6 +46,8 @@ end
 
 module K256 : CURVE = struct
   open Hacl_star.Hacl
+
+  let name = "K256"
 
   let public_prefix = Bytes.of_string "\xe7\x01"
 
@@ -108,6 +112,8 @@ end
 
 module P256 : CURVE = struct
   open Hacl_star.Hacl
+
+  let name = "P256"
 
   let public_prefix = Bytes.of_string "\x80\x24"
 

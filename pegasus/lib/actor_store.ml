@@ -8,7 +8,7 @@ module Types = struct
     ; handle: string
     ; email: string
     ; password_hash: bytes
-    ; signing_key: bytes
+    ; signing_key: string
     ; preferences: Yojson.Safe.t
     ; created_at: int
     ; deactivated_at: int option }
@@ -26,7 +26,7 @@ module Queries = struct
                 handle TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 password_hash BLOB NOT NULL,
-                signing_key BLOB NOT NULL,
+                signing_key TEXT NOT NULL,
                 preferences TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 deactivated_at INTEGER
@@ -53,7 +53,7 @@ module Queries = struct
                 %string{handle},
                 %string{email},
                 %Blob{password_hash},
-                %Blob{signing_key},
+                %string{signing_key},
                 %Json{preferences},
                 %int{created_at}
               );
@@ -62,7 +62,7 @@ module Queries = struct
   let get_actor_by_identifier id =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @Blob{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
               FROM actors WHERE did = %string{id} OR handle = %string{id} OR email = %string{id}
               LIMIT 1
         |sql}
@@ -72,7 +72,7 @@ module Queries = struct
   let list_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @Blob{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
               FROM actors
               ORDER BY created_at DESC LIMIT %int{limit} OFFSET %int{offset}
         |sql}
