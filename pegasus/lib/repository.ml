@@ -303,7 +303,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               | None ->
                   Lwt.return ()
             in
-            let%lwt cid = User_store.put_record t.db (`LexMap value) path in
+            let record_with_type : Lex.repo_record =
+              if StringMap.mem "$type" value then value
+              else StringMap.add "$type" (`String collection) value
+            in
+            let%lwt cid =
+              User_store.put_record t.db (`LexMap record_with_type) path
+            in
             block_map := StringMap.add path cid !block_map ;
             let refs =
               Util.find_blob_refs value
@@ -357,7 +363,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               | None ->
                   Lwt.return_unit
             in
-            let%lwt new_cid = User_store.put_record t.db (`LexMap value) path in
+            let record_with_type : Lex.repo_record =
+              if StringMap.mem "$type" value then value
+              else StringMap.add "$type" (`String collection) value
+            in
+            let%lwt new_cid =
+              User_store.put_record t.db (`LexMap record_with_type) path
+            in
             block_map := StringMap.add path new_cid !block_map ;
             Lwt.return
               (Update
