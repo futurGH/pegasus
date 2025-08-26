@@ -117,7 +117,7 @@ module Queries = struct
         {sql| DELETE FROM mst WHERE cid IN (%list{%CID{cids}}) RETURNING @CID{cid} |sql}]
       ~cids
 
-  let clear_blocks = [%rapper execute {sql| DELETE FROM mst |sql}] ()
+  let clear_mst = [%rapper execute {sql| DELETE FROM mst |sql}] ()
 
   (* repo commit *)
   let get_commit =
@@ -312,8 +312,8 @@ let delete_block conn cid : (bool, exn) Lwt_result.t =
 let delete_many conn cids : (int, exn) Lwt_result.t =
   Queries.delete_blocks cids conn >$! List.length >>= Lwt.return_ok
 
-let clear_blocks conn : unit Lwt.t =
-  let$! () = Queries.clear_blocks conn in
+let clear_mst conn : unit Lwt.t =
+  let$! () = Queries.clear_mst conn in
   Lwt.return_unit
 
 (* repo commit *)

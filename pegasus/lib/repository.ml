@@ -399,7 +399,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
       writes
     |> Lwt.all
   in
-  let%lwt () = User_store.clear_blocks t.db in
+  let%lwt () = User_store.clear_mst t.db in
   let%lwt {root; _} = Mst.of_assoc t.db (StringMap.bindings !block_map) in
   let%lwt commit = put_commit t root ~previous:(Some commit) in
   Lwt.return {commit; results}
