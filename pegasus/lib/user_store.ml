@@ -61,24 +61,24 @@ end
 open Types
 
 module Queries = struct
-  (* block storage *)
+  (* mst block storage *)
   let create_blocks_tables conn =
     let$! () =
       [%rapper
         execute
-          {sql| CREATE TABLE IF NOT EXISTS blocks (
-                cid TEXT NOT NULL PRIMARY KEY,
-                data BLOB NOT NULL
-              );
-        |sql}]
+          {sql| CREATE TABLE IF NOT EXISTS mst (
+                  cid TEXT NOT NULL PRIMARY KEY,
+                  data BLOB NOT NULL
+                );
+          |sql}]
         () conn
     in
     [%rapper
       execute
-        {sql| CREATE TABLE IF NOT EXISTS named_blocks (
-                name TEXT NOT NULL UNIQUE,
-                cid TEXT NOT NULL UNIQUE,
-                FOREIGN KEY (cid) REFERENCES blocks (cid)
+        {sql| CREATE TABLE IF NOT EXISTS commit (
+                id INTEGER PRIMARY KEY CHECK (id = 0),
+                cid TEXT NOT NULL,
+                data BLOB NOT NULL
               );
         |sql}]
       () conn
@@ -86,56 +86,58 @@ module Queries = struct
   let get_block cid =
     [%rapper
       get_opt
-        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks WHERE cid = %CID{cid} |sql}
+        {sql| SELECT @CID{cid}, @Blob{data} FROM mst WHERE cid = %CID{cid} |sql}
         record_out]
       ~cid
 
   let get_blocks cids =
     [%rapper
       get_many
-        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks WHERE cid IN (%list{%CID{cids}}) |sql}
+        {sql| SELECT @CID{cid}, @Blob{data} FROM mst WHERE cid IN (%list{%CID{cids}}) |sql}
         record_out]
       ~cids
 
   let has_block cid =
     [%rapper
-      get_opt {sql| SELECT @CID{cid} FROM blocks WHERE cid = %CID{cid} |sql}]
+      get_opt {sql| SELECT @CID{cid} FROM mst WHERE cid = %CID{cid} |sql}]
       ~cid
 
   let put_block cid block =
     [%rapper
       get_opt
-        {sql| INSERT INTO blocks (cid, data) VALUES (%CID{cid}, %Blob{block}) ON CONFLICT DO NOTHING RETURNING @CID{cid} |sql}]
+        {sql| INSERT INTO mst (cid, data) VALUES (%CID{cid}, %Blob{block}) ON CONFLICT DO NOTHING RETURNING @CID{cid} |sql}]
       ~cid ~block
 
   let delete_block cid =
-    [%rapper execute {sql| DELETE FROM blocks WHERE cid = %CID{cid} |sql}] ~cid
+    [%rapper execute {sql| DELETE FROM mst WHERE cid = %CID{cid} |sql}] ~cid
 
   let delete_blocks cids =
     [%rapper
       get_many
-        {sql| DELETE FROM blocks WHERE cid IN (%list{%CID{cids}}) RETURNING @CID{cid} |sql}]
+        {sql| DELETE FROM mst WHERE cid IN (%list{%CID{cids}}) RETURNING @CID{cid} |sql}]
       ~cids
 
-  let clear_blocks = [%rapper execute {sql| DELETE FROM blocks |sql}] ()
+  let clear_blocks = [%rapper execute {sql| DELETE FROM mst |sql}] ()
 
+  (* repo commit *)
   let get_commit =
     [%rapper
       get_opt
-        {sql| SELECT @CID{cid}, @Blob{data} FROM blocks
-              LEFT JOIN named_blocks ON blocks.cid = named_blocks.cid
-              WHERE blocks.name = 'commit'
-        |sql}]
+        {sql| SELECT @CID{cid}, @Blob{data}
+            FROM commit WHERE id = 0
+      |sql}]
       ()
 
-  let put_commit cid block conn =
-    let$! _ = put_block cid block conn in
+  let put_commit cid data =
     [%rapper
       execute
-        {sql| INSERT INTO named_blocks (cid, name) VALUES (%CID{cid}, 'commit')
-              ON CONFLICT DO UPDATE SET cid = %CID{cid}
-        |sql}]
-      ~cid conn
+        {sql| INSERT INTO commit (id, cid, data)
+            VALUES (0, %CID{cid}, %Blob{data})
+            ON CONFLICT(id) DO UPDATE SET
+              cid = excluded.cid,
+              data = excluded.data
+      |sql}]
+      ~cid ~data
 
   (* record storage *)
   let create_records_table =
@@ -270,7 +272,7 @@ let init conn : unit Lwt.t =
   let$! () = Queries.create_blobs_tables conn in
   Lwt.return_unit
 
-(* blocks *)
+(* mst blocks; implements Writable_blockstore *)
 
 let get_bytes conn cid : Blob.t option Lwt.t =
   Queries.get_block cid conn
@@ -313,6 +315,8 @@ let delete_many conn cids : (int, exn) Lwt_result.t =
 let clear_blocks conn : unit Lwt.t =
   let$! () = Queries.clear_blocks conn in
   Lwt.return_unit
+
+(* repo commit *)
 
 let get_commit conn : (Cid.t * signed_commit) option Lwt.t =
   Queries.get_commit conn
