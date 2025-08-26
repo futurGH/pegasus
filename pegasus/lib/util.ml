@@ -2,6 +2,23 @@ module Exceptions = struct
   exception XrpcError of (string * string)
 end
 
+module Constants = struct
+  let pegasus_db_location =
+    Env.load ()
+    |> fun {database_dir; _} -> Filename.concat database_dir "pegasus.db"
+
+  let user_db_location did =
+    let rec last (lst : 'a list) : 'a option =
+      match lst with [] -> None | [x] -> Some x | _ :: xs -> last xs
+    in
+    let filename =
+      did |> String.split_on_char ':' |> last |> Option.get
+      |> Printf.sprintf "%s.db"
+    in
+    Env.load ()
+    |> fun {database_dir; _} -> Filename.concat database_dir filename
+end
+
 module Syntax = struct
   (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( let$! ) m f =

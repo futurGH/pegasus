@@ -1,6 +1,9 @@
-type env = {hostname: string; invite_required: bool}
+type env = {database_dir: string; hostname: string; invite_required: bool}
 
-let load () =
+let load () : env =
+  let database_dir =
+    Option.value ~default:"./db" @@ Sys.getenv_opt "DATABASE_DIR"
+  in
   let hostname = Sys.getenv "PDS_HOSTNAME" in
   let invite_required = Sys.getenv "INVITE_CODE_REQUIRED" = "true" in
-  {hostname; invite_required}
+  {database_dir; hostname; invite_required}

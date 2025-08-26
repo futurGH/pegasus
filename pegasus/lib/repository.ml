@@ -136,6 +136,36 @@ type t =
   ; mutable block_map: Cid.t StringMap.t option
   ; mutable commit: Cid.t option }
 
+let load did : t Lwt.t =
+  let%lwt actor_store_conn =
+    Util.connect_sqlite Util.Constants.pegasus_db_location
+  in
+  let%lwt db = Util.connect_sqlite (Util.Constants.user_db_location did) in
+  let%lwt {signing_key; _} =
+    match%lwt Actor_store.get_actor_by_identifier did actor_store_conn with
+    | Some actor ->
+        Lwt.return actor
+    | None ->
+        failwith ("failed to retrieve actor for " ^ did)
+  in
+  let key =
+    match Kleidos.parse_multikey_str signing_key with
+    | key, (module M) when M.name = "K256" ->
+        K256 key
+    | key, (module M) when M.name = "P256" ->
+        P256 key
+    | _ ->
+        failwith "unsupported key type"
+  in
+  let%lwt commit =
+    match%lwt User_store.get_commit db with
+    | Some (cid, _) ->
+        Lwt.return_some cid
+    | None ->
+        Lwt.return_none
+  in
+  Lwt.return {key; did; db; block_map= None; commit}
+
 let get_map t : Cid.t StringMap.t Lwt.t =
   let%lwt root, commit =
     match%lwt User_store.get_commit t.db with
