@@ -146,8 +146,8 @@ module Queries = struct
         {sql| CREATE TABLE IF NOT EXISTS records (
                 path TEXT NOT NULL PRIMARY KEY,
                 cid TEXT NOT NULL,
-                data BLOB NOT NULL,
-                since TEXT NOT NULL
+                since TEXT NOT NULL,
+                data BLOB NOT NULL
               );
               CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
         |sql}]
@@ -166,7 +166,10 @@ module Queries = struct
   let list_records =
     [%rapper
       get_many
-        {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path LIKE %string{collection}/% |sql}]
+        {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
+              WHERE path LIKE %string{collection}/%
+              ORDER BY since DESC LIMIT %int{limit} OFFSET %int{offset}
+        |sql}]
 
   let put_record =
     [%rapper
@@ -345,8 +348,9 @@ let get_record_by_cid conn cid : record option Lwt.t =
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return
 
-let list_records conn collection : record list Lwt.t =
-  Queries.list_records ~collection conn
+let list_records conn ?(limit = 100) ?(offset = 0) collection :
+    record list Lwt.t =
+  Queries.list_records ~collection ~limit ~offset conn
   >$! List.map (fun (path, cid, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return
