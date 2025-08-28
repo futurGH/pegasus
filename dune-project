@@ -1,4 +1,4 @@
-(lang dune 3.14)
+(lang dune 3.20)
 
 (name pegasus)
 
@@ -10,14 +10,16 @@
 
 (license MPL-2.0)
 
-(pin
+(pin ; fixes build on macOS 26
+ (url "git+https://github.com/mcksan/pg_query-ocaml.git")
+ (package (name pg_query)))
+
+(pin ; these 3 all need to be pinned or they'll conflict
  (url "git+https://github.com/aantron/dream.git")
  (package (name dream)))
-
 (pin
  (url "git+https://github.com/roddyyaga/ppx_rapper.git")
  (package (name ppx_rapper)))
-
 (pin
  (url "git+https://github.com/roddyyaga/ppx_rapper.git")
  (package (name ppx_rapper_lwt)))
@@ -28,12 +30,14 @@
  (description "Eventually")
  (allow_empty)
  (depends
-  ocaml
+  (ocaml (= 5.2.1))
   dune
   lwt
   (caqti (>= 1.9.0))
   (caqti-driver-sqlite3 (>= 1.9.0))
   (caqti-lwt (>= 1.9.0))
+  (cohttp (>= 6.1.1))
+  (cohttp-lwt-unix (>= 6.1.1))
   dream
   (re (>= 1.13.2))
   (safepass (>= 3.1))
@@ -49,7 +53,7 @@
  (synopsis "Atproto repo functionality")
  (allow_empty)
  (depends
-  ocaml
+  (ocaml (= 5.2.1))
   dune
   lwt
   (core_unix (>= 0.16.0))
@@ -65,7 +69,7 @@
  (description "Currently includes DAG-CBOR, CIDv1, and CARv1")
  (allow_empty)
  (depends
-  ocaml
+  (ocaml (= 5.2.1))
   dune
   lwt
   (digestif (>= 1.2.0))
@@ -79,7 +83,7 @@
  (synopsis "Atproto-flavour k256 and p256 signing and verification")
  (allow_empty)
  (depends
-  ocaml
+  (ocaml (= 5.2.1))
   dune
   (hacl-star (>= 0.7.2))
   (mirage-crypto-ec (>= 2.0.1))

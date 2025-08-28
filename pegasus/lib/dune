@@ -5,6 +5,8 @@
   caqti-lwt
   caqti-lwt.unix
   caqti-driver-sqlite3
+  cohttp
+  cohttp-lwt-unix
   dream
   ipld
   kleidos

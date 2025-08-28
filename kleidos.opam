@@ -7,8 +7,8 @@ license: "MPL-2.0"
 homepage: "https://github.com/futurGH/pegasus"
 bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
-  "ocaml"
-  "dune" {>= "3.14"}
+  "ocaml" {= "5.2.1"}
+  "dune" {>= "3.20"}
   "hacl-star" {>= "0.7.2"}
   "mirage-crypto-ec" {>= "2.0.1"}
   "multibase" {>= "0.1.0"}
@@ -29,3 +29,4 @@ build: [
   ]
 ]
 dev-repo: "git+https://github.com/futurGH/pegasus.git"
+x-maintenance-intent: ["(latest)"]
