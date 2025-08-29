@@ -42,6 +42,8 @@ module type CURVE = sig
   val privkey_to_multikey : bytes -> string
 
   val pubkey_to_multikey : bytes -> string
+
+  val pubkey_to_did_key : bytes -> string
 end
 
 module K256 : CURVE = struct
@@ -103,11 +105,13 @@ module K256 : CURVE = struct
     let privkey = generate () |> fst |> priv_to_octets |> Bytes.of_string in
     (privkey, derive_pubkey ~privkey)
 
+  let privkey_to_multikey privkey : string =
+    to_multikey privkey ~prefix:private_prefix
+
   let pubkey_to_multikey pubkey : string =
     to_multikey pubkey ~prefix:public_prefix
 
-  let privkey_to_multikey privkey : string =
-    to_multikey privkey ~prefix:private_prefix
+  let pubkey_to_did_key pubkey : string = "did:key:" ^ pubkey_to_multikey pubkey
 end
 
 module P256 : CURVE = struct
@@ -169,14 +173,18 @@ module P256 : CURVE = struct
     let privkey = generate () |> fst |> priv_to_octets |> Bytes.of_string in
     (privkey, derive_pubkey ~privkey)
 
+  let privkey_to_multikey privkey : string =
+    to_multikey privkey ~prefix:private_prefix
+
   let pubkey_to_multikey pubkey : string =
     to_multikey pubkey ~prefix:public_prefix
 
-  let privkey_to_multikey privkey : string =
-    to_multikey privkey ~prefix:private_prefix
+  let pubkey_to_did_key pubkey : string = "did:key:" ^ pubkey_to_multikey pubkey
 end
 
-let parse_multikey_bytes bytes : bytes * (module CURVE) =
+type key = bytes * (module CURVE)
+
+let parse_multikey_bytes bytes : key =
   if Bytes.length bytes < 3 then failwith "multikey too short" ;
   let b0 = int_of_char (Bytes.get bytes 0) in
   let b1 = int_of_char (Bytes.get bytes 1) in
@@ -198,5 +206,5 @@ let parse_multikey_bytes bytes : bytes * (module CURVE) =
   | _ ->
       failwith (Printf.sprintf "invalid key type 0x%04x" type_code)
 
-let parse_multikey_str multikey : bytes * (module CURVE) =
+let parse_multikey_str multikey : key =
   multikey |> bytes_of_multikey |> parse_multikey_bytes

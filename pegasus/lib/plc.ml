@@ -1,0 +1,215 @@
+type t = {did: string; rotation_key: Kleidos.key; endpoint: string}
+
+type service = {type': string [@key "type"]; endpoint: string}
+[@@deriving yojson]
+
+type unsigned_operation =
+  | Operation of
+      { type': string [@key "type"]
+      ; rotation_keys: string list [@key "rotationKeys"]
+      ; verification_methods: (string * string) list
+            [@key "verificationMethods"]
+      ; also_known_as: string list [@key "alsoKnownAs"]
+      ; services: (string * service) list
+      ; prev: string option }
+  | Tombstone of {type': string [@key "type"]; prev: string}
+[@@deriving yojson]
+
+let unsigned_operation_to_yojson = function
+  | Operation
+      {type'; rotation_keys; verification_methods; also_known_as; services; prev}
+    ->
+      `Assoc
+        [ ("type", `String type')
+        ; ("rotationKeys", `List (List.map (fun k -> `String k) rotation_keys))
+        ; ( "verificationMethods"
+          , `List
+              (List.map
+                 (fun ((k, v) : string * string) -> `Assoc [(k, `String v)])
+                 verification_methods ) )
+        ; ("alsoKnownAs", `List (List.map (fun k -> `String k) also_known_as))
+        ; ( "services"
+          , `List
+              (List.map
+                 (fun ((k, v) : string * service) ->
+                   `Assoc
+                     [ ( k
+                       , `Assoc
+                           [ ("type", `String v.type')
+                           ; ("endpoint", `String v.endpoint) ] ) ] )
+                 services ) )
+        ; ("prev", match prev with Some p -> `String p | None -> `Null) ]
+  | Tombstone {type'; prev} ->
+      `Assoc [("type", `String type'); ("prev", `String prev)]
+
+let unsigned_operation_of_yojson (json : Yojson.Safe.t) =
+  let open Yojson.Safe.Util in
+  let type' = json |> member "type" |> to_string in
+  let rotation_keys =
+    json |> member "rotationKeys" |> to_list |> List.map to_string
+  in
+  let verification_methods =
+    json
+    |> member "verificationMethods"
+    |> to_list
+    |> List.map (fun json ->
+           let key = json |> member "key" |> to_string in
+           let value = json |> member "value" |> to_string in
+           (key, value) )
+  in
+  let also_known_as =
+    json |> member "alsoKnownAs" |> to_list |> List.map to_string
+  in
+  let services =
+    json |> member "services" |> to_list
+    |> List.map (fun json ->
+           let key = json |> member "key" |> to_string in
+           let type' = json |> member "type" |> to_string in
+           let endpoint = json |> member "endpoint" |> to_string in
+           (key, {type'; endpoint}) )
+  in
+  let prev = json |> member "prev" |> to_string_option in
+  match type' with
+  | "plc_operation" ->
+      Operation
+        { type'
+        ; rotation_keys
+        ; verification_methods
+        ; also_known_as
+        ; services
+        ; prev }
+  | "plc_tombstone" ->
+      Tombstone {type'; prev= Option.get prev}
+  | _ ->
+      raise (Invalid_argument "Invalid operation type")
+
+type signed_operation =
+  | Operation of
+      { type': string [@key "type"]
+      ; rotation_keys: string list [@key "rotationKeys"]
+      ; verification_methods: (string * string) list
+            [@key "verificationMethods"]
+      ; also_known_as: string list [@key "alsoKnownAs"]
+      ; services: (string * service) list
+      ; prev: string option
+      ; signature: string [@key "sig"] }
+  | Tombstone of
+      {type': string [@key "type"]; prev: string; signature: string [@key "sig"]}
+[@@deriving yojson]
+
+let signed_operation_to_yojson = function
+  | Operation
+      { type'
+      ; rotation_keys
+      ; verification_methods
+      ; also_known_as
+      ; services
+      ; prev
+      ; signature } -> (
+    match
+      unsigned_operation_to_yojson
+        (Operation
+           { type'
+           ; rotation_keys
+           ; verification_methods
+           ; also_known_as
+           ; services
+           ; prev } )
+    with
+    | `Assoc fields ->
+        `Assoc (fields @ [("sig", `String signature)])
+    | _ ->
+        failwith "unexpected json structure" )
+  | Tombstone {type'; prev; signature} -> (
+    match unsigned_operation_to_yojson (Tombstone {type'; prev}) with
+    | `Assoc fields ->
+        `Assoc (fields @ [("sig", `String signature)])
+    | _ ->
+        failwith "unexpected json structure" )
+
+let sign_operation (key : Kleidos.key) operation : signed_operation =
+  let sig_privkey, (module Sig_curve) = key in
+  let cbor = unsigned_operation_to_yojson operation |> Dag_cbor.encode_yojson in
+  let sig_bytes = Sig_curve.sign ~privkey:sig_privkey ~msg:cbor in
+  let sig_str =
+    Result.get_ok @@ Multibase.encode_t `Base64url (Bytes.to_string sig_bytes)
+  in
+  match operation with
+  | Operation
+      {type'; rotation_keys; verification_methods; also_known_as; services; prev}
+    ->
+      Operation
+        { type'
+        ; rotation_keys
+        ; verification_methods
+        ; also_known_as
+        ; services
+        ; prev
+        ; signature= sig_str }
+  | Tombstone {type'; prev} ->
+      Tombstone {type'; prev; signature= sig_str}
+
+let submit_operation ?(endpoint = "https://plc.directory") did operation :
+    (unit, int * string) Lwt_result.t =
+  let open Cohttp in
+  let open Cohttp_lwt_unix in
+  let endpoint = Uri.(with_path (of_string endpoint) did) in
+  let headers = Header.of_list [("Content-Type", "application/json")] in
+  let body =
+    operation |> signed_operation_to_yojson |> Yojson.Safe.to_string
+    |> Cohttp_lwt.Body.of_string
+  in
+  let%lwt res, body = Client.post ~headers ~body endpoint in
+  match res.status with
+  | `OK ->
+      Lwt.return_ok ()
+  | _ ->
+      let%lwt body_str = Cohttp_lwt.Body.to_string body in
+      Lwt.return_error (Http.Status.to_int res.status, body_str)
+
+let did_of_operation operation : string =
+  let cbor = signed_operation_to_yojson operation |> Dag_cbor.encode_yojson in
+  let digest = Digestif.SHA256.(cbor |> digest_bytes |> to_raw_string) in
+  let hash = Result.get_ok @@ Multibase.encode_t `Base32 digest in
+  let did = "did:plc:" ^ String.sub hash 0 24 in
+  did
+
+let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
+    ?(rotation_did_keys : string list option) handle : string * signed_operation
+    =
+  let recovery_privkey, (module Rec_curve) = pds_rotation_key in
+  let recovery_did_key =
+    Rec_curve.pubkey_to_did_key
+      (Rec_curve.derive_pubkey ~privkey:recovery_privkey)
+  in
+  let rotation_keys =
+    recovery_did_key :: Option.value rotation_did_keys ~default:[]
+  in
+  let operation : unsigned_operation =
+    Operation
+      { type'= "plc_operation"
+      ; rotation_keys
+      ; verification_methods= [("atproto", signing_did_key)]
+      ; also_known_as= ["at://" ^ handle]
+      ; services=
+          [ ( "atproto_pds"
+            , { type'= "AtprotoPersonalDataServer"
+              ; endpoint= "https://" ^ Env.hostname } ) ]
+      ; prev= None }
+  in
+  let signed = sign_operation pds_rotation_key operation in
+  let did = did_of_operation signed in
+  (did, signed)
+
+let submit_genesis ?endpoint (pds_rotation_key : Kleidos.key)
+    (signing_did_key : string) ?(rotation_did_keys : string list option) handle
+    : (string, string) Lwt_result.t =
+  let did, signed =
+    create_did pds_rotation_key signing_did_key ?rotation_did_keys handle
+  in
+  match%lwt submit_operation ?endpoint did signed with
+  | Ok _ ->
+      Lwt.return_ok did
+  | Error (status, error) ->
+      Lwt.return_error
+      @@ Format.sprintf "error %d while submitting operation; %s" status error
