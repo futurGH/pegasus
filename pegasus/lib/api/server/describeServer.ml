@@ -1,6 +1,5 @@
 let handler : Dream.handler =
  fun _ ->
-  let env = Env.load () in
   Dream.json
   @@ Format.sprintf
        {|{
@@ -10,4 +9,4 @@ let handler : Dream.handler =
   "links": {},
   "contact": {}
 }|}
-       env.hostname env.hostname env.invite_required
+       Env.hostname Env.hostname Env.invite_required
