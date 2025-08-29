@@ -7,7 +7,7 @@ module Types = struct
     ; did: string
     ; handle: string
     ; email: string
-    ; password_hash: bytes
+    ; password_hash: string
     ; signing_key: string
     ; preferences: Yojson.Safe.t
     ; created_at: int
@@ -17,15 +17,16 @@ end
 open Types
 
 module Queries = struct
-  let create_tables =
-    [%rapper
-      execute
-        {sql| CREATE TABLE IF NOT EXISTS actors (
+  let create_tables conn =
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS actors (
                 id INTEGER PRIMARY KEY,
                 did TEXT NOT NULL UNIQUE,
                 handle TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
-                password_hash BLOB NOT NULL,
+                password_hash TEXT NOT NULL,
                 signing_key TEXT NOT NULL,
                 preferences TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
@@ -35,7 +36,42 @@ module Queries = struct
               CREATE INDEX IF NOT EXISTS actors_handle_idx ON actors (handle);
               CREATE INDEX IF NOT EXISTS actors_email_idx ON actors (email);
         |sql}]
-      ()
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS invite_codes (
+              code TEXT PRIMARY KEY,
+              did TEXT NOT NULL,
+              remaining INTEGER NOT NULL
+            );
+        |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS firehose (
+              seq INTEGER PRIMARY KEY AUTOINCREMENT,
+              time INTEGER NOT NULL,
+              data BLOB NOT NULL
+            );
+        |sql}
+          syntax_off]
+        () conn
+    in
+    [%rapper
+      execute
+        (* no need to store issued tokens, just revoked ones; stolen from millipds https://github.com/DavidBuchanan314/millipds/blob/8f89a01e7d367a2a46f379960e9ca50347dcce71/src/millipds/database.py#L253 *)
+        {sql| CREATE TABLE IF NOT EXISTS revoked_tokens (
+            did TEXT NOT NULL,
+            jti TEXT NOT NULL,
+            revoked_at INTEGER NOT NULL,
+            PRIMARY KEY (did, jti)
+          );
+       |sql}]
+      () conn
 
   let create_actor =
     [%rapper
@@ -52,7 +88,7 @@ module Queries = struct
                 %string{did},
                 %string{handle},
                 %string{email},
-                %Blob{password_hash},
+                %string{password_hash},
                 %string{signing_key},
                 %Json{preferences},
                 %int{created_at}
@@ -62,7 +98,7 @@ module Queries = struct
   let get_actor_by_identifier id =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
               FROM actors WHERE did = %string{id} OR handle = %string{id} OR email = %string{id}
               LIMIT 1
         |sql}
@@ -72,7 +108,7 @@ module Queries = struct
   let list_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @Blob{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
               FROM actors
               ORDER BY created_at DESC LIMIT %int{limit} OFFSET %int{offset}
         |sql}
@@ -86,9 +122,7 @@ let init conn : unit Lwt.t =
   Lwt.return_unit
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
-  let password_hash =
-    Bcrypt.hash password |> Bcrypt.string_of_hash |> Bytes.of_string
-  in
+  let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
   let now = Unix.gettimeofday () *. 1000. |> int_of_float in
   let$! () =
     Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
@@ -101,6 +135,14 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
 let get_actor_by_identifier id conn =
   let$! actor = Queries.get_actor_by_identifier ~id conn in
   Lwt.return actor
+
+let try_login ~id ~password conn =
+  match%lwt get_actor_by_identifier id conn with
+  | None ->
+      Lwt.return false
+  | Some actor ->
+      let password_hash = actor.password_hash |> Bcrypt.hash_of_string in
+      Lwt.return @@ Bcrypt.verify password password_hash
 
 let list_actors ?(limit = 100) ?(offset = 0) conn =
   let$! actors = Queries.list_actors ~limit ~offset conn in
