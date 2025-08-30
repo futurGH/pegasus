@@ -1,3 +1,6 @@
-(test
- (name test_pegasus)
- (package pegasus))
+(tests
+ (names test_sequencer)
+ (package pegasus)
+ (libraries ipld pegasus lwt_ppx alcotest)
+ (preprocess
+  (pps lwt_ppx)))

@@ -187,11 +187,15 @@ module Types = struct
   let header_of_yojson = function
     | `Assoc [("op", `Int -1)] ->
         Ok Error
-    | `Assoc [("op", `Int 1); ("t", `String t)] -> (
-      match header_t_of_string t with
-      | Ok t ->
-          Ok (Message t)
-      | Error _ ->
+    | `Assoc a -> (
+      match (List.assoc_opt "op" a, List.assoc_opt "t" a) with
+      | Some (`Int 1), Some (`String t) -> (
+        match header_t_of_string t with
+        | Ok t ->
+            Ok (Message t)
+        | Error _ ->
+            Error "invalid header type" )
+      | _ ->
           Error "invalid header type" )
     | _ ->
         Error "invalid header type"

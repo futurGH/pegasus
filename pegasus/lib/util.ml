@@ -3,17 +3,15 @@ module Exceptions = struct
 end
 
 module Constants = struct
-  let pegasus_db_location = Filename.concat Env.database_dir "pegasus.db"
+  let pegasus_db_location =
+    Filename.concat Env.database_dir "sqlite3://pegasus.db" |> Uri.of_string
 
   let user_db_location did =
-    let rec last (lst : 'a list) : 'a option =
-      match lst with [] -> None | [x] -> Some x | _ :: xs -> last xs
-    in
-    let filename =
-      did |> String.split_on_char ':' |> last |> Option.get
-      |> Printf.sprintf "%s.db"
-    in
-    Filename.concat Env.database_dir filename
+    did
+    |> Str.global_replace (Str.regexp ":") "_"
+    |> Format.sprintf "sqlite3://%s.db"
+    |> Filename.concat Env.database_dir
+    |> Uri.of_string
 end
 
 module Syntax = struct
@@ -84,21 +82,37 @@ let caqti_result_exn = function
   | Error caqti_err ->
       Error (Caqti_error.Exn caqti_err)
 
+let _init_connection conn =
+  let open Syntax in
+  let$! () =
+    [%rapper
+      execute
+        {sql|
+          PRAGMA journal_mode=WAL;
+          PRAGMA foreign_keys=ON;
+          PRAGMA synchronous=NORMAL;
+        |sql}
+        syntax_off]
+      () conn
+  in
+  Lwt.return conn
+
 (* opens an sqlite connection *)
 let connect_sqlite db_uri =
-  let open Syntax in
-  match%lwt Caqti_lwt_unix.connect (Uri.of_string db_uri) with
+  match%lwt Caqti_lwt_unix.connect db_uri with
   | Ok c ->
-      let$! () =
-        [%rapper execute {sql| PRAGMA journal_mode=WAL; |sql} syntax_off] () c
-      in
-      let$! () =
-        [%rapper execute {sql| PRAGMA synchronous=NORMAL; |sql} syntax_off] () c
-      in
-      let$! () =
-        [%rapper execute {sql| PRAGMA foreign_keys=ON; |sql} syntax_off] () c
-      in
-      Lwt.return c
+      _init_connection c
+  | Error e ->
+      raise (Caqti_error.Exn e)
+
+let with_connection db_uri f =
+  match%lwt
+    Caqti_lwt_unix.with_connection db_uri (fun conn ->
+        let%lwt _ = _init_connection conn in
+        f conn )
+  with
+  | Ok result ->
+      Lwt.return result
   | Error e ->
       raise (Caqti_error.Exn e)
 
