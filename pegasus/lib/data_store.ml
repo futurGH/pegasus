@@ -12,6 +12,8 @@ module Types = struct
     ; preferences: Yojson.Safe.t
     ; created_at: int
     ; deactivated_at: int option }
+
+  type firehose_event = {seq: int; time: int; t: string; data: bytes}
 end
 
 open Types
@@ -53,8 +55,9 @@ module Queries = struct
       [%rapper
         execute
           {sql| CREATE TABLE IF NOT EXISTS firehose (
-              seq INTEGER PRIMARY KEY AUTOINCREMENT,
+              seq INTEGER PRIMARY KEY,
               time INTEGER NOT NULL,
+              t TEXT NOT NULL,
               data BLOB NOT NULL
             );
         |sql}
@@ -113,13 +116,56 @@ module Queries = struct
               ORDER BY created_at DESC LIMIT %int{limit} OFFSET %int{offset}
         |sql}
         record_out]
+
+  (* firehose *)
+  let firehose_insert =
+    [%rapper
+      get_one
+        {sql| INSERT INTO firehose (time, t, data)
+              VALUES (%int{time}, %string{t}, %Blob{data})
+              RETURNING @int{seq}
+        |sql}]
+
+  let firehose_since =
+    [%rapper
+      get_many
+        {sql| SELECT @int{seq}, @int{time}, @string{t}, @Blob{data}
+              FROM firehose
+              WHERE seq > %int{since}
+              ORDER BY seq ASC
+              LIMIT %int{limit}
+        |sql}
+        record_out]
+
+  let firehose_next =
+    [%rapper
+      get_opt
+        {sql| SELECT @int{seq}, @int{time}, @string{t}, @Blob{data}
+              FROM firehose
+              WHERE seq > %int{cursor}
+              ORDER BY seq ASC
+              LIMIT 1
+        |sql}
+        record_out]
+
+  let firehose_earliest_after =
+    [%rapper
+      get_opt
+        {sql| SELECT @int{seq}, @int{time}, @string{t}, @Blob{data}
+              FROM firehose
+              WHERE time >= %int{time}
+              ORDER BY time ASC
+              LIMIT 1
+        |sql}
+        record_out]
+
+  let firehose_latest_seq =
+    [%rapper get_one {sql| SELECT MAX(seq) AS @int?{seq} FROM firehose |sql}] ()
 end
 
 type t = (module Rapper_helper.CONNECTION)
 
-let init conn : unit Lwt.t =
-  let$! () = Queries.create_tables conn in
-  Lwt.return_unit
+let init conn : unit Lwt.t = unwrap @@ Queries.create_tables conn
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
@@ -133,8 +179,7 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
   Lwt.return_unit
 
 let get_actor_by_identifier id conn =
-  let$! actor = Queries.get_actor_by_identifier ~id conn in
-  Lwt.return actor
+  unwrap @@ Queries.get_actor_by_identifier ~id conn
 
 let try_login ~id ~password conn =
   match%lwt get_actor_by_identifier id conn with
@@ -145,5 +190,24 @@ let try_login ~id ~password conn =
       Lwt.return @@ Bcrypt.verify password password_hash
 
 let list_actors ?(limit = 100) ?(offset = 0) conn =
-  let$! actors = Queries.list_actors ~limit ~offset conn in
-  Lwt.return actors
+  unwrap @@ Queries.list_actors ~limit ~offset conn
+
+(* firehose helpers *)
+let append_firehose_event conn ~time ~t ~data : int Lwt.t =
+  unwrap @@ Queries.firehose_insert ~time ~t ~data conn
+
+let list_firehose_since conn ~since ~limit : firehose_event list Lwt.t =
+  unwrap @@ Queries.firehose_since ~since ~limit conn
+
+let next_firehose_event conn ~cursor : firehose_event option Lwt.t =
+  unwrap @@ Queries.firehose_next ~cursor conn
+
+let earliest_firehose_after_time conn ~time : firehose_event option Lwt.t =
+  unwrap @@ Queries.firehose_earliest_after ~time conn
+
+let latest_firehose_seq conn : int option Lwt.t =
+  unwrap @@ Queries.firehose_latest_seq conn
+
+let next_firehose_seq conn : int Lwt.t =
+  Queries.firehose_latest_seq conn
+  >$! fun s -> s |> Option.map succ |> Option.value ~default:0

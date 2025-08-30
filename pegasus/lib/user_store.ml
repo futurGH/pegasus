@@ -363,25 +363,19 @@ let put_record conn record path : Cid.t Lwt.t =
 
 (* blobs *)
 
-let get_blob conn cid : blob option Lwt.t =
-  let$! blob = Queries.get_blob conn ~cid in
-  Lwt.return blob
+let get_blob conn cid : blob option Lwt.t = unwrap @@ Queries.get_blob conn ~cid
 
 let list_blobs conn ~limit ~cursor : Cid.t list Lwt.t =
-  let$! blobs = Queries.list_blobs conn ~limit ~cursor in
-  Lwt.return blobs
+  unwrap @@ Queries.list_blobs conn ~limit ~cursor
 
 let put_blob conn cid mimetype data : int Lwt.t =
-  let$! blob_id = Queries.put_blob cid mimetype data conn in
-  Lwt.return blob_id
+  unwrap @@ Queries.put_blob cid mimetype data conn
 
 let list_blob_refs conn path : Cid.t list Lwt.t =
-  let$! blob_refs = Queries.list_blob_refs path conn in
-  Lwt.return blob_refs
+  unwrap @@ Queries.list_blob_refs path conn
 
 let put_blob_ref conn path cid : unit Lwt.t =
-  let$! () = Queries.put_blob_ref path cid conn in
-  Lwt.return_unit
+  unwrap @@ Queries.put_blob_ref path cid conn
 
 let put_blob_refs conn path cids : (unit, exn) Lwt_result.t =
   Lwt_result.map (fun _ -> ())
@@ -391,5 +385,4 @@ let put_blob_refs conn path cids : (unit, exn) Lwt_result.t =
           cids )
 
 let clear_blob_refs conn path cids : unit Lwt.t =
-  let$! () = Queries.clear_blob_refs path cids conn in
-  Lwt.return_unit
+  unwrap @@ Queries.clear_blob_refs path cids conn

@@ -17,6 +17,13 @@ module Constants = struct
 end
 
 module Syntax = struct
+  let unwrap m =
+    match%lwt m with
+    | Ok x ->
+        Lwt.return x
+    | Error e ->
+        raise (Caqti_error.Exn e)
+
   (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( let$! ) m f =
     match%lwt m with Ok x -> f x | Error e -> raise (Caqti_error.Exn e)
@@ -131,6 +138,13 @@ let multi_query connection
               else Lwt.return_error (Caqti_error.Exn e) ) )
   in
   aux (Ok 0) queries
+
+(* unix timestamp *)
+let now_ms () : int = int_of_float (Unix.gettimeofday () *. 1000.)
+
+let ms_to_iso8601 ms =
+  let s = float_of_int ms /. 1000. in
+  Timedesc.(of_timestamp_float_s_exn s |> to_iso8601)
 
 (* returns all blob refs in a record *)
 let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =

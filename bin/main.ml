@@ -3,4 +3,6 @@ let () =
   @@ Dream.logger
   @@ Dream.router
        [ Dream.get "/xrpc/com.atproto.server.describeServer"
-           Pegasus.Api.Server.DescribeServer.handler ]
+           Pegasus.Api.Server.DescribeServer.handler
+       ; Dream.get "/xrpc/com.atproto.sync.subscribeRepos"
+           Pegasus.Api.Server.SubscribeRepos.handler ]

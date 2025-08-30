@@ -16,6 +16,7 @@
   re
   safepass
   str
+  timedesc
   yojson
   lwt_ppx
   ppx_deriving_yojson.runtime
