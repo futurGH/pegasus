@@ -378,14 +378,6 @@ module Make (Store : Writable_blockstore) = struct
     in
     Lwt_seq.unfold_lwt step init_state
 
-  (* returns a car v1 formatted stream containing the mst *)
-  let to_car_stream t : bytes Lwt_seq.t =
-    t |> to_blocks_stream |> Car.blocks_to_stream (Some t.root)
-
-  (* returns a car archive containing the mst *)
-  let to_car t : bytes Lwt.t =
-    t |> to_blocks_stream |> Car.blocks_to_car (Some t.root)
-
   (* produces a cid and cbor-encoded bytes for a given tree *)
   let serialize t node : (Cid.t * bytes, exn) Lwt_result.t =
     let sorted_entries =

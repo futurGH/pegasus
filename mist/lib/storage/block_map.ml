@@ -39,6 +39,8 @@ let merge m m' =
   let m = Cid_map.fold (fun cid bytes m -> Cid_map.add cid bytes m) m m in
   Cid_map.fold (fun cid bytes m -> Cid_map.add cid bytes m) m' m
 
+let of_seq = Cid_map.of_seq
+
 let size = Cid_map.cardinal
 
 let byte_size m = Cid_map.fold (fun _ bytes acc -> acc + Bytes.length bytes) m 0

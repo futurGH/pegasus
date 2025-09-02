@@ -54,18 +54,14 @@ module Varint = struct
     (result, final_counter)
 end
 
-(* converts a series of mst blocks into a car stream *)
-let blocks_to_stream (root : Cid.t option) (blocks : (Cid.t * bytes) Lwt_seq.t)
-    : bytes Lwt_seq.t =
+(* converts a series of blocks into a car stream *)
+let blocks_to_stream (root : Cid.t) (blocks : (Cid.t * bytes) Lwt_seq.t) :
+    bytes Lwt_seq.t =
   let header =
     Dag_cbor.encode
       (`Map
          (Dag_cbor.StringMap.of_list
-            [ ("version", `Integer 1L)
-            ; ( "roots"
-              , `Array
-                  (match root with None -> [||] | Some root -> [|`Link root|])
-              ) ] ) )
+            [("version", `Integer 1L); ("roots", `Array [|`Link root|])] ) )
   in
   let seq = Lwt_seq.of_list [Varint.encode (Bytes.length header); header] in
   Lwt_seq.append seq
@@ -77,45 +73,105 @@ let blocks_to_stream (root : Cid.t option) (blocks : (Cid.t * bytes) Lwt_seq.t)
            ; block ] )
        blocks )
 
-(* converts a series of mst blocks into a car file *)
-let blocks_to_car (root : Cid.t option) (blocks : (Cid.t * bytes) Lwt_seq.t) :
+(* converts a series of blocks into a car file *)
+let blocks_to_car (root : Cid.t) (blocks : (Cid.t * bytes) Lwt_seq.t) :
     bytes Lwt.t =
   let stream = blocks_to_stream root blocks in
   let buf = Buffer.create 1024 in
   let%lwt () = Lwt_seq.iter (Buffer.add_bytes buf) stream in
   Lwt.return (Buffer.to_bytes buf)
 
-(* reads a car stream into a serialized mst
+(* reads a car stream into a series of blocks
    returns (roots, blocks) *)
 let read_car_stream (stream : bytes Lwt_seq.t) :
     (Cid.t list * (Cid.t * bytes) Lwt_seq.t) Lwt.t =
-  let buf = Buffer.create 1024 in
-  let%lwt () = Lwt_seq.iter (Buffer.add_bytes buf) stream in
-  let bytes = Buffer.to_bytes buf in
-  let bytes_len = Bytes.length bytes in
+  let open Lwt.Infix in
+  let q : bytes option Lwt_mvar.t = Lwt_mvar.create_empty () in
+  let () =
+    Lwt.async (fun () ->
+        let%lwt () =
+          Lwt_seq.iter_s (fun chunk -> Lwt_mvar.put q (Some chunk)) stream
+        in
+        Lwt_mvar.put q None )
+  in
+  let buf = ref Bytes.empty in
   let pos = ref 0 in
-  let read_varint () =
-    if !pos >= bytes_len then None
+  let len = ref 0 in
+  let eof = ref false in
+  let rec refill () =
+    if !pos < !len || !eof then Lwt.return_unit
     else
-      let n, used = Varint.decode (Bytes.sub bytes !pos (bytes_len - !pos)) in
-      pos := !pos + used ;
-      Some n
+      Lwt_mvar.take q
+      >>= function
+      | None ->
+          eof := true ;
+          buf := Bytes.empty ;
+          pos := 0 ;
+          len := 0 ;
+          Lwt.return_unit
+      | Some chunk ->
+          buf := chunk ;
+          pos := 0 ;
+          len := Bytes.length chunk ;
+          if !len = 0 then refill () else Lwt.return_unit
   in
-  let read_bytes n =
-    if !pos + n > bytes_len then failwith "unexpected end of car stream"
-    else
-      let b = Bytes.sub bytes !pos n in
-      pos := !pos + n ;
-      b
+  let read_byte () =
+    refill ()
+    >>= fun () ->
+    if !pos < !len then (
+      let b = Bytes.get_uint8 !buf !pos in
+      pos := !pos + 1 ;
+      Lwt.return_some b )
+    else Lwt.return_none
   in
+  let read_exact n =
+    let out = Buffer.create n in
+    let rec loop remaining =
+      if remaining = 0 then Lwt.return (Buffer.to_bytes out)
+      else
+        refill ()
+        >>= fun () ->
+        if !pos >= !len && !eof then
+          Lwt.fail_with "unexpected end of car stream"
+        else
+          let avail = !len - !pos in
+          let take = if avail < remaining then avail else remaining in
+          if take = 0 then loop remaining
+          else (
+            Buffer.add_bytes out (Bytes.sub !buf !pos take) ;
+            pos := !pos + take ;
+            loop (remaining - take) )
+    in
+    loop n
+  in
+  let read_varint_stream () =
+    let rec aux res shift =
+      if shift > 49 then Lwt.fail_with "could not decode varint"
+      else
+        read_byte ()
+        >>= function
+        | None ->
+            if shift = 0 then Lwt.return_none
+            else Lwt.fail_with "could not decode varint"
+        | Some b ->
+            let v =
+              if shift < 28 then res + ((b land Varint.rest) lsl shift)
+              else res + (b land Varint.rest * (1 lsl shift))
+            in
+            if b land Varint.msb <> 0 then aux v (shift + 7)
+            else Lwt.return_some v
+    in
+    aux 0 0
+  in
+  let%lwt header_size_opt = read_varint_stream () in
   let header_size =
-    match read_varint () with
+    match header_size_opt with
     | None ->
         failwith "could not parse car header"
     | Some n ->
         n
   in
-  let header_bytes = read_bytes header_size in
+  let%lwt header_bytes = read_exact header_size in
   let header = Dag_cbor.decode header_bytes in
   let roots =
     match header with
@@ -133,19 +189,22 @@ let read_car_stream (stream : bytes Lwt_seq.t) :
     | _ ->
         []
   in
-  let rec read_blocks acc =
-    if !pos >= bytes_len then List.rev acc
-    else
-      match read_varint () with
-      | None ->
-          List.rev acc
-      | Some block_size ->
-          if block_size <= 0 then read_blocks acc
-          else
-            let block_bytes = read_bytes block_size in
-            let cid, remainder = Cid.decode_first block_bytes in
-            read_blocks ((cid, remainder) :: acc)
+  let rec next () =
+    read_varint_stream ()
+    >>= function
+    | None ->
+        Lwt.return_none
+    | Some block_size ->
+        if block_size <= 0 then next ()
+        else
+          read_exact block_size
+          >>= fun block_bytes ->
+          let cid, remainder = Cid.decode_first block_bytes in
+          Lwt.return_some (cid, remainder)
   in
-  let blocks_list = read_blocks [] in
-  let blocks_seq = Lwt_seq.of_list blocks_list in
-  Lwt.return (roots, blocks_seq)
+  let blocks : (Cid.t * bytes) Lwt_seq.t =
+    Lwt_seq.unfold_lwt
+      (fun () -> next () >|= function None -> None | Some x -> Some (x, ()))
+      ()
+  in
+  Lwt.return (roots, blocks)

@@ -144,12 +144,12 @@ let get_map t : Cid.t StringMap.t Lwt.t =
     | None ->
         failwith ("failed to retrieve commit for " ^ t.did)
   in
+  if t.commit <> Some root then t.commit <- Some root ;
   match t.block_map with
-  | Some map when Some root = t.commit ->
+  | Some map ->
       Lwt.return map
   | _ ->
       let%lwt map = Mst.build_map {blockstore= t.db; root= commit.data} in
-      t.commit <- Some root ;
       t.block_map <- Some map ;
       Lwt.return map
 
@@ -416,3 +416,46 @@ let load did : t Lwt.t =
         Lwt.return_none
   in
   Lwt.return {key; did; db= user_db; block_map= None; commit}
+
+let export_blocks_stream t : (Cid.t * bytes) Lwt_seq.t Lwt.t =
+  let%lwt root, commit =
+    match%lwt User_store.get_commit t.db with
+    | Some (r, c) ->
+        Lwt.return (r, c)
+    | None ->
+        failwith ("failed to retrieve commit for " ^ t.did)
+  in
+  let mst : Mst.t = {blockstore= t.db; root= commit.data} in
+  let mst_blocks = Mst.to_blocks_stream mst in
+  let commit_block =
+    commit |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
+  in
+  if Cid.create Dcbor commit_block <> root then
+    failwith "commit does not match stored cid" ;
+  Lwt.return (Lwt_seq.cons (root, commit_block) mst_blocks)
+
+let import_car (did : string) (stream : bytes Lwt_seq.t) : t Lwt.t =
+  let%lwt t = load did in
+  let%lwt roots, blocks = Car.read_car_stream stream in
+  let root =
+    match roots with [root] -> root | _ -> failwith "invalid number of roots"
+  in
+  let%lwt () =
+    Lwt_seq.iter_s
+      (fun (cid, block) ->
+        if cid = root then (
+          let commit =
+            block |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
+            |> Result.get_ok
+          in
+          if commit.did <> did then failwith "did does not match commit did" ;
+          let%lwt _ = Lwt_result.get_exn @@ User_store.put_commit t.db commit in
+          Lwt.return_unit )
+        else
+          let%lwt _ =
+            Lwt_result.get_exn @@ User_store.put_block t.db cid block
+          in
+          Lwt.return_unit )
+      blocks
+  in
+  Lwt.return t

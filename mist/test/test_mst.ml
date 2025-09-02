@@ -819,10 +819,11 @@ let test_roundtrip () =
       | _ ->
           failwith "expected exactly one root in car stream"
     in
-    let%lwt bm =
-      Lwt_seq.fold_left
+    let%lwt blocks_list = Lwt_seq.to_list blocks in
+    let bm =
+      Seq.fold_left
         (fun acc (cid, bytes) -> Storage.Block_map.set cid bytes acc)
-        Storage.Block_map.empty blocks
+        Storage.Block_map.empty (List.to_seq blocks_list)
     in
     let store = Storage.Memory_blockstore.create ~blocks:bm () in
     let%lwt commit =
@@ -854,7 +855,7 @@ let test_roundtrip () =
   let commit_bytes = Dag_cbor.encode (`Map commit) in
   let commit_cid = Cid.create Dcbor commit_bytes in
   let%lwt car' =
-    Car.blocks_to_car (Some commit_cid)
+    Car.blocks_to_car commit_cid
       (Lwt_seq.append (Lwt_seq.of_list [(commit_cid, commit_bytes)]) mst_stream)
   in
   let%lwt _, mst' = mst_of_car_bytes car' in
