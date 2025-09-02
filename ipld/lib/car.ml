@@ -54,9 +54,14 @@ module Varint = struct
     (result, final_counter)
 end
 
+type block = Cid.t * bytes
+
+type block_stream = block Lwt_seq.t
+
+type stream = bytes Lwt_seq.t
+
 (* converts a series of blocks into a car stream *)
-let blocks_to_stream (root : Cid.t) (blocks : (Cid.t * bytes) Lwt_seq.t) :
-    bytes Lwt_seq.t =
+let blocks_to_stream (root : Cid.t) (blocks : block_stream) : stream =
   let header =
     Dag_cbor.encode
       (`Map
@@ -73,18 +78,19 @@ let blocks_to_stream (root : Cid.t) (blocks : (Cid.t * bytes) Lwt_seq.t) :
            ; block ] )
        blocks )
 
-(* converts a series of blocks into a car file *)
-let blocks_to_car (root : Cid.t) (blocks : (Cid.t * bytes) Lwt_seq.t) :
-    bytes Lwt.t =
-  let stream = blocks_to_stream root blocks in
+(* collects a stream into a car file *)
+let collect_stream (stream : stream) : bytes Lwt.t =
   let buf = Buffer.create 1024 in
   let%lwt () = Lwt_seq.iter (Buffer.add_bytes buf) stream in
   Lwt.return (Buffer.to_bytes buf)
 
+(* converts a series of blocks into a car file *)
+let blocks_to_car (root : Cid.t) (blocks : block_stream) : bytes Lwt.t =
+  blocks_to_stream root blocks |> collect_stream
+
 (* reads a car stream into a series of blocks
    returns (roots, blocks) *)
-let read_car_stream (stream : bytes Lwt_seq.t) :
-    (Cid.t list * (Cid.t * bytes) Lwt_seq.t) Lwt.t =
+let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
   let open Lwt.Infix in
   let q : bytes option Lwt_mvar.t = Lwt_mvar.create_empty () in
   let () =

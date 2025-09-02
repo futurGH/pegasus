@@ -417,7 +417,7 @@ let load did : t Lwt.t =
   in
   Lwt.return {key; did; db= user_db; block_map= None; commit}
 
-let export_blocks_stream t : (Cid.t * bytes) Lwt_seq.t Lwt.t =
+let export_car t : Car.stream Lwt.t =
   let%lwt root, commit =
     match%lwt User_store.get_commit t.db with
     | Some (r, c) ->
@@ -432,9 +432,10 @@ let export_blocks_stream t : (Cid.t * bytes) Lwt_seq.t Lwt.t =
   in
   if Cid.create Dcbor commit_block <> root then
     failwith "commit does not match stored cid" ;
-  Lwt.return (Lwt_seq.cons (root, commit_block) mst_blocks)
+  Lwt.return
+  @@ Car.blocks_to_stream root (Lwt_seq.cons (root, commit_block) mst_blocks)
 
-let import_car (did : string) (stream : bytes Lwt_seq.t) : t Lwt.t =
+let import_car (did : string) (stream : Car.stream) : t Lwt.t =
   let%lwt t = load did in
   let%lwt roots, blocks = Car.read_car_stream stream in
   let root =
