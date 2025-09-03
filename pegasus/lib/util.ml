@@ -1,5 +1,7 @@
 module Exceptions = struct
   exception XrpcError of (string * string)
+
+  exception AuthError of (string * string)
 end
 
 module Constants = struct
@@ -167,3 +169,6 @@ let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
       match value with `BlobRef blob -> blob :: acc | _ -> acc )
     []
     (Mist.Lex.StringMap.bindings record)
+
+(* returns whether the value is None *)
+let is_none = function None -> true | _ -> false

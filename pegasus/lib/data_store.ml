@@ -161,6 +161,11 @@ module Queries = struct
 
   let firehose_latest_seq =
     [%rapper get_one {sql| SELECT MAX(seq) AS @int?{seq} FROM firehose |sql}] ()
+
+  let get_revoked_token =
+    [%rapper
+      get_opt
+        {sql| SELECT @int{revoked_at} FROM tokens WHERE did = %string{did} AND jti = %string{jti} |sql}]
 end
 
 type t = (module Rapper_helper.CONNECTION)
@@ -211,3 +216,7 @@ let latest_firehose_seq conn : int option Lwt.t =
 let next_firehose_seq conn : int Lwt.t =
   Queries.firehose_latest_seq conn
   >$! fun s -> s |> Option.map succ |> Option.value ~default:0
+
+(* jwts *)
+let is_token_revoked conn ~did ~jti =
+  unwrap @@ Queries.get_revoked_token conn ~did ~jti

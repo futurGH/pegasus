@@ -9,6 +9,7 @@
   cohttp-lwt-unix
   dream
   ipld
+  jwto
   kleidos
   lwt
   lwt.unix
@@ -17,6 +18,7 @@
   safepass
   str
   timedesc
+  uuidm
   yojson
   lwt_ppx
   ppx_deriving_yojson.runtime
