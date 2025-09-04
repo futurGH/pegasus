@@ -1,12 +1,9 @@
-let handler : Dream.handler =
- fun _ ->
-  Dream.json
-  @@ Format.sprintf
-       {|{
-  "did": "did:web:%s",
-  "availableUserDomains": [".%s"],
-  "inviteCodeRequired": %b,
-  "links": {},
-  "contact": {}
-}|}
-       Env.hostname Env.hostname Env.invite_required
+let handler =
+  Xrpc.handler (fun _ ->
+      Dream.json @@ Yojson.Safe.to_string
+      @@ `Assoc
+           [ ("did", `String ("did:web:" ^ Env.hostname))
+           ; ("availableUserDomains", `List [`String ("." ^ Env.hostname)])
+           ; ("inviteCodeRequired", `Bool Env.invite_required)
+           ; ("links", `Assoc [])
+           ; ("contact", `Assoc []) ] )

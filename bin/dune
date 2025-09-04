@@ -2,4 +2,6 @@
  (public_name pegasus)
  (name main)
  (package pegasus)
- (libraries pegasus dream))
+ (libraries pegasus dream lwt lwt_ppx)
+ (preprocess
+  (pps lwt_ppx)))

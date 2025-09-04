@@ -1,7 +1,25 @@
 module Exceptions = struct
-  exception XrpcError of (string * string)
+  exception InvalidRequestError of {error: string option; message: string}
 
-  exception AuthError of (string * string)
+  exception AuthError of {error: string option; message: string}
+
+  let exn_to_response exn =
+    let format_response error msg status =
+      Dream.json ~status @@ Yojson.Safe.to_string
+      @@ `Assoc [("error", `String error); ("message", `String msg)]
+    in
+    match exn with
+    | InvalidRequestError {error; message} ->
+        format_response
+          (Option.value error ~default:"InvalidRequest")
+          message `Bad_Request
+    | AuthError {error; message} ->
+        format_response
+          (Option.value error ~default:"AuthenticationRequired")
+          message `Unauthorized
+    | _ ->
+        format_response "InternalServerError" "internal server error"
+          `Internal_Server_Error
 end
 
 module Constants = struct

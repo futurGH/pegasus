@@ -245,12 +245,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   in
   if swap_commit <> None && swap_commit <> t.commit then
     raise
-      (XrpcError
-         ( "InvalidSwap"
-         , Format.sprintf "swapCommit cid %s did not match last commit cid %s"
-             (Cid.to_string (Option.get swap_commit))
-             (match t.commit with Some c -> Cid.to_string c | None -> "null") )
-      ) ;
+      (InvalidRequestError
+         { error= Some "InvalidSwap"
+         ; message=
+             Format.sprintf "swapCommit cid %s did not match last commit cid %s"
+               (Cid.to_string (Option.get swap_commit))
+               (match t.commit with Some c -> Cid.to_string c | None -> "null")
+         } ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
   let%lwt results =
     List.map
@@ -264,12 +265,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               match StringMap.find_opt path !block_map with
               | Some cid ->
                   raise
-                    (XrpcError
-                       ( "InvalidSwap"
-                       , Format.sprintf
-                           "attempted to write record %s that already exists \
-                            with cid %s"
-                           path (Cid.to_string cid) ) )
+                    (InvalidRequestError
+                       { error= Some "InvalidSwap"
+                       ; message=
+                           Format.sprintf
+                             "attempted to write record %s that already exists \
+                              with cid %s"
+                             path (Cid.to_string cid) } )
               | None ->
                   Lwt.return ()
             in
@@ -312,11 +314,12 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                       "null"
                 in
                 raise
-                  (XrpcError
-                     ( "InvalidSwap"
-                     , Format.sprintf
-                         "attempted to update record %s with cid %s" path
-                         cid_str ) ) ) ;
+                  (InvalidRequestError
+                     { error= Some "InvalidSwap"
+                     ; message=
+                         Format.sprintf
+                           "attempted to update record %s with cid %s" path
+                           cid_str } ) ) ;
             let%lwt () =
               match old_cid with
               | Some _ -> (
@@ -358,11 +361,12 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                       "null"
                 in
                 raise
-                  (XrpcError
-                     ( "InvalidSwap"
-                     , Format.sprintf
-                         "attempted to delete record %s with cid %s" path
-                         cid_str ) ) ) ;
+                  (InvalidRequestError
+                     { error= Some "InvalidSwap"
+                     ; message=
+                         Format.sprintf
+                           "attempted to delete record %s with cid %s" path
+                           cid_str } ) ) ;
             let%lwt () =
               match%lwt User_store.get_record_by_path t.db path with
               | Some record ->

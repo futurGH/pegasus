@@ -112,82 +112,94 @@ module Verifiers = struct
     let parse_bearer req = parse_header req "Bearer"
   end
 
-  type t = {req: Dream.request; res: Dream.response; db: Data_store.t}
+  type ctx = {req: Dream.request; db: Data_store.t}
 
-  let unauthenticated ({req; _} : t) : (credentials, exn) Lwt_result.t =
-    match Dream.header req "authorization" with
-    | Some _ ->
-        Lwt.return_error
-        @@ AuthError ("AuthenticationRequired", "Invalid authorization header")
-    | None ->
-        Lwt.return_ok Unauthenticated
+  type verifier = ctx -> (credentials, exn) Lwt_result.t
 
-  let admin ({req; _} : t) : (credentials, exn) Lwt_result.t =
-    match parse_basic req with
-    | Ok (username, password) -> (
-      match (username, password) with
-      | "admin", p when p = Env.admin_password ->
-          Lwt.return_ok Admin
+  let unauthenticated : verifier = function
+    | {req; _} -> (
+      match Dream.header req "authorization" with
+      | Some _ ->
+          Lwt.return_error
+          @@ AuthError {error= None; message= "Invalid authorization header"}
+      | None ->
+          Lwt.return_ok Unauthenticated )
+
+  let admin : verifier = function
+    | {req; _} -> (
+      match parse_basic req with
+      | Ok (username, password) -> (
+        match (username, password) with
+        | "admin", p when p = Env.admin_password ->
+            Lwt.return_ok Admin
+        | _ ->
+            Lwt.return_error
+            @@ AuthError {error= None; message= "Invalid credentials"} )
+      | Error _ ->
+          Lwt.return_error
+          @@ AuthError {error= None; message= "Invalid authorization header"} )
+
+  let access : verifier = function
+    | {req; db} -> (
+      match parse_bearer req with
+      | Ok jwt -> (
+          match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
+          | Ok {sub= did; _} -> (
+              match%lwt Data_store.get_actor_by_identifier did db with
+              | Some {deactivated_at= None; _} ->
+                  Lwt.return_ok (Access {did})
+              | Some {deactivated_at= Some _; _} ->
+                  Lwt.return_error
+                  @@ AuthError
+                       { error= Some "AccountDeactivated"
+                       ; message= "Account is deactivated" }
+              | None ->
+                  Lwt.return_error
+                  @@ AuthError {error= None; message= "Invalid credentials"} )
+          | Error _ ->
+              Lwt.return_error
+              @@ AuthError {error= None; message= "Invalid credentials"} )
+      | Error _ ->
+          Lwt.return_error
+          @@ AuthError {error= None; message= "Invalid authorization header"} )
+
+  let refresh : verifier = function
+    | {req; db} -> (
+      match parse_bearer req with
+      | Ok jwt -> (
+          match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
+          | Ok {sub= did; jti; _} -> (
+              match%lwt Data_store.get_actor_by_identifier did db with
+              | Some {deactivated_at= None; _} ->
+                  Lwt.return_ok (Refresh {did; jti})
+              | Some {deactivated_at= Some _; _} ->
+                  Lwt.return_error
+                  @@ AuthError
+                       { error= Some "AccountDeactivated"
+                       ; message= "Account is deactivated" }
+              | None ->
+                  Lwt.return_error
+                  @@ AuthError {error= None; message= "Invalid credentials"} )
+          | Error "" | Error _ ->
+              Lwt.return_error
+              @@ AuthError {error= None; message= "Invalid credentials"} )
+      | Error _ ->
+          Lwt.return_error
+          @@ AuthError {error= None; message= "Invalid authorization header"} )
+
+  let authorization : verifier = function
+    | ctx -> (
+      match
+        Dream.header ctx.req "Authorization"
+        |> Option.map @@ String.split_on_char ' '
+      with
+      | Some ("Basic" :: _) ->
+          admin ctx
+      | Some ("Bearer" :: _) ->
+          access ctx
       | _ ->
           Lwt.return_error
-          @@ AuthError ("AuthenticationRequired", "Invalid credentials") )
-    | Error _ ->
-        Lwt.return_error
-        @@ AuthError ("AuthenticationRequired", "Invalid authorization header")
-
-  let access ({req; db; _} : t) : (credentials, exn) Lwt_result.t =
-    match parse_bearer req with
-    | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
-        | Ok {sub= did; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Access {did})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ AuthError ("AccountDeactivated", "Account is deactivated")
-            | None ->
-                Lwt.return_error
-                @@ AuthError ("AuthenticationRequired", "Invalid credentials") )
-        | Error _ ->
-            Lwt.return_error
-            @@ AuthError ("AuthenticationRequired", "Invalid credentials") )
-    | Error _ ->
-        Lwt.return_error
-        @@ AuthError ("AuthenticationRequired", "Invalid authorization header")
-
-  let refresh ({req; db; _} : t) : (credentials, exn) Lwt_result.t =
-    match parse_bearer req with
-    | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
-        | Ok {sub= did; jti; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Refresh {did; jti})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ AuthError ("AccountDeactivated", "Account is deactivated")
-            | None ->
-                Lwt.return_error
-                @@ AuthError ("AuthenticationRequired", "Invalid credentials") )
-        | Error "" | Error _ ->
-            Lwt.return_error
-            @@ AuthError ("AuthenticationRequired", "Invalid credentials") )
-    | Error _ ->
-        Lwt.return_error
-        @@ AuthError ("AuthenticationRequired", "Invalid authorization header")
-
-  let authorization t : (credentials, exn) Lwt_result.t =
-    match
-      Dream.header t.req "Authorization"
-      |> Option.map @@ String.split_on_char ' '
-      |> Option.map List.hd
-    with
-    | Some "Basic" ->
-        admin t
-    | Some "Bearer" ->
-        access t
-    | _ ->
-        Lwt.return_error
-        @@ AuthError ("InvalidToken", "Unexpected authorization type")
+          @@ AuthError
+               { error= Some "InvalidToken"
+               ; message= "Unexpected authorization type" } )
 end
