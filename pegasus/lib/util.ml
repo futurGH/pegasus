@@ -1,7 +1,15 @@
 module Exceptions = struct
-  exception InvalidRequestError of {error: string option; message: string}
+  exception InvalidRequestError of (string * string)
 
-  exception AuthError of {error: string option; message: string}
+  exception AuthError of (string * string)
+
+  module Errors = struct
+    let invalid_request ?(name = "InvalidRequest") msg =
+      raise (InvalidRequestError (name, msg))
+
+    let auth_required ?(name = "AuthRequired") msg =
+      raise (AuthError (name, msg))
+  end
 
   let exn_to_response exn =
     let format_response error msg status =
@@ -9,14 +17,10 @@ module Exceptions = struct
       @@ `Assoc [("error", `String error); ("message", `String msg)]
     in
     match exn with
-    | InvalidRequestError {error; message} ->
-        format_response
-          (Option.value error ~default:"InvalidRequest")
-          message `Bad_Request
-    | AuthError {error; message} ->
-        format_response
-          (Option.value error ~default:"AuthenticationRequired")
-          message `Unauthorized
+    | InvalidRequestError (error, message) ->
+        format_response error message `Bad_Request
+    | AuthError (error, message) ->
+        format_response error message `Unauthorized
     | _ ->
         format_response "InternalServerError" "internal server error"
           `Internal_Server_Error

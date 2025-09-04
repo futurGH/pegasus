@@ -121,7 +121,7 @@ module Verifiers = struct
       match Dream.header req "authorization" with
       | Some _ ->
           Lwt.return_error
-          @@ AuthError {error= None; message= "Invalid authorization header"}
+          @@ Errors.auth_required "Invalid authorization header"
       | None ->
           Lwt.return_ok Unauthenticated )
 
@@ -133,11 +133,10 @@ module Verifiers = struct
         | "admin", p when p = Env.admin_password ->
             Lwt.return_ok Admin
         | _ ->
-            Lwt.return_error
-            @@ AuthError {error= None; message= "Invalid credentials"} )
+            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
       | Error _ ->
           Lwt.return_error
-          @@ AuthError {error= None; message= "Invalid authorization header"} )
+          @@ Errors.auth_required "Invalid authorization header" )
 
   let access : verifier = function
     | {req; db} -> (
@@ -150,18 +149,16 @@ module Verifiers = struct
                   Lwt.return_ok (Access {did})
               | Some {deactivated_at= Some _; _} ->
                   Lwt.return_error
-                  @@ AuthError
-                       { error= Some "AccountDeactivated"
-                       ; message= "Account is deactivated" }
+                  @@ Errors.auth_required ~name:"AccountDeactivated"
+                       "Account is deactivated"
               | None ->
-                  Lwt.return_error
-                  @@ AuthError {error= None; message= "Invalid credentials"} )
+                  Lwt.return_error @@ Errors.auth_required "Invalid credentials"
+              )
           | Error _ ->
-              Lwt.return_error
-              @@ AuthError {error= None; message= "Invalid credentials"} )
+              Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
       | Error _ ->
           Lwt.return_error
-          @@ AuthError {error= None; message= "Invalid authorization header"} )
+          @@ Errors.auth_required "Invalid authorization header" )
 
   let refresh : verifier = function
     | {req; db} -> (
@@ -174,18 +171,16 @@ module Verifiers = struct
                   Lwt.return_ok (Refresh {did; jti})
               | Some {deactivated_at= Some _; _} ->
                   Lwt.return_error
-                  @@ AuthError
-                       { error= Some "AccountDeactivated"
-                       ; message= "Account is deactivated" }
+                  @@ Errors.auth_required ~name:"AccountDeactivated"
+                       "Account is deactivated"
               | None ->
-                  Lwt.return_error
-                  @@ AuthError {error= None; message= "Invalid credentials"} )
+                  Lwt.return_error @@ Errors.auth_required "Invalid credentials"
+              )
           | Error "" | Error _ ->
-              Lwt.return_error
-              @@ AuthError {error= None; message= "Invalid credentials"} )
+              Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
       | Error _ ->
           Lwt.return_error
-          @@ AuthError {error= None; message= "Invalid authorization header"} )
+          @@ Errors.auth_required "Invalid authorization header" )
 
   let authorization : verifier = function
     | ctx -> (
@@ -199,7 +194,6 @@ module Verifiers = struct
           access ctx
       | _ ->
           Lwt.return_error
-          @@ AuthError
-               { error= Some "InvalidToken"
-               ; message= "Unexpected authorization type" } )
+          @@ Errors.auth_required ~name:"InvalidToken"
+               "Unexpected authorization type" )
 end
