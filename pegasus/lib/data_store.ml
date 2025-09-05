@@ -189,10 +189,14 @@ let get_actor_by_identifier id conn =
 let try_login ~id ~password conn =
   match%lwt get_actor_by_identifier id conn with
   | None ->
-      Lwt.return false
-  | Some actor ->
+      Lwt.return_none
+  | Some actor -> (
       let password_hash = actor.password_hash |> Bcrypt.hash_of_string in
-      Lwt.return @@ Bcrypt.verify password password_hash
+      match Bcrypt.verify password password_hash with
+      | true ->
+          Lwt.return_some actor
+      | _ ->
+          Lwt.return_none )
 
 let list_actors ?(limit = 100) ?(offset = 0) conn =
   unwrap @@ Queries.list_actors ~limit ~offset conn

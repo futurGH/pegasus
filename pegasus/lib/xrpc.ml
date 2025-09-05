@@ -14,3 +14,10 @@ let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.unauthenticated)
       with e -> exn_to_response e )
   | Error e ->
       exn_to_response e
+
+let parse_body (req : Dream.request)
+    (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
+  try%lwt
+    let%lwt body = Dream.body req in
+    body |> Yojson.Safe.from_string |> of_yojson |> Result.get_ok |> Lwt.return
+  with _ -> Errors.invalid_request "Invalid request body"

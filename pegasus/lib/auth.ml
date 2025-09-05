@@ -77,6 +77,17 @@ let verify_bearer_jwt t token expected_scope =
         if revoked_at <> None then Lwt.return_error "token revoked"
         else Lwt.return_ok {scope; aud; sub; iat; exp; jti}
 
+let verify_auth ?(refresh = false) credentials did =
+  match credentials with
+  | Admin ->
+      true
+  | Access {did= creds} when creds = did ->
+      true
+  | Refresh {did= creds; _} when creds = did && refresh ->
+      true
+  | _ ->
+      false
+
 module Verifiers = struct
   open Util.Exceptions
 
