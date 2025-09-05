@@ -17,7 +17,7 @@ type response =
 [@@deriving yojson {strict= false}]
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.authorization (fun {req; db; auth} ->
+  Xrpc.handler (fun {req; db; auth} ->
       let%lwt {identifier; password; _} =
         Xrpc.parse_body req request_of_yojson
       in
