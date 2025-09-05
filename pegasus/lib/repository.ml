@@ -1,5 +1,4 @@
 open User_store.Types
-open Util.Exceptions
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
 module StringMap = Lex.StringMap

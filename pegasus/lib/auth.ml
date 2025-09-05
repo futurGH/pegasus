@@ -104,7 +104,7 @@ let get_authed_did_exn = function
   | Refresh {did; _} ->
       did
   | _ ->
-      Util.Exceptions.Errors.auth_required "Invalid authorization header"
+      Errors.auth_required "Invalid authorization header"
 
 let get_session_info identifier db =
   let%lwt actor =
@@ -131,8 +131,6 @@ let get_session_info identifier db =
     ; status }
 
 module Verifiers = struct
-  open Util.Exceptions
-
   open struct
     let parse_header req expected_type =
       match Dream.header req "authorization" with

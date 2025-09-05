@@ -7,7 +7,7 @@ let handler =
         | `Assoc [("preferences", prefs)] ->
             prefs
         | _ ->
-            Util.Exceptions.Errors.invalid_request "Invalid request body"
+            Errors.invalid_request "Invalid request body"
       in
       let%lwt () = Data_store.put_preferences ~did ~prefs db in
       Dream.empty `OK )

@@ -46,6 +46,6 @@ let handler =
                ; active
                ; status }
       | Ok _ ->
-          Util.Exceptions.Errors.invalid_request "Invalid credentials"
+          Errors.invalid_request "Invalid credentials"
       | Error e ->
-          Util.Exceptions.(log_exn e ; exn_to_response e) )
+          Errors.(log_exn e ; exn_to_response e) )

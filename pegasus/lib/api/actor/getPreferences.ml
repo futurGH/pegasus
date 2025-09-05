@@ -6,6 +6,6 @@ let handler =
         | Some actor ->
             Lwt.return actor.preferences
         | None ->
-            Util.Exceptions.Errors.internal_error ()
+            Errors.internal_error ()
       in
       Dream.json @@ Yojson.Safe.to_string prefs )
