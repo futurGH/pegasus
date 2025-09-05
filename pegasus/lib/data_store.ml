@@ -117,6 +117,12 @@ module Queries = struct
         |sql}
         record_out]
 
+  let put_preferences =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET preferences = %Json{preferences} WHERE did = %string{did}
+        |sql}]
+
   (* firehose *)
   let firehose_insert =
     [%rapper
@@ -205,6 +211,9 @@ let try_login ~id ~password conn =
 
 let list_actors ?(limit = 100) ?(offset = 0) conn =
   unwrap @@ Queries.list_actors ~limit ~offset conn
+
+let put_preferences ~did ~prefs conn =
+  unwrap @@ Queries.put_preferences ~did ~preferences:prefs conn
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =

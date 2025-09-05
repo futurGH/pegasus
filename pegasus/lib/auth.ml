@@ -98,6 +98,14 @@ let verify_auth ?(refresh = false) credentials did =
   | _ ->
       false
 
+let get_authed_did_exn = function
+  | Access {did} ->
+      did
+  | Refresh {did; _} ->
+      did
+  | _ ->
+      Util.Exceptions.Errors.auth_required "Invalid authorization header"
+
 let get_session_info identifier db =
   let%lwt actor =
     match%lwt Data_store.get_actor_by_identifier identifier db with
