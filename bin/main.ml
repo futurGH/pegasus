@@ -1,7 +1,9 @@
 open Pegasus
 
 let handlers =
-  [ ( "/xrpc/com.atproto.server.describeServer"
+  [ ("/xrpc/_health", Api.Health.handler)
+  ; ("/.well-known/did.json", Api.Well_known.did_json)
+  ; ( "/xrpc/com.atproto.server.describeServer"
     , Api.Server.DescribeServer.handler )
   ; ("/xrpc/com.atproto.server.createSession", Api.Server.CreateSession.handler)
   ; ( "/xrpc/com.atproto.server.refreshSession"
