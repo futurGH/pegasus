@@ -3,6 +3,16 @@ type t = (module Rapper_helper.CONNECTION)
 type symmetric_jwt =
   {scope: string; aud: string; sub: string; iat: int; exp: int; jti: string}
 
+type session_info =
+  { handle: string
+  ; did: string
+  ; email: string
+  ; email_confirmed: bool [@key "emailConfirmed"]
+  ; email_auth_factor: bool [@key "emailAuthFactor"]
+  ; active: bool option
+  ; status: string option }
+[@@deriving yojson {strict= false}]
+
 type credentials =
   | Unauthenticated
   | Admin
@@ -87,6 +97,30 @@ let verify_auth ?(refresh = false) credentials did =
       true
   | _ ->
       false
+
+let get_session_info identifier db =
+  let%lwt actor =
+    match%lwt Data_store.get_actor_by_identifier identifier db with
+    | Some actor ->
+        Lwt.return actor
+    | None ->
+        failwith "actor not found"
+  in
+  let active, status =
+    match actor.deactivated_at with
+    | None ->
+        (Some true, None)
+    | Some _ ->
+        (Some false, Some "deactivated")
+  in
+  Lwt.return
+    { did= actor.did
+    ; handle= actor.handle
+    ; email= actor.email
+    ; email_confirmed= true
+    ; email_auth_factor= true
+    ; active
+    ; status }
 
 module Verifiers = struct
   open Util.Exceptions

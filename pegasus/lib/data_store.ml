@@ -165,7 +165,12 @@ module Queries = struct
   let get_revoked_token =
     [%rapper
       get_opt
-        {sql| SELECT @int{revoked_at} FROM tokens WHERE did = %string{did} AND jti = %string{jti} |sql}]
+        {sql| SELECT @int{revoked_at} FROM revoked_tokens WHERE did = %string{did} AND jti = %string{jti} |sql}]
+
+  let revoke_token =
+    [%rapper
+      execute
+        {sql| INSERT INTO revoked_tokens (did, jti, revoked_at) VALUES (%string{did}, %string{jti}, %int{now}) |sql}]
 end
 
 type t = (module Rapper_helper.CONNECTION)
@@ -224,3 +229,6 @@ let next_firehose_seq conn : int Lwt.t =
 (* jwts *)
 let is_token_revoked conn ~did ~jti =
   unwrap @@ Queries.get_revoked_token conn ~did ~jti
+
+let revoke_token conn ~did ~jti =
+  unwrap @@ Queries.revoke_token conn ~did ~jti ~now:(Util.now_ms ())

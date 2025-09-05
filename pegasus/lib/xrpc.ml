@@ -11,7 +11,7 @@ let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.unauthenticated)
   match%lwt auth init with
   | Ok creds -> (
       try%lwt hdlr {req= init.req; db= init.db; auth= creds}
-      with e -> exn_to_response e )
+      with e -> log_exn e ; exn_to_response e )
   | Error e ->
       exn_to_response e
 

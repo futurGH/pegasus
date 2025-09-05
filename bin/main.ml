@@ -3,6 +3,10 @@ open Pegasus
 let handlers =
   [ ( "/xrpc/com.atproto.server.describeServer"
     , Api.Server.DescribeServer.handler )
+  ; ("/xrpc/com.atproto.server.createSession", Api.Server.CreateSession.handler)
+  ; ( "/xrpc/com.atproto.server.refreshSession"
+    , Api.Server.RefreshSession.handler )
+  ; ("/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
   ; ("/xrpc/com.atproto.sync.subscribeRepos", Api.Server.SubscribeRepos.handler)
   ]
 

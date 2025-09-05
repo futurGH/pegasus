@@ -2,7 +2,7 @@ type request =
   { identifier: string
   ; password: string
   ; auth_factor_token: string option [@key "authFactorToken"] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type response =
   { access_jwt: string [@key "accessJwt"]
@@ -12,9 +12,9 @@ type response =
   ; email: string
   ; email_confirmed: bool [@key "emailConfirmed"]
   ; email_auth_factor: bool [@key "emailAuthFactor"]
-  ; active: bool
+  ; active: bool option
   ; status: string option }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Auth.Verifiers.authorization (fun {req; db; auth} ->
@@ -30,9 +30,9 @@ let handler =
           let active, status =
             match actor.deactivated_at with
             | None ->
-                (true, None)
+                (Some true, None)
             | Some _ ->
-                (false, Some "deactivated")
+                (Some false, Some "deactivated")
           in
           Dream.json @@ Yojson.Safe.to_string
           @@ response_to_yojson
