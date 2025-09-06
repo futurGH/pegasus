@@ -11,12 +11,15 @@ let handlers =
     ( get
     , "/xrpc/com.atproto.server.describeServer"
     , Api.Server.DescribeServer.handler )
-  ; ( post
-    , "/xrpc/com.atproto.server.createSession"
-    , Api.Server.CreateSession.handler )
+  ; ( get
+    , "/xrpc/com.atproto.identity.resolveHandle"
+    , Api.Identity.ResolveHandle.handler )
   ; ( get
     , "/xrpc/com.atproto.sync.subscribeRepos"
     , Api.Server.SubscribeRepos.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.createSession"
+    , Api.Server.CreateSession.handler )
   ; (* account *)
     (get, "/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
   ; ( post

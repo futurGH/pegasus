@@ -38,6 +38,7 @@
   (caqti-lwt (>= 1.9.0))
   (cohttp (>= 6.1.1))
   (cohttp-lwt-unix (>= 6.1.1))
+  (dns-client (>= 10.2.0))
   dream
   (jwto (>= 0.4.0))
   (re (>= 1.13.2))

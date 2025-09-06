@@ -7,6 +7,7 @@
   caqti-driver-sqlite3
   cohttp
   cohttp-lwt-unix
+  dns-client.unix
   dream
   ipld
   jwto
