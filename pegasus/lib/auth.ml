@@ -56,6 +56,21 @@ let generate_jwt did =
   in
   (access, refresh)
 
+let generate_service_jwt ~did ~service_did ~lxm ~signing_key =
+  let now_s = int_of_float (Unix.gettimeofday ()) in
+  let exp = now_s + (60 * 5) in
+  match
+    Jwto.encode Jwto.HS256 signing_key
+      [ ("iss", did)
+      ; ("aud", service_did)
+      ; ("lxm", lxm)
+      ; ("exp", Int.to_string exp) ]
+  with
+  | Ok token ->
+      token
+  | Error err ->
+      failwith err
+
 let verify_bearer_jwt t token expected_scope =
   match Jwto.decode_and_verify Env.jwt_secret token with
   | Error err ->

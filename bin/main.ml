@@ -40,7 +40,9 @@ let main =
   let%lwt db = Util.connect_sqlite Util.Constants.pegasus_db_location in
   let%lwt () = Data_store.init db in
   Dream.serve ~interface:"0.0.0.0" ~port:8008
-  @@ Dream.logger @@ Dream.router
+  @@ Dream.logger
+  @@ Xrpc.service_proxy_middleware db
+  @@ Dream.router
   @@ List.map
        (fun (fn, path, handler) ->
          fn path (fun req -> handler ({req; db} : Xrpc.init)) )
