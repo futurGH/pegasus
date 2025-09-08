@@ -108,6 +108,12 @@ module Queries = struct
         record_out]
       id
 
+  let update_actor_handle =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET handle = %string{handle} WHERE did = %string{did}
+        |sql}]
+
   let list_actors =
     [%rapper
       get_many
@@ -196,6 +202,9 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
 
 let get_actor_by_identifier id conn =
   unwrap @@ Queries.get_actor_by_identifier ~id conn
+
+let update_actor_handle ~did ~handle conn =
+  unwrap @@ Queries.update_actor_handle ~did ~handle conn
 
 let try_login ~id ~password conn =
   match%lwt get_actor_by_identifier id conn with

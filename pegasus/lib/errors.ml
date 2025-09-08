@@ -4,6 +4,12 @@ exception InternalServerError of (string * string)
 
 exception AuthError of (string * string)
 
+let is_xrpc_error = function
+  | InvalidRequestError _ | InternalServerError _ | AuthError _ ->
+      true
+  | _ ->
+      false
+
 let invalid_request ?(name = "InvalidRequest") msg =
   raise (InvalidRequestError (name, msg))
 
@@ -29,4 +35,5 @@ let exn_to_response exn =
       format_response "InternalServerError" "Internal server error"
         `Internal_Server_Error
 
-let log_exn exn = Dream.error (fun log -> log "%s" (Printexc.to_string exn))
+let log_exn ?req exn =
+  Dream.error (fun log -> log ?request:req "%s" (Printexc.to_string exn))

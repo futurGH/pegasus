@@ -1,7 +1,14 @@
+open Cohttp
+open Cohttp_lwt
+open Cohttp_lwt_unix
+open Util.Did_doc_types
+
+let default_endpoint = "https://plc.directory"
+
 type t = {did: string; rotation_key: Kleidos.key; endpoint: string}
 
 type service = {type': string [@key "type"]; endpoint: string}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type unsigned_operation =
   | Operation of
@@ -13,7 +20,7 @@ type unsigned_operation =
       ; services: (string * service) list
       ; prev: string option }
   | Tombstone of {type': string [@key "type"]; prev: string}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let unsigned_operation_to_yojson = function
   | Operation
@@ -95,7 +102,7 @@ type signed_operation =
       ; signature: string [@key "sig"] }
   | Tombstone of
       {type': string [@key "type"]; prev: string; signature: string [@key "sig"]}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let signed_operation_to_yojson = function
   | Operation
@@ -127,6 +134,42 @@ let signed_operation_to_yojson = function
     | _ ->
         failwith "unexpected json structure" )
 
+type audit_log_operation =
+  { signature: string [@key "sig"]
+  ; prev: string option
+  ; type': string [@key "type"]
+  ; services: (string * service) list
+        [@to_yojson
+          fun l -> `Assoc (List.map (fun (k, v) -> (k, service_to_yojson v)) l)]
+        [@of_yojson
+          function
+          | `Assoc fields ->
+              Ok
+                (List.filter_map
+                   (fun (k, v) ->
+                     match service_of_yojson v with
+                     | Ok service ->
+                         Some (k, service)
+                     | _ ->
+                         None )
+                   fields )
+          | _ ->
+              Error "Expected object for services"]
+  ; also_known_as: string list [@key "alsoKnownAs"]
+  ; rotation_keys: string list [@key "rotationKeys"]
+  ; verification_methods: string_map [@key "verificationMethods"] }
+[@@deriving yojson {strict= false}]
+
+type audit_log_entry =
+  { did: string
+  ; operation: audit_log_operation
+  ; cid: string
+  ; nullified: bool
+  ; created_at: string [@key "createdAt"] }
+[@@deriving yojson {strict= false}]
+
+type audit_log = audit_log_entry list [@@deriving yojson {strict= false}]
+
 let sign_operation (key : Kleidos.key) operation : signed_operation =
   let sig_privkey, (module Sig_curve) = key in
   let cbor = unsigned_operation_to_yojson operation |> Dag_cbor.encode_yojson in
@@ -149,22 +192,20 @@ let sign_operation (key : Kleidos.key) operation : signed_operation =
   | Tombstone {type'; prev} ->
       Tombstone {type'; prev; signature= sig_str}
 
-let submit_operation ?(endpoint = "https://plc.directory") did operation :
+let submit_operation ?(endpoint = default_endpoint) did operation :
     (unit, int * string) Lwt_result.t =
-  let open Cohttp in
-  let open Cohttp_lwt_unix in
   let endpoint = Uri.(with_path (of_string endpoint) did) in
   let headers = Header.of_list [("Content-Type", "application/json")] in
   let body =
     operation |> signed_operation_to_yojson |> Yojson.Safe.to_string
-    |> Cohttp_lwt.Body.of_string
+    |> Body.of_string
   in
   let%lwt res, body = Client.post ~headers ~body endpoint in
   match res.status with
   | `OK ->
       Lwt.return_ok ()
   | _ ->
-      let%lwt body_str = Cohttp_lwt.Body.to_string body in
+      let%lwt body_str = Body.to_string body in
       Lwt.return_error (Http.Status.to_int res.status, body_str)
 
 let did_of_operation operation : string =
@@ -213,3 +254,22 @@ let submit_genesis ?endpoint (pds_rotation_key : Kleidos.key)
   | Error (status, error) ->
       Lwt.return_error
       @@ Format.sprintf "error %d while submitting operation; %s" status error
+
+let get_audit_log ?endpoint did : (audit_log, string) Lwt_result.t =
+  let uri =
+    Uri.of_string
+    @@ Format.sprintf "%s/%s/log/audit"
+         (Option.value endpoint ~default:"https://plc.directory")
+         did
+  in
+  let headers = Http.Header.init_with "Accept" "application/json" in
+  let%lwt res, body = Client.get ~headers uri in
+  match res.status with
+  | `OK ->
+      let%lwt body = Body.to_string body in
+      Lwt.return @@ audit_log_of_yojson @@ Yojson.Safe.from_string body
+  | s ->
+      let%lwt body_str = Body.to_string body in
+      Lwt.return_error
+      @@ Format.sprintf "error %d while fetching audit log; %s"
+           (Http.Status.to_int s) body_str

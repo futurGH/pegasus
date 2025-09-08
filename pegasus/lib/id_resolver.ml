@@ -79,71 +79,7 @@ module Handle = struct
 end
 
 module Did = struct
-  open struct
-    type string_or_strings = [`String of string | `Strings of string list]
-
-    let string_or_strings_to_yojson = function
-      | `String c ->
-          `String c
-      | `Strings cs ->
-          `List (List.map (fun c -> `String c) cs)
-
-    let string_or_strings_of_yojson = function
-      | `String c ->
-          Ok (`Strings [c])
-      | `List cs ->
-          Ok (`Strings (Yojson.Safe.Util.filter_string cs))
-      | _ ->
-          Error "invalid field value"
-
-    type string_or_string_map =
-      [`String of string | `StringMap of (string * string) list]
-
-    let string_or_string_map_to_yojson = function
-      | `String c ->
-          `String c
-      | `StringMap m ->
-          `Assoc (List.map (fun (k, v) -> (k, `String v)) m)
-
-    let string_or_string_map_of_yojson = function
-      | `String c ->
-          Ok (`StringMap [(c, "")])
-      | `Assoc m ->
-          Ok
-            (`StringMap
-               (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
-      | _ ->
-          Error "invalid field value"
-
-    type string_or_string_map_or_either_list =
-      [ `String of string
-      | `StringMap of (string * string) list
-      | `List of string_or_string_map list ]
-
-    let string_or_string_map_or_either_list_to_yojson = function
-      | `String c ->
-          `String c
-      | `StringMap m ->
-          `Assoc (List.map (fun (k, v) -> (k, `String v)) m)
-      | `List l ->
-          `List (List.map string_or_string_map_to_yojson l)
-
-    let string_or_string_map_or_either_list_of_yojson = function
-      | `String c ->
-          Ok (`StringMap [(c, "")])
-      | `Assoc m ->
-          Ok
-            (`StringMap
-               (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
-      | `List l ->
-          Ok
-            (`List
-               ( List.map string_or_string_map_of_yojson l
-               |> List.filter_map (function Ok x -> Some x | Error _ -> None) )
-            )
-      | _ ->
-          Error "invalid field value"
-  end
+  open Util.Did_doc_types
 
   module Document = struct
     type service =
