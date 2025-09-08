@@ -61,7 +61,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
             Errors.internal_error ~msg:"user not found" ()
       in
       let jwt =
-        Auth.generate_service_jwt ~did ~service_did ~lxm:nsid ~signing_key
+        Auth.generate_service_jwt ~did ~aud:service_did ~lxm:nsid ~signing_key
       in
       let uri =
         host ^ "/" ^ String.concat "/" @@ (Dream.path [@warning "-3"]) ctx.req

@@ -56,15 +56,12 @@ let generate_jwt did =
   in
   (access, refresh)
 
-let generate_service_jwt ~did ~service_did ~lxm ~signing_key =
+let generate_service_jwt ~did ~aud ~lxm ~signing_key =
   let now_s = int_of_float (Unix.gettimeofday ()) in
   let exp = now_s + (60 * 5) in
   match
     Jwto.encode Jwto.HS256 signing_key
-      [ ("iss", did)
-      ; ("aud", service_did)
-      ; ("lxm", lxm)
-      ; ("exp", Int.to_string exp) ]
+      [("iss", did); ("aud", aud); ("lxm", lxm); ("exp", Int.to_string exp)]
   with
   | Ok token ->
       token
