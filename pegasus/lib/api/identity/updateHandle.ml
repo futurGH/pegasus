@@ -1,4 +1,4 @@
-type request = {handle: string} [@@deriving yojson {strict= false}]
+type request = {handle: string} [@@deriving yojson]
 
 let validate_handle handle =
   if not @@ String.ends_with ~suffix:("." ^ Env.hostname) handle then

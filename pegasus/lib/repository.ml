@@ -4,26 +4,34 @@ module Mst = Mist.Mst.Make (User_store)
 module StringMap = Lex.StringMap
 module Tid = Mist.Tid
 
+module Write_op = struct
+  let create = "com.atproto.repo.applyWrites#create"
+
+  let update = "com.atproto.repo.applyWrites#update"
+
+  let delete = "com.atproto.repo.applyWrites#delete"
+end
+
 type signing_key = P256 of bytes | K256 of bytes
 
 type repo_write =
   | Create of
-      { type': string [@key "$type"]
+      { type': string [@key "$type"] [@default Write_op.create]
       ; collection: string
       ; rkey: string option
       ; value: Lex.repo_record }
   | Update of
-      { type': string [@key "$type"]
+      { type': string [@key "$type"] [@default Write_op.update]
       ; collection: string
       ; rkey: string
       ; value: Lex.repo_record
       ; swap_record: Cid.t option [@key "swapRecord"] }
   | Delete of
-      { type': string [@key "$type"]
+      { type': string [@key "$type"] [@default Write_op.delete]
       ; collection: string
       ; rkey: string
       ; swap_record: Cid.t option [@key "swapRecord"] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let repo_write_of_yojson (json : Yojson.Safe.t) =
   let open Yojson.Safe.Util in
@@ -42,16 +50,16 @@ let repo_write_of_yojson (json : Yojson.Safe.t) =
       let value =
         member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
       in
-      Create {type'; collection; rkey; value}
+      Ok (Create {type'; collection; rkey; value})
   | "com.atproto.repo.applyWrites#update" ->
       let value =
         member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
       in
-      Update {type'; collection; rkey= Option.get rkey; value; swap_record}
+      Ok (Update {type'; collection; rkey= Option.get rkey; value; swap_record})
   | "com.atproto.repo.applyWrites#delete" ->
-      Delete {type'; collection; rkey= Option.get rkey; swap_record}
+      Ok (Delete {type'; collection; rkey= Option.get rkey; swap_record})
   | _ ->
-      raise (Invalid_argument "invalid applyWrites write $type")
+      Error "invalid applyWrites write $type"
 
 let repo_write_to_yojson = function
   | Create {type'; collection; rkey; value} ->
@@ -99,17 +107,17 @@ let apply_writes_result_of_yojson (json : Yojson.Safe.t) =
       let cid =
         member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
       in
-      Create {type'; uri; cid}
+      Ok (Create {type'; uri; cid})
   | "com.atproto.repo.applyWrites#updateResult" ->
       let uri = member "uri" json |> to_string in
       let cid =
         member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
       in
-      Update {type'; uri; cid}
+      Ok (Update {type'; uri; cid})
   | "com.atproto.repo.applyWrites#deleteResult" ->
-      Delete {type'}
+      Ok (Delete {type'})
   | _ ->
-      failwith "invalid applyWrites result $type"
+      Error "invalid applyWrites result $type"
 
 let apply_writes_result_to_yojson = function
   | Create {type'; uri; cid} ->
@@ -243,11 +251,10 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
         failwith ("failed to retrieve commit for " ^ t.did)
   in
   if swap_commit <> None && swap_commit <> t.commit then
-    raise
-      (Errors.invalid_request ~name:"InvalidSwap"
-         (Format.sprintf "swapCommit cid %s did not match last commit cid %s"
-            (Cid.to_string (Option.get swap_commit))
-            (match t.commit with Some c -> Cid.to_string c | None -> "null") ) ) ;
+    Errors.invalid_request ~name:"InvalidSwap"
+      (Format.sprintf "swapCommit cid %s did not match last commit cid %s"
+         (Cid.to_string (Option.get swap_commit))
+         (match t.commit with Some c -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
   let%lwt results =
     List.map
@@ -260,12 +267,11 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             let%lwt () =
               match StringMap.find_opt path !block_map with
               | Some cid ->
-                  raise
-                    (Errors.invalid_request ~name:"InvalidSwap"
-                       (Format.sprintf
-                          "attempted to write record %s that already exists \
-                           with cid %s"
-                          path (Cid.to_string cid) ) )
+                  Errors.invalid_request ~name:"InvalidSwap"
+                    (Format.sprintf
+                       "attempted to write record %s that already exists with \
+                        cid %s"
+                       path (Cid.to_string cid) )
               | None ->
                   Lwt.return ()
             in
@@ -307,10 +313,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   | None ->
                       "null"
                 in
-                raise
-                  (Errors.invalid_request ~name:"InvalidSwap"
-                     (Format.sprintf "attempted to update record %s with cid %s"
-                        path cid_str ) ) ) ;
+                Errors.invalid_request ~name:"InvalidSwap"
+                  (Format.sprintf "attempted to update record %s with cid %s"
+                     path cid_str ) ) ;
             let%lwt () =
               match old_cid with
               | Some _ -> (
@@ -351,10 +356,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   | None ->
                       "null"
                 in
-                raise
-                  (Errors.invalid_request ~name:"InvalidSwap"
-                     (Format.sprintf "attempted to delete record %s with cid %s"
-                        path cid_str ) ) ) ;
+                Errors.invalid_request ~name:"InvalidSwap"
+                  (Format.sprintf "attempted to delete record %s with cid %s"
+                     path cid_str ) ) ;
             let%lwt () =
               match%lwt User_store.get_record_by_path t.db path with
               | Some record ->

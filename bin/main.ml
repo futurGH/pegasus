@@ -28,6 +28,12 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.deleteSession"
     , Api.Server.DeleteSession.handler )
+  ; ( post
+    , "/xrpc/com.atproto.identity.updateHandle"
+    , Api.Identity.UpdateHandle.handler )
+  ; (* repo *)
+    (post, "/xrpc/com.atproto.repo.applyWrites", Api.Repo.ApplyWrites.handler)
+  ; (post, "/xrpc/com.atproto.repo.createRecord", Api.Repo.CreateRecord.handler)
   ; (* preferences *)
     ( get
     , "/xrpc/com.atproto.actor.getPreferences"
