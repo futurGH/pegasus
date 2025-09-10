@@ -41,6 +41,20 @@ and entry =
 
 type node_or_entry = Node of node | Entry of entry
 
+type diff_add = {key: string; cid: Cid.t}
+
+type diff_update = {key: string; prev: Cid.t; cid: Cid.t}
+
+type diff_delete = {key: string; cid: Cid.t}
+
+type data_diff =
+  { adds: diff_add list
+  ; updates: diff_update list
+  ; deletes: diff_delete list
+  ; new_mst_blocks: (Cid.t * bytes) list
+  ; new_leaf_cids: Cid.Set.t
+  ; removed_cids: Cid.Set.t }
+
 let ( let*? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
@@ -49,7 +63,62 @@ let ( >>? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
 
-module Make (Store : Writable_blockstore) = struct
+module type Intf = sig
+  type bs
+
+  type t = {blockstore: bs; root: Cid.t}
+
+  val create : bs -> Cid.t -> t
+
+  val retrieve_node_raw : t -> Cid.t -> node_raw option Lwt.t
+
+  val retrieve_node : t -> Cid.t -> node option Lwt.t
+
+  val retrieve_node_lazy : t -> Cid.t -> node option Lwt.t lazy_t
+
+  val get_node_height : t -> node_raw -> int Lwt.t
+
+  val traverse : t -> (string -> Cid.t -> unit) -> unit Lwt.t
+
+  val build_map : t -> Cid.t StringMap.t Lwt.t
+
+  val path_to_entry : t -> Cid.t -> string -> (Cid.t * bytes) list Lwt.t
+
+  val to_blocks_stream : t -> (Cid.t * bytes) Lwt_seq.t
+
+  val serialize : t -> node -> (Cid.t * bytes, exn) Lwt_result.t
+
+  val get_covering_proof : t -> string -> Storage.Block_map.t Lwt.t
+
+  val leaf_count : t -> int Lwt.t
+
+  val layer : t -> int Lwt.t
+
+  val all_nodes : t -> (Cid.t * bytes) list Lwt.t
+
+  val create_empty : bs -> (t, exn) Lwt_result.t
+
+  val get_cid : t -> string -> Cid.t option Lwt.t
+
+  val of_assoc : bs -> (string * Cid.t) list -> t Lwt.t
+
+  val add : t -> string -> Cid.t -> t Lwt.t
+
+  val delete : t -> string -> t Lwt.t
+
+  val collect_nodes_and_leaves :
+    t -> ((Cid.t * bytes) list * Cid.Set.t * Cid.Set.t) Lwt.t
+
+  val leaves_of_node : node -> (string * Cid.t) list Lwt.t
+
+  val leaves_of_root : t -> (string * Cid.t) list Lwt.t
+
+  val null_diff : t -> data_diff Lwt.t
+
+  val equal : t -> t -> bool Lwt.t
+end
+
+module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
   type bs = Store.t
 
   type t = {blockstore: bs; root: Cid.t}
@@ -139,7 +208,7 @@ module Make (Store : Writable_blockstore) = struct
     let%lwt layer = get_node_height t node_raw in
     let entries =
       List.fold_left
-        (fun entries entry ->
+        (fun (entries : entry list) entry ->
           let prefix =
             match entries with
             | [] ->
@@ -156,7 +225,7 @@ module Make (Store : Writable_blockstore) = struct
             | None ->
                 lazy Lwt.return_none
           in
-          {layer; key= path; value= entry.v; right} :: entries )
+          ({layer; key= path; value= entry.v; right} : entry) :: entries )
         [] node_raw.e
     in
     Lwt.return {layer; left; entries}
@@ -187,7 +256,7 @@ module Make (Store : Writable_blockstore) = struct
         let*? left = node.left in
         match left with Some l -> traverse l | None -> Lwt.return_unit
       in
-      List.iter (fun entry -> fn entry.key entry.value) node.entries ;
+      List.iter (fun (entry : entry) -> fn entry.key entry.value) node.entries ;
       Lwt.return_unit
     in
     match%lwt retrieve_node t t.root with
@@ -248,7 +317,7 @@ module Make (Store : Writable_blockstore) = struct
         let entries = (Option.get root).entries in
         let entries_len = List.length entries in
         let entry_index =
-          match List.find_index (fun e -> e.key >= key) entries with
+          match List.find_index (fun (e : entry) -> e.key >= key) entries with
           | Some index ->
               index
           | None ->
@@ -381,7 +450,7 @@ module Make (Store : Writable_blockstore) = struct
   (* produces a cid and cbor-encoded bytes for a given tree *)
   let serialize t node : (Cid.t * bytes, exn) Lwt_result.t =
     let sorted_entries =
-      List.sort (fun a b -> String.compare a.key b.key) node.entries
+      List.sort (fun (a : entry) b -> String.compare a.key b.key) node.entries
     in
     let rec aux node : (Cid.t * bytes) Lwt.t =
       let%lwt left =
@@ -578,21 +647,6 @@ module Make (Store : Writable_blockstore) = struct
       (List.fold_left
          (fun acc proof -> Block_map.merge acc proof)
          Block_map.empty proofs )
-
-  (*** diffs ***)
-  type diff_add = {key: string; cid: Cid.t}
-
-  type diff_update = {key: string; prev: Cid.t; cid: Cid.t}
-
-  type diff_delete = {key: string; cid: Cid.t}
-
-  type data_diff =
-    { adds: diff_add list
-    ; updates: diff_update list
-    ; deletes: diff_delete list
-    ; new_mst_blocks: (Cid.t * bytes) list
-    ; new_leaf_cids: Cid.Set.t
-    ; removed_cids: Cid.Set.t }
 
   (* collects all node blocks (cid, bytes) and all leaf cids reachable from root
      only traverses nodes; doesn't fetch leaf blocks
@@ -927,83 +981,6 @@ module Make (Store : Writable_blockstore) = struct
       ; new_leaf_cids= curr_leaf_set
       ; removed_cids= Cid.Set.empty }
 
-  (* produces a diff between two msts *)
-  let mst_diff t_curr t_prev_opt : data_diff Lwt.t =
-    match t_prev_opt with
-    | None ->
-        null_diff t_curr
-    | Some t_prev ->
-        let%lwt curr_nodes, curr_node_set, curr_leaf_set =
-          collect_nodes_and_leaves t_curr
-        in
-        let%lwt _, prev_node_set, prev_leaf_set =
-          collect_nodes_and_leaves t_prev
-        in
-        (* just convenient to have these functions *)
-        let in_prev_nodes cid = Cid.Set.mem cid prev_node_set in
-        let in_curr_nodes cid = Cid.Set.mem cid curr_node_set in
-        let in_prev_leaves cid = Cid.Set.mem cid prev_leaf_set in
-        let in_curr_leaves cid = Cid.Set.mem cid curr_leaf_set in
-        (* new mst blocks are curr nodes that are not in prev *)
-        let new_mst_blocks =
-          List.filter (fun (cid, _) -> not (in_prev_nodes cid)) curr_nodes
-        in
-        (* removed cids are prev nodes not in curr plus prev leaves not in curr *)
-        let removed_node_cids =
-          Cid.Set.fold
-            (fun cid acc ->
-              if not (in_curr_nodes cid) then Cid.Set.add cid acc else acc )
-            prev_node_set Cid.Set.empty
-        in
-        let removed_leaf_cids =
-          Cid.Set.fold
-            (fun cid acc ->
-              if not (in_curr_leaves cid) then Cid.Set.add cid acc else acc )
-            prev_leaf_set Cid.Set.empty
-        in
-        let removed_cids = Cid.Set.union removed_node_cids removed_leaf_cids in
-        (* new leaf cids are curr leaves not in prev *)
-        let new_leaf_cids =
-          Cid.Set.fold
-            (fun cid acc ->
-              if not (in_prev_leaves cid) then Cid.Set.add cid acc else acc )
-            curr_leaf_set Cid.Set.empty
-        in
-        (* compute adds/updates/deletes by merging sorted leaves *)
-        let%lwt curr_leaves = leaves_of_root t_curr in
-        let%lwt prev_leaves = leaves_of_root t_prev in
-        let rec merge (pl : (string * Cid.t) list) (cl : (string * Cid.t) list)
-            (adds : diff_add list) (updates : diff_update list)
-            (deletes : diff_delete list) =
-          match (pl, cl) with
-          | [], [] ->
-              (* we prepend for speed, then reverse at the end *)
-              (List.rev adds, List.rev updates, List.rev deletes)
-          | [], (k, c) :: cr ->
-              (* more curr than prev, goes in adds *)
-              merge [] cr ({key= k; cid= c} :: adds) updates deletes
-          | (k, c) :: pr, [] ->
-              (* more prev than curr, goes in deletes *)
-              merge pr [] adds updates ({key= k; cid= c} :: deletes)
-          | (k1, c1) :: pr, (k2, c2) :: cr ->
-              if k1 = k2 then (* if key & value are the same, keep going *)
-                if Cid.equal c1 c2 then merge pr cr adds updates deletes
-                else (* same key, different value; update *)
-                  merge pr cr adds
-                    ({key= k1; prev= c1; cid= c2} :: updates)
-                    deletes
-              else if k1 < k2 then
-                merge pr ((k2, c2) :: cr) adds updates
-                  ({key= k1; cid= c1} :: deletes)
-              else
-                merge ((k1, c1) :: pr) cr
-                  ({key= k2; cid= c2} :: adds)
-                  updates deletes
-        in
-        let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
-        Lwt.return
-          {adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
-
   (* checks that two msts are identical by recursively comparing their entries *)
   let equal (t1 : t) (t2 : t) : bool Lwt.t =
     let rec nodes_equal (n1 : node) (n2 : node) : bool Lwt.t =
@@ -1073,4 +1050,76 @@ module Make (Store : Writable_blockstore) = struct
         Lwt.return true
     | _ ->
         Lwt.return false
+end
+
+module Differ (Prev : Intf) (Curr : Intf) = struct
+  let diff ~(t_curr : Curr.t) ~(t_prev : Prev.t) : data_diff Lwt.t =
+    let%lwt curr_nodes, curr_node_set, curr_leaf_set =
+      Curr.collect_nodes_and_leaves t_curr
+    in
+    let%lwt _, prev_node_set, prev_leaf_set =
+      Prev.collect_nodes_and_leaves t_prev
+    in
+    (* just convenient to have these functions *)
+    let in_prev_nodes cid = Cid.Set.mem cid prev_node_set in
+    let in_curr_nodes cid = Cid.Set.mem cid curr_node_set in
+    let in_prev_leaves cid = Cid.Set.mem cid prev_leaf_set in
+    let in_curr_leaves cid = Cid.Set.mem cid curr_leaf_set in
+    (* new mst blocks are curr nodes that are not in prev *)
+    let new_mst_blocks =
+      List.filter (fun (cid, _) -> not (in_prev_nodes cid)) curr_nodes
+    in
+    (* removed cids are prev nodes not in curr plus prev leaves not in curr *)
+    let removed_node_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_curr_nodes cid) then Cid.Set.add cid acc else acc )
+        prev_node_set Cid.Set.empty
+    in
+    let removed_leaf_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_curr_leaves cid) then Cid.Set.add cid acc else acc )
+        prev_leaf_set Cid.Set.empty
+    in
+    let removed_cids = Cid.Set.union removed_node_cids removed_leaf_cids in
+    (* new leaf cids are curr leaves not in prev *)
+    let new_leaf_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_prev_leaves cid) then Cid.Set.add cid acc else acc )
+        curr_leaf_set Cid.Set.empty
+    in
+    (* compute adds/updates/deletes by merging sorted leaves *)
+    let%lwt curr_leaves = Curr.leaves_of_root t_curr in
+    let%lwt prev_leaves = Prev.leaves_of_root t_prev in
+    let rec merge (pl : (string * Cid.t) list) (cl : (string * Cid.t) list)
+        (adds : diff_add list) (updates : diff_update list)
+        (deletes : diff_delete list) =
+      match (pl, cl) with
+      | [], [] ->
+          (* we prepend for speed, then reverse at the end *)
+          (List.rev adds, List.rev updates, List.rev deletes)
+      | [], (k, c) :: cr ->
+          (* more curr than prev, goes in adds *)
+          merge [] cr ({key= k; cid= c} :: adds) updates deletes
+      | (k, c) :: pr, [] ->
+          (* more prev than curr, goes in deletes *)
+          merge pr [] adds updates ({key= k; cid= c} :: deletes)
+      | (k1, c1) :: pr, (k2, c2) :: cr ->
+          if k1 = k2 then (* if key & value are the same, keep going *)
+            if Cid.equal c1 c2 then merge pr cr adds updates deletes
+            else (* same key, different value; update *)
+              merge pr cr adds ({key= k1; prev= c1; cid= c2} :: updates) deletes
+          else if k1 < k2 then
+            merge pr ((k2, c2) :: cr) adds updates
+              ({key= k1; cid= c1} :: deletes)
+          else
+            merge ((k1, c1) :: pr) cr
+              ({key= k2; cid= c2} :: adds)
+              updates deletes
+    in
+    let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
+    Lwt.return
+      {adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
 end

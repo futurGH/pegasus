@@ -355,11 +355,11 @@ let list_records conn ?(limit = 100) ?(offset = 0) collection :
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return
 
-let put_record conn record path : Cid.t Lwt.t =
+let put_record conn record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in
   let since = Tid.now () in
   let$! () = Queries.put_record ~path ~cid ~data ~since conn in
-  Lwt.return cid
+  Lwt.return (cid, data)
 
 (* blobs *)
 

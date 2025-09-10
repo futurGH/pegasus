@@ -2,6 +2,7 @@ open Mist
 open Lwt.Infix
 open Lwt_result.Syntax
 module MemMst = Mst.Make (Storage.Memory_blockstore)
+module MemDiff = Mst.Differ (MemMst) (MemMst)
 module StringMap = Dag_cbor.StringMap
 
 let cid_of_string_exn s =
@@ -595,7 +596,7 @@ let test_diffs () =
   let%lwt to_diff =
     Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) to_diff to_add
   in
-  let%lwt diff = MemMst.mst_diff to_diff (Some mst) in
+  let%lwt diff = MemDiff.diff ~t_curr:to_diff ~t_prev:mst in
   (* lengths *)
   Alcotest.(check int) "adds length" 100 (List.length diff.adds) ;
   Alcotest.(check int) "updates length" 100 (List.length diff.updates) ;
@@ -603,17 +604,17 @@ let test_diffs () =
   (* contents: convert to maps to compare *)
   let adds_map =
     List.fold_left
-      (fun m (a : MemMst.diff_add) -> StringMap.add a.key a.cid m)
+      (fun m (a : Mst.diff_add) -> StringMap.add a.key a.cid m)
       StringMap.empty diff.adds
   in
   let updates_map =
     List.fold_left
-      (fun m (u : MemMst.diff_update) -> StringMap.add u.key (u.prev, u.cid) m)
+      (fun m (u : Mst.diff_update) -> StringMap.add u.key (u.prev, u.cid) m)
       StringMap.empty diff.updates
   in
   let deletes_map =
     List.fold_left
-      (fun m (d : MemMst.diff_delete) -> StringMap.add d.key d.cid m)
+      (fun m (d : Mst.diff_delete) -> StringMap.add d.key d.cid m)
       StringMap.empty diff.deletes
   in
   (* compare adds *)
@@ -750,7 +751,7 @@ let test_empty_root () =
   Lwt.return_ok ()
 
 let test_trivial_root () =
-  let store = Storage.Memory_blockstore.create () in
+  let store : MemMst.bs = Storage.Memory_blockstore.create () in
   let cid1 =
     cid_of_string_exn
       "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"

@@ -1,6 +1,8 @@
 open User_store.Types
+module BlockMap = User_store.Block_map
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
+module MemMst = Mist.Mst.Make (Mist.Storage.Memory_blockstore)
 module StringMap = Lex.StringMap
 module Tid = Mist.Tid
 
@@ -256,6 +258,16 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
          (Cid.to_string (Option.get swap_commit))
          (match t.commit with Some c -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
+  (* need to cache this so in the end, we only emit new blocks *)
+  let prev_blocks =
+    StringMap.bindings !block_map
+    |> List.fold_left (fun acc (k, v) -> Cid.Map.add v k acc) Cid.Map.empty
+  in
+  (* record cbor keyed by cid, needed to calculate covering proofs at the end
+     we can't do it along the way because covering proofs require the full new mst *)
+  let added_records = ref Cid.Map.empty in
+  (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
+  let commit_ops : Sequencer.Types.commit_evt_op list ref = ref [] in
   let%lwt results =
     List.map
       (fun (w : repo_write) ->
@@ -279,10 +291,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               if StringMap.mem "$type" value then value
               else StringMap.add "$type" (`String collection) value
             in
-            let%lwt cid =
+            let%lwt cid, cbor =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
             block_map := StringMap.add path cid !block_map ;
+            added_records := Cid.Map.add cid (path, cbor) !added_records ;
+            commit_ops :=
+              !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
             let refs =
               Util.find_blob_refs value
               |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
@@ -336,10 +351,14 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               if StringMap.mem "$type" value then value
               else StringMap.add "$type" (`String collection) value
             in
-            let%lwt new_cid =
+            let%lwt new_cid, cbor =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
             block_map := StringMap.add path new_cid !block_map ;
+            added_records := Cid.Map.add new_cid (path, cbor) !added_records ;
+            commit_ops :=
+              !commit_ops
+              @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
             Lwt.return
               (Update
                  { type'= "com.atproto.repo.applyWrites#updateResult"
@@ -372,15 +391,49 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   Lwt.return_unit
             in
             block_map := StringMap.remove path !block_map ;
+            commit_ops :=
+              !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
             Lwt.return
               (Delete {type'= "com.atproto.repo.applyWrites#deleteResult"}) )
       writes
     |> Lwt.all
   in
   let%lwt () = User_store.clear_mst t.db in
-  let%lwt {root; _} = Mst.of_assoc t.db (StringMap.bindings !block_map) in
-  let%lwt commit = put_commit t root ~previous:(Some commit) in
-  Lwt.return {commit; results}
+  let%lwt new_mst = Mst.of_assoc t.db (StringMap.bindings !block_map) in
+  let%lwt new_commit = put_commit t new_mst.root ~previous:(Some commit) in
+  let commit_cid, commit_signed = new_commit in
+  let commit_block =
+    commit_signed |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
+  in
+  let relevant_blocks = ref BlockMap.empty in
+  let%lwt _ =
+    (* for each block that wasn't in the previous mst,
+       commit event `blocks` contains the block itself & its covering proofs *)
+    List.map
+      (fun (cid, (path, cbor)) ->
+        if Cid.Map.mem cid prev_blocks then Lwt.return_unit
+        else
+          let%lwt proofs = Mst.get_covering_proof new_mst path in
+          relevant_blocks :=
+            BlockMap.merge (BlockMap.set cid cbor !relevant_blocks) proofs ;
+          Lwt.return_unit )
+      (Cid.Map.bindings !added_records)
+    |> Lwt.all
+  in
+  let block_stream =
+    BlockMap.entries !relevant_blocks
+    |> Lwt_seq.of_list
+    |> Lwt_seq.cons (commit_cid, commit_block)
+  in
+  let%lwt blocks =
+    Car.blocks_to_stream commit_cid block_stream |> Car.collect_stream
+  in
+  let%lwt _ =
+    Sequencer.sequence_commit t.db ~did:t.did ~commit:commit_cid
+      ~rev:commit_signed.rev ~blocks ~ops:!commit_ops ~since:commit.rev
+      ~prev_data:commit.data ()
+  in
+  Lwt.return {commit= new_commit; results}
 
 let load did : t Lwt.t =
   let%lwt data_store_conn =
