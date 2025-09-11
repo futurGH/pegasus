@@ -451,6 +451,8 @@ module Bus = struct
 
   let ring_size = 2048
 
+  let queue_max = 1000
+
   let ring : item array = Array.make ring_size {seq= 0; bytes= Bytes.empty}
 
   let head_seq = ref 0
@@ -458,7 +460,11 @@ module Bus = struct
   let count = ref 0
 
   type subscriber =
-    {id: int; q: item Queue.t; cond: unit Lwt_condition.t; mutable closed: bool}
+    { id: int
+    ; q: item Queue.t
+    ; cond: unit Lwt_condition.t
+    ; mutable closed: bool
+    ; mutable close_reason: string option }
 
   let subs : (int, subscriber) Hashtbl.t = Hashtbl.create 64
 
@@ -475,7 +481,12 @@ module Bus = struct
           (fun _ s ->
             if not s.closed then (
               Queue.push it s.q ;
-              Lwt_condition.broadcast s.cond () ) )
+              if Queue.length s.q > queue_max then (
+                s.closed <- true ;
+                s.close_reason <- Some "ConsumerTooSlow" ;
+                Hashtbl.remove subs s.id ;
+                Lwt_condition.broadcast s.cond () )
+              else Lwt_condition.broadcast s.cond () ) )
           subs ;
         Lwt.return_unit )
 
@@ -489,7 +500,8 @@ module Bus = struct
           { id= !id
           ; q= Queue.create ()
           ; cond= Lwt_condition.create ()
-          ; closed= false }
+          ; closed= false
+          ; close_reason= None }
         in
         Hashtbl.add subs !id s ; Lwt.return s )
 
@@ -562,6 +574,16 @@ module Live = struct
   let stream_with_backfill ~(conn : Data_store.t) ~(cursor : int)
       ~(send : bytes -> unit Lwt.t) : unit Lwt.t =
     let%lwt sub = Bus.subscribe () in
+    let send_consumer_too_slow () =
+      let err =
+        { error= "ConsumerTooSlow"
+        ; message=
+            Some
+              "you're not consuming messages fast enough! maybe \
+               com.atproto.sync.getRepo is more your speed?" }
+      in
+      send (Frame.encode_error err)
+    in
     Lwt.finalize
       (fun () ->
         let%lwt head_db = DB.latest_seq conn in
@@ -592,32 +614,57 @@ module Live = struct
                       (Frame.encode_message ~seq:ev.seq ~time:ev.time payload) )
               events )
         >>= fun () ->
-        (* live tail *)
-        let rec loop last =
-          let%lwt it = Bus.wait_next sub in
-          if it.seq <= last then loop last
-          else if it.seq > last + 1 then
-            let%lwt gap =
-              DB.request_seq_range ~earliest_seq:last ~latest_seq:it.seq
-                ~limit:1000 conn
-            in
-            let%lwt () =
-              Lwt_list.iter_s
-                (fun ev ->
-                  if ev.seq <= last then Lwt.return_unit
-                  else
-                    send
-                      ( match ev.kind with
-                      | Message (m, _) ->
-                          Frame.encode_message ~seq:ev.seq ~time:ev.time m
-                      | Error e ->
-                          Frame.encode_error e ) )
-                gap
-            in
-            send it.bytes >>= fun () -> loop it.seq
-          else send it.bytes >>= fun () -> loop it.seq
-        in
-        loop cutoff )
+        (* bail if consumer too slow *)
+        if sub.Bus.closed then
+          match sub.Bus.close_reason with
+          | Some "ConsumerTooSlow" ->
+              send_consumer_too_slow ()
+          | _ ->
+              Lwt.return_unit
+        else
+          (* live tail *)
+          let rec loop last =
+            if sub.Bus.closed then
+              match sub.Bus.close_reason with
+              | Some "ConsumerTooSlow" ->
+                  send_consumer_too_slow ()
+              | _ ->
+                  Lwt.return_unit
+            else
+              Lwt.catch
+                (fun () ->
+                  let%lwt it = Bus.wait_next sub in
+                  if it.seq <= last then loop last
+                  else if it.seq > last + 1 then
+                    let%lwt gap =
+                      DB.request_seq_range ~earliest_seq:last ~latest_seq:it.seq
+                        ~limit:1000 conn
+                    in
+                    let%lwt () =
+                      Lwt_list.iter_s
+                        (fun ev ->
+                          if ev.seq <= last then Lwt.return_unit
+                          else
+                            send
+                              ( match ev.kind with
+                              | Message (m, _) ->
+                                  Frame.encode_message ~seq:ev.seq ~time:ev.time
+                                    m
+                              | Error e ->
+                                  Frame.encode_error e ) )
+                        gap
+                    in
+                    send it.bytes >>= fun () -> loop it.seq
+                  else send it.bytes >>= fun () -> loop it.seq )
+                (fun _exn ->
+                  (* check if any failure was due to slow consumer *)
+                  match sub.Bus.close_reason with
+                  | Some "ConsumerTooSlow" ->
+                      send_consumer_too_slow ()
+                  | _ ->
+                      Lwt.return_unit )
+          in
+          loop cutoff )
       (fun () -> Bus.unsubscribe sub)
 end
 
