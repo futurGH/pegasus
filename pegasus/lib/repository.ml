@@ -180,7 +180,7 @@ let list_collections t : string list Lwt.t =
        Set.empty
   |> Set.to_list |> Lwt.return
 
-let list_records t collection : (string * Cid.t * record) list Lwt.t =
+let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
   let%lwt map = get_map t in
   StringMap.bindings map
   |> List.filter (fun (path, _) ->
@@ -436,10 +436,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   Lwt.return {commit= new_commit; results}
 
 let load did : t Lwt.t =
-  let%lwt data_store_conn =
-    Util.connect_sqlite Util.Constants.pegasus_db_location
-  in
-  let%lwt user_db = Util.connect_sqlite (Util.Constants.user_db_location did) in
+  let%lwt data_store_conn = Data_store.connect () in
+  let%lwt user_db = User_store.connect did in
   let%lwt () = User_store.init user_db in
   let%lwt {signing_key; _} =
     match%lwt Data_store.get_actor_by_identifier did data_store_conn with

@@ -150,6 +150,7 @@ module Queries = struct
                 data BLOB NOT NULL
               );
               CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
+              CREATE INDEX IF NOT EXISTS records_since_idx ON records (since);
         |sql}]
       ()
 
@@ -168,7 +169,17 @@ module Queries = struct
       get_many
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
               WHERE path LIKE %string{collection}/%
-              ORDER BY since DESC LIMIT %int{limit} OFFSET %int{offset}
+              AND since < %string{cursor}
+              ORDER BY since DESC LIMIT %int{limit}
+        |sql}]
+
+  let list_records_reverse =
+    [%rapper
+      get_many
+        {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
+              WHERE path LIKE %string{collection}/%
+              AND since > %string{cursor}
+        	  ORDER BY since ASC LIMIT %int{limit}
         |sql}]
 
   let put_record =
@@ -260,14 +271,19 @@ module Queries = struct
   let clear_blob_refs path cids =
     [%rapper
       execute
-        {sql| DELETE FROM blobs_records WHERE record_path LIKE %string{path} AND blob_id IN (
-                    SELECT id FROM blobs WHERE cid IN (%list{%CID{cids}})
-                  )
+        {sql| DELETE FROM blobs_records
+              WHERE record_path LIKE %string{path}
+              AND blob_id IN (
+                SELECT id FROM blobs WHERE cid IN (%list{%CID{cids}})
+              )
         |sql}]
       ~path ~cids
 end
 
 type t = (module Rapper_helper.CONNECTION)
+
+let connect did : t Lwt.t =
+  Util.connect_sqlite (Util.Constants.user_db_location did)
 
 let init conn : unit Lwt.t =
   let$! () = Queries.create_blocks_tables conn in
@@ -348,9 +364,12 @@ let get_record_by_cid conn cid : record option Lwt.t =
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return
 
-let list_records conn ?(limit = 100) ?(offset = 0) collection :
-    record list Lwt.t =
-  Queries.list_records ~collection ~limit ~offset conn
+let list_records conn ?(limit = 100) ?(cursor = "") ?(reverse = false)
+    collection : record list Lwt.t =
+  let fn =
+    if reverse then Queries.list_records_reverse else Queries.list_records
+  in
+  fn ~collection ~limit ~cursor conn
   >$! List.map (fun (path, cid, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
   >>= Lwt.return

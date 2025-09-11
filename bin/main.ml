@@ -20,6 +20,8 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.createSession"
     , Api.Server.CreateSession.handler )
+  ; (get, "/xrpc/com.atproto.repo.getRecord", Api.Repo.GetRecord.handler)
+  ; (get, "/xrpc/com.atproto.repo.listRecords", Api.Repo.ListRecords.handler)
   ; (* account *)
     (get, "/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
   ; ( post
@@ -34,6 +36,8 @@ let handlers =
   ; (* repo *)
     (post, "/xrpc/com.atproto.repo.applyWrites", Api.Repo.ApplyWrites.handler)
   ; (post, "/xrpc/com.atproto.repo.createRecord", Api.Repo.CreateRecord.handler)
+  ; (post, "/xrpc/com.atproto.repo.putRecord", Api.Repo.PutRecord.handler)
+  ; (post, "/xrpc/com.atproto.repo.deleteRecord", Api.Repo.DeleteRecord.handler)
   ; (* preferences *)
     ( get
     , "/xrpc/com.atproto.actor.getPreferences"
@@ -43,7 +47,7 @@ let handlers =
     , Api.Actor.PutPreferences.handler ) ]
 
 let main =
-  let%lwt db = Util.connect_sqlite Util.Constants.pegasus_db_location in
+  let%lwt db = Data_store.connect () in
   let%lwt () = Data_store.init db in
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.logger

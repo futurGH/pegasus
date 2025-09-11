@@ -23,6 +23,16 @@ let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.unauthenticated)
   | Error e ->
       exn_to_response e
 
+let parse_query (req : Dream.request)
+    (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
+  try%lwt
+    let queries = Dream.all_queries req in
+    let query_json =
+      `Assoc (List.map (fun (k, v) -> (k, Yojson.Safe.from_string v)) queries)
+    in
+    query_json |> of_yojson |> Result.get_ok |> Lwt.return
+  with _ -> Errors.invalid_request "Invalid query string"
+
 let parse_body (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
   try%lwt

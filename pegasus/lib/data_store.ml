@@ -187,6 +187,9 @@ end
 
 type t = (module Rapper_helper.CONNECTION)
 
+let connect () : t Lwt.t =
+  Util.connect_sqlite Util.Constants.pegasus_db_location
+
 let init conn : unit Lwt.t = unwrap @@ Queries.create_tables conn
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
