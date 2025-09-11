@@ -1,7 +1,7 @@
-type query = {repo: string; collection: string; rkey: string; cid: Cid.t option}
+type query = {repo: string; collection: string; rkey: string; cid: string option}
 [@@deriving yojson]
 
-type response = {uri: string; cid: Cid.t; value: Mist.Lex.repo_record}
+type response = {uri: string; cid: string; value: Mist.Lex.repo_record}
 [@@deriving yojson]
 
 let handler =
@@ -21,9 +21,10 @@ let handler =
       let path = input.collection ^ "/" ^ input.rkey in
       let uri = "at://" ^ input_did ^ "/" ^ path in
       match%lwt Repository.get_record repo path with
-      | Some {cid; value; _} when input.cid = None || input.cid = Some cid ->
+      | Some {cid; value; _}
+        when input.cid = None || input.cid = Some (Cid.to_string cid) ->
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {uri; cid; value}
+          @@ response_to_yojson {uri; cid= Cid.to_string cid; value}
       | _ ->
           Errors.internal_error ~name:"RecordNotFound"
             ~msg:("could not find record " ^ uri)

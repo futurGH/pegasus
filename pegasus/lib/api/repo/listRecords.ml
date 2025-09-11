@@ -9,7 +9,7 @@ type query =
 type response = {cursor: string option; records: response_record list}
 [@@deriving yojson]
 
-and response_record = {uri: string; cid: Cid.t; value: Mist.Lex.repo_record}
+and response_record = {uri: string; cid: string; value: Mist.Lex.repo_record}
 [@@deriving yojson]
 
 let handler =
@@ -42,7 +42,8 @@ let handler =
           (fun (_cursor, results_rev) (record : User_store.Types.record) ->
             let uri = "at://" ^ input_did ^ "/" ^ record.path in
             ( record.since
-            , {uri; cid= record.cid; value= record.value} :: results_rev ) )
+            , {uri; cid= Cid.to_string record.cid; value= record.value}
+              :: results_rev ) )
           ("", []) results
       in
       Dream.json @@ Yojson.Safe.to_string

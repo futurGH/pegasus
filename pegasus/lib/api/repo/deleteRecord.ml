@@ -2,13 +2,13 @@ type request =
   { repo: string
   ; collection: string
   ; rkey: string
-  ; swap_record: Cid.t option [@key "swapRecord"]
-  ; swap_commit: Cid.t option [@key "swapCommit"] }
+  ; swap_record: string option [@key "swapRecord"]
+  ; swap_commit: string option [@key "swapCommit"] }
 [@@deriving yojson]
 
 type response = {commit: res_commit option} [@@deriving yojson]
 
-and res_commit = {cid: Cid.t; rev: string} [@@deriving yojson]
+and res_commit = {cid: string; rev: string} [@@deriving yojson]
 
 let handler =
   Xrpc.handler ~auth:Auth.Verifiers.authorization (fun ctx ->
@@ -39,14 +39,16 @@ let handler =
           { type'= Repository.Write_op.delete
           ; collection= input.collection
           ; rkey= input.rkey
-          ; swap_record= input.swap_record }
+          ; swap_record= Option.map Cid.as_cid input.swap_record }
       in
       let%lwt {commit= commit_cid, {rev; _}; results} =
-        Repository.apply_writes repo [write] input.swap_commit
+        Repository.apply_writes repo [write]
+          (Option.map Cid.as_cid input.swap_commit)
       in
       match List.hd results with
       | Delete _ ->
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {commit= Some {cid= commit_cid; rev}}
+          @@ response_to_yojson
+               {commit= Some {cid= Cid.to_string commit_cid; rev}}
       | _ ->
           Errors.invalid_request "unexpected create or update result" )

@@ -2,14 +2,14 @@ type request =
   { repo: string
   ; validate: bool option
   ; writes: Repository.repo_write list
-  ; swap_commit: Cid.t option [@key "swapCommit"] }
+  ; swap_commit: string option [@key "swapCommit"] }
 [@@deriving yojson]
 
 type response =
   {commit: res_commit option; results: Repository.apply_writes_result list}
 [@@deriving yojson]
 
-and res_commit = {cid: Cid.t; rev: string} [@@deriving yojson]
+and res_commit = {cid: string; rev: string} [@@deriving yojson]
 
 let handler =
   Xrpc.handler ~auth:Auth.Verifiers.authorization (fun ctx ->
@@ -36,7 +36,9 @@ let handler =
       in
       let%lwt repo = Repository.load did in
       let%lwt {commit= commit_cid, {rev; _}; results} =
-        Repository.apply_writes repo input.writes input.swap_commit
+        Repository.apply_writes repo input.writes
+          (Option.map Cid.as_cid input.swap_commit)
       in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {commit= Some {cid= commit_cid; rev}; results} )
+      @@ response_to_yojson
+           {commit= Some {cid= Cid.to_string commit_cid; rev}; results} )
