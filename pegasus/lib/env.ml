@@ -1,4 +1,4 @@
-let database_dir = Option.value ~default:"./db" @@ Sys.getenv_opt "DATABASE_DIR"
+let data_dir = Option.value ~default:"./data" @@ Sys.getenv_opt "DATA_DIR"
 
 let hostname = Sys.getenv "PDS_HOSTNAME"
 
