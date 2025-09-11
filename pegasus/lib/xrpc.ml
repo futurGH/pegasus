@@ -7,7 +7,7 @@ type context = {req: Dream.request; db: Data_store.t; auth: Auth.credentials}
 
 type handler = context -> Dream.response Lwt.t
 
-let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.unauthenticated)
+let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.any)
     (hdlr : handler) (init : init) =
   let open Errors in
   match%lwt auth init with

@@ -179,84 +179,81 @@ module Verifiers = struct
 
   type verifier = ctx -> (credentials, exn) Lwt_result.t
 
-  let unauthenticated : verifier = function
-    | {req; _} -> (
-      match Dream.header req "authorization" with
-      | Some _ ->
-          Lwt.return_error
-          @@ Errors.auth_required "Invalid authorization header"
-      | None ->
-          Lwt.return_ok Unauthenticated )
+  let unauthenticated : verifier =
+   fun {req; _} ->
+    match Dream.header req "authorization" with
+    | Some _ ->
+        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+    | None ->
+        Lwt.return_ok Unauthenticated
 
-  let admin : verifier = function
-    | {req; _} -> (
-      match parse_basic req with
-      | Ok (username, password) -> (
-        match (username, password) with
-        | "admin", p when p = Env.admin_password ->
-            Lwt.return_ok Admin
-        | _ ->
-            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
-      | Error _ ->
-          Lwt.return_error
-          @@ Errors.auth_required "Invalid authorization header" )
-
-  let access : verifier = function
-    | {req; db} -> (
-      match parse_bearer req with
-      | Ok jwt -> (
-          match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
-          | Ok {sub= did; _} -> (
-              match%lwt Data_store.get_actor_by_identifier did db with
-              | Some {deactivated_at= None; _} ->
-                  Lwt.return_ok (Access {did})
-              | Some {deactivated_at= Some _; _} ->
-                  Lwt.return_error
-                  @@ Errors.auth_required ~name:"AccountDeactivated"
-                       "Account is deactivated"
-              | None ->
-                  Lwt.return_error @@ Errors.auth_required "Invalid credentials"
-              )
-          | Error _ ->
-              Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
-      | Error _ ->
-          Lwt.return_error
-          @@ Errors.auth_required "Invalid authorization header" )
-
-  let refresh : verifier = function
-    | {req; db} -> (
-      match parse_bearer req with
-      | Ok jwt -> (
-          match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
-          | Ok {sub= did; jti; _} -> (
-              match%lwt Data_store.get_actor_by_identifier did db with
-              | Some {deactivated_at= None; _} ->
-                  Lwt.return_ok (Refresh {did; jti})
-              | Some {deactivated_at= Some _; _} ->
-                  Lwt.return_error
-                  @@ Errors.auth_required ~name:"AccountDeactivated"
-                       "Account is deactivated"
-              | None ->
-                  Lwt.return_error @@ Errors.auth_required "Invalid credentials"
-              )
-          | Error "" | Error _ ->
-              Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
-      | Error _ ->
-          Lwt.return_error
-          @@ Errors.auth_required "Invalid authorization header" )
-
-  let authorization : verifier = function
-    | ctx -> (
-      match
-        Dream.header ctx.req "Authorization"
-        |> Option.map @@ String.split_on_char ' '
-      with
-      | Some ("Basic" :: _) ->
-          admin ctx
-      | Some ("Bearer" :: _) ->
-          access ctx
+  let admin : verifier =
+   fun {req; _} ->
+    match parse_basic req with
+    | Ok (username, password) -> (
+      match (username, password) with
+      | "admin", p when p = Env.admin_password ->
+          Lwt.return_ok Admin
       | _ ->
-          Lwt.return_error
-          @@ Errors.auth_required ~name:"InvalidToken"
-               "Unexpected authorization type" )
+          Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+    | Error _ ->
+        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+
+  let access : verifier =
+   fun {req; db} ->
+    match parse_bearer req with
+    | Ok jwt -> (
+        match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
+        | Ok {sub= did; _} -> (
+            match%lwt Data_store.get_actor_by_identifier did db with
+            | Some {deactivated_at= None; _} ->
+                Lwt.return_ok (Access {did})
+            | Some {deactivated_at= Some _; _} ->
+                Lwt.return_error
+                @@ Errors.auth_required ~name:"AccountDeactivated"
+                     "Account is deactivated"
+            | None ->
+                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+        | Error _ ->
+            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+    | Error _ ->
+        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+
+  let refresh : verifier =
+   fun {req; db} ->
+    match parse_bearer req with
+    | Ok jwt -> (
+        match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
+        | Ok {sub= did; jti; _} -> (
+            match%lwt Data_store.get_actor_by_identifier did db with
+            | Some {deactivated_at= None; _} ->
+                Lwt.return_ok (Refresh {did; jti})
+            | Some {deactivated_at= Some _; _} ->
+                Lwt.return_error
+                @@ Errors.auth_required ~name:"AccountDeactivated"
+                     "Account is deactivated"
+            | None ->
+                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+        | Error "" | Error _ ->
+            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+    | Error _ ->
+        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+
+  let authorization : verifier =
+   fun ctx ->
+    match
+      Dream.header ctx.req "Authorization"
+      |> Option.map @@ String.split_on_char ' '
+    with
+    | Some ("Basic" :: _) ->
+        admin ctx
+    | Some ("Bearer" :: _) ->
+        access ctx
+    | _ ->
+        Lwt.return_error
+        @@ Errors.auth_required ~name:"InvalidToken"
+             "Unexpected authorization type"
+
+  let any : verifier =
+   fun ctx -> try authorization ctx with _ -> unauthenticated ctx
 end

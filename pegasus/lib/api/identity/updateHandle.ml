@@ -23,7 +23,7 @@ let validate_handle handle =
           Ok ()
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.access (fun {req; auth; db} ->
+  Xrpc.handler ~auth:Auth.Verifiers.authorization (fun {req; auth; db} ->
       let did = Auth.get_authed_did_exn auth in
       let%lwt body = Dream.body req in
       let handle =
