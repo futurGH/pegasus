@@ -37,5 +37,6 @@ let handler =
               :: results_rev ) )
           ("", []) results
       in
+      let cursor = if List.length results = limit then Some cursor else None in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {cursor= Some cursor; records= List.rev results_rev} )
+      @@ response_to_yojson {cursor; records= List.rev results_rev} )

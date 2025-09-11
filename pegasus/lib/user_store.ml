@@ -236,11 +236,27 @@ module Queries = struct
         {sql| SELECT @int{id}, @CID{cid}, @string{mimetype} FROM blobs WHERE cid = %CID{cid} |sql}
         record_out]
 
-  let list_blobs ~limit ~cursor =
+  let list_blobs =
     [%rapper
       get_many
-        {sql| SELECT @CID{cid} FROM blobs WHERE id > %int{cursor} ORDER BY id LIMIT %int{limit} |sql}]
-      ~limit ~cursor
+        {sql| SELECT @CID{cid} FROM blobs WHERE cid > %string{cursor} ORDER BY cid LIMIT %int{limit} |sql}]
+
+  let list_blobs_since =
+    [%rapper
+      get_many
+        {sql|
+          SELECT @CID{cid}
+          FROM blobs
+          WHERE cid > %string{cursor}
+            AND (
+              SELECT MIN(records.since)
+              FROM blobs_records
+              JOIN records ON records.path = blobs_records.record_path
+              WHERE blobs_records.blob_id = blobs.id
+            ) > %string{since}
+          ORDER BY cid
+          LIMIT %int{limit}
+        |sql}]
 
   let put_blob cid mimetype =
     [%rapper
@@ -400,8 +416,14 @@ let get_blob t cid : blob_with_contents option Lwt.t =
       in
       Lwt.return_some {id; cid; mimetype; data}
 
-let list_blobs t ~limit ~cursor : Cid.t list Lwt.t =
-  unwrap @@ Queries.list_blobs t.db ~limit ~cursor
+let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
+  unwrap
+  @@
+  match since with
+  | Some since ->
+      Queries.list_blobs_since t.db ~limit ~cursor ~since
+  | None ->
+      Queries.list_blobs t.db ~limit ~cursor
 
 let put_blob t cid mimetype data : int Lwt.t =
   let file =
