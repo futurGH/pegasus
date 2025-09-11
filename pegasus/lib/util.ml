@@ -185,8 +185,12 @@ let _init_connection conn =
   Lwt.return conn
 
 (* opens an sqlite connection *)
-let connect_sqlite db_uri =
-  match%lwt Caqti_lwt_unix.connect db_uri with
+let connect_sqlite ?(create = false) ?(write = true) db_uri =
+  let uri =
+    Uri.add_query_params' db_uri
+      [("create", string_of_bool create); ("write", string_of_bool write)]
+  in
+  match%lwt Caqti_lwt_unix.connect uri with
   | Ok c ->
       _init_connection c
   | Error e ->

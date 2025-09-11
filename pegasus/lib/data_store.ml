@@ -189,8 +189,8 @@ end
 
 type t = (module Rapper_helper.CONNECTION)
 
-let connect () : t Lwt.t =
-  Util.connect_sqlite Util.Constants.pegasus_db_location
+let connect ?create ?write () : t Lwt.t =
+  Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
 
 let init conn : unit Lwt.t = unwrap @@ Queries.create_tables conn
 

@@ -299,8 +299,10 @@ end
 
 type t = {did: string; db: (module Rapper_helper.CONNECTION)}
 
-let connect did : t Lwt.t =
-  let%lwt db = Util.connect_sqlite (Util.Constants.user_db_location did) in
+let connect ?create ?write did : t Lwt.t =
+  let%lwt db =
+    Util.connect_sqlite ?create ?write (Util.Constants.user_db_location did)
+  in
   Lwt.return {did; db}
 
 let init t : unit Lwt.t =
