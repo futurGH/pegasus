@@ -22,16 +22,7 @@ let handler =
         | _ ->
             100
       in
-      let%lwt input_did =
-        if String.starts_with ~prefix:"did:" input.repo then
-          Lwt.return input.repo
-        else
-          match%lwt Data_store.get_actor_by_identifier input.repo ctx.db with
-          | Some {did; _} ->
-              Lwt.return did
-          | None ->
-              Errors.invalid_request "target repository not found"
-      in
+      let%lwt input_did = Xrpc.resolve_repo_did ctx input.repo in
       let%lwt db = User_store.connect input_did in
       let%lwt results =
         User_store.list_records db ~limit ?cursor:input.cursor

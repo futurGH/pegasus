@@ -123,3 +123,25 @@ let service_proxy_middleware db inner_handler req =
         {req; db}
   | None ->
       inner_handler req
+
+let resolve_repo_did ctx repo =
+  if String.starts_with ~prefix:"did:" repo then Lwt.return repo
+  else
+    match%lwt Data_store.get_actor_by_identifier repo ctx.db with
+    | Some {did; _} ->
+        Lwt.return did
+    | None ->
+        Errors.invalid_request "target repository not found"
+
+let resolve_repo_did_authed ctx repo =
+  let%lwt input_did = resolve_repo_did ctx repo in
+  let did =
+    match ctx.auth with
+    | Access {did} when did = input_did ->
+        did
+    | Admin ->
+        input_did
+    | _ ->
+        Errors.auth_required "authentication does not match target repository"
+  in
+  Lwt.return did

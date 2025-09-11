@@ -13,26 +13,7 @@ and res_commit = {cid: string; rev: string} [@@deriving yojson]
 let handler =
   Xrpc.handler ~auth:Auth.Verifiers.authorization (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
-      let%lwt input_did =
-        if String.starts_with ~prefix:"did:" input.repo then
-          Lwt.return input.repo
-        else
-          match%lwt Data_store.get_actor_by_identifier input.repo ctx.db with
-          | Some {did; _} ->
-              Lwt.return did
-          | None ->
-              Errors.invalid_request "target repository not found"
-      in
-      let did =
-        match ctx.auth with
-        | Access {did} when did = input_did ->
-            did
-        | Admin ->
-            input_did
-        | _ ->
-            Errors.auth_required
-              "authentication does not match target repository"
-      in
+      let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       let%lwt repo = Repository.load did in
       let write : Repository.repo_write =
         Delete

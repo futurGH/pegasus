@@ -7,16 +7,7 @@ type response = {uri: string; cid: string; value: Mist.Lex.repo_record}
 let handler =
   Xrpc.handler (fun ctx ->
       let input = Xrpc.parse_query ctx.req query_of_yojson in
-      let%lwt input_did =
-        if String.starts_with ~prefix:"did:" input.repo then
-          Lwt.return input.repo
-        else
-          match%lwt Data_store.get_actor_by_identifier input.repo ctx.db with
-          | Some {did; _} ->
-              Lwt.return did
-          | None ->
-              Errors.invalid_request "target repository not found"
-      in
+      let%lwt input_did = Xrpc.resolve_repo_did ctx input.repo in
       let%lwt repo = Repository.load input_did in
       let path = input.collection ^ "/" ^ input.rkey in
       let uri = "at://" ^ input_did ^ "/" ^ path in
