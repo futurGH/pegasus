@@ -1,8 +1,13 @@
 module StringMap = Dag_cbor.StringMap
 
-type typed_json_ref = {type': string; ref: Cid.t; mime_type: string; size: int64}
+type typed_json_ref =
+  { type': string [@key "$type"]
+  ; ref: Cid.t
+  ; mime_type: string [@key "mimeType"]
+  ; size: int64 }
+[@@deriving yojson]
 
-type untyped_json_ref = {cid: string; mime_type: string}
+type untyped_json_ref = {cid: string; mime_type: string [@key "mimeType"]}
 
 type json_ref = Typed of typed_json_ref | Untyped of untyped_json_ref
 

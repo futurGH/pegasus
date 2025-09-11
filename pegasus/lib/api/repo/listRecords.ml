@@ -14,7 +14,7 @@ and response_record = {uri: string; cid: string; value: Mist.Lex.repo_record}
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let%lwt input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req query_of_yojson in
       let limit =
         match input.limit with
         | Some limit when limit > 0 && limit <= 100 ->

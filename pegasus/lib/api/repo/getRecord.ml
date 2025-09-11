@@ -6,7 +6,7 @@ type response = {uri: string; cid: string; value: Mist.Lex.repo_record}
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let%lwt input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req query_of_yojson in
       let%lwt input_did =
         if String.starts_with ~prefix:"did:" input.repo then
           Lwt.return input.repo
