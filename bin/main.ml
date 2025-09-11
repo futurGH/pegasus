@@ -40,7 +40,9 @@ let handlers =
   ; (post, "/xrpc/com.atproto.repo.deleteRecord", Api.Repo.DeleteRecord.handler)
   ; (post, "/xrpc/com.atproto.repo.uploadBlob", Api.Repo.UploadBlob.handler)
   ; (* sync *)
-    (get, "/xrpc/com.atproto.sync.getBlob", Api.Sync.GetBlob.handler)
+    (get, "/xrpc/com.atproto.sync.getRepoStatus", Api.Sync.GetRepoStatus.handler)
+  ; (get, "/xrpc/com.atproto.sync.listRepos", Api.Sync.ListRepos.handler)
+  ; (get, "/xrpc/com.atproto.sync.getBlob", Api.Sync.GetBlob.handler)
   ; (get, "/xrpc/com.atproto.sync.listBlobs", Api.Sync.ListBlobs.handler)
   ; (* preferences *)
     ( get

@@ -20,5 +20,7 @@ let handler =
       let%lwt db = User_store.connect did in
       let%lwt cids = User_store.list_blobs db ~limit ~cursor ?since in
       let cids = List.map Cid.to_string cids in
-      let cursor = if List.length cids = limit then Some cursor else None in
+      let cursor =
+        if List.length cids = limit then Mist.Util.last cids else None
+      in
       Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {cursor; cids} )

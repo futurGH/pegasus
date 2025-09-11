@@ -119,7 +119,9 @@ module Queries = struct
       get_many
         {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
               FROM actors
-              ORDER BY created_at DESC LIMIT %int{limit} OFFSET %int{offset}
+              WHERE did > %string{cursor}
+              AND deactivated_at IS NULL
+              ORDER BY created_at DESC LIMIT %int{limit}
         |sql}
         record_out]
 
@@ -221,8 +223,8 @@ let try_login ~id ~password conn =
       | _ ->
           Lwt.return_none )
 
-let list_actors ?(limit = 100) ?(offset = 0) conn =
-  unwrap @@ Queries.list_actors ~limit ~offset conn
+let list_actors ?(cursor = "") ?(limit = 100) conn =
+  unwrap @@ Queries.list_actors ~cursor ~limit conn
 
 let put_preferences ~did ~prefs conn =
   unwrap @@ Queries.put_preferences ~did ~preferences:prefs conn
