@@ -14,8 +14,6 @@ module Write_op = struct
   let delete = "com.atproto.repo.applyWrites#delete"
 end
 
-type signing_key = P256 of bytes | K256 of bytes
-
 type repo_write =
   | Create of
       { type': string [@key "$type"] [@default Write_op.create]
@@ -139,7 +137,7 @@ type write_result =
   {commit: Cid.t * signed_commit; results: apply_writes_result list}
 
 type t =
-  { key: signing_key
+  { key: Kleidos.key
   ; did: string
   ; db: User_store.t
   ; mutable block_map: Cid.t StringMap.t option
@@ -196,15 +194,8 @@ let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
        []
 
 let sign_commit t commit : signed_commit =
-  let sign_fn, privkey =
-    match t.key with
-    | K256 k ->
-        (Kleidos.K256.sign, k)
-    | P256 k ->
-        (Kleidos.P256.sign, k)
-  in
   let msg = commit |> commit_to_yojson |> Dag_cbor.encode_yojson in
-  let signature = sign_fn ~privkey ~msg in
+  let signature = Kleidos.sign ~privkey:t.key ~msg in
   { did= commit.did
   ; version= commit.version
   ; data= commit.data
@@ -446,15 +437,7 @@ let load did : t Lwt.t =
     | None ->
         failwith ("failed to retrieve actor for " ^ did)
   in
-  let key =
-    match Kleidos.parse_multikey_str signing_key with
-    | key, (module M) when M.name = "K256" ->
-        K256 key
-    | key, (module M) when M.name = "P256" ->
-        P256 key
-    | _ ->
-        failwith "unsupported key type"
-  in
+  let key = Kleidos.parse_multikey_str signing_key in
   let%lwt commit =
     match%lwt User_store.get_commit user_db with
     | Some (cid, _) ->

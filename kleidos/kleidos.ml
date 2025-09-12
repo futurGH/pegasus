@@ -208,3 +208,7 @@ let parse_multikey_bytes bytes : key =
 
 let parse_multikey_str multikey : key =
   multikey |> bytes_of_multikey |> parse_multikey_bytes
+
+let sign ~privkey ~msg : bytes =
+  let privkey, (module Curve : CURVE) = privkey in
+  Curve.sign ~privkey ~msg

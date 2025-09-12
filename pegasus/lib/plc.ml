@@ -171,9 +171,8 @@ type audit_log_entry =
 type audit_log = audit_log_entry list [@@deriving yojson {strict= false}]
 
 let sign_operation (key : Kleidos.key) operation : signed_operation =
-  let sig_privkey, (module Sig_curve) = key in
   let cbor = unsigned_operation_to_yojson operation |> Dag_cbor.encode_yojson in
-  let sig_bytes = Sig_curve.sign ~privkey:sig_privkey ~msg:cbor in
+  let sig_bytes = Kleidos.sign ~privkey:key ~msg:cbor in
   let sig_str =
     Result.get_ok @@ Multibase.encode_t `Base64url (Bytes.to_string sig_bytes)
   in
