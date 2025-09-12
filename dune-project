@@ -14,6 +14,12 @@
  (url "git+https://github.com/mcksan/pg_query-ocaml.git")
  (package (name pg_query)))
 
+(pin ; build broken on macOS for some reason
+ (url "git+https://github.com/janestreet/bin_prot.git#03c783d")
+ (package
+   (name bin_prot)
+   (version v0.17~preview.128.20+135))) ; this is actually v0.16~preview.128.20+135 but some other package requires >=v0.17
+
 (pin ; these 3 all need to be pinned or they'll conflict
  (url "git+https://github.com/aantron/dream.git")
  (package (name dream)))
