@@ -141,7 +141,7 @@ type t =
   ; did: string
   ; db: User_store.t
   ; mutable block_map: Cid.t StringMap.t option
-  ; mutable commit: Cid.t option }
+  ; mutable commit: (Cid.t * signed_commit) option }
 
 let get_map t : Cid.t StringMap.t Lwt.t =
   let%lwt root, commit =
@@ -151,7 +151,7 @@ let get_map t : Cid.t StringMap.t Lwt.t =
     | None ->
         failwith ("failed to retrieve commit for " ^ t.did)
   in
-  if t.commit <> Some root then t.commit <- Some root ;
+  t.commit <- Some (root, commit) ;
   match t.block_map with
   | Some map ->
       Lwt.return map
@@ -225,7 +225,7 @@ let put_commit t ?(previous : signed_commit option = None) mst_root :
   let%lwt commit_cid =
     User_store.put_commit t.db signed |> Lwt_result.get_exn
   in
-  t.commit <- Some commit_cid ;
+  t.commit <- Some (commit_cid, signed) ;
   Lwt.return (commit_cid, signed)
 
 let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
@@ -243,11 +243,11 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     | None ->
         failwith ("failed to retrieve commit for " ^ t.did)
   in
-  if swap_commit <> None && swap_commit <> t.commit then
+  if swap_commit <> None && swap_commit <> Option.map fst t.commit then
     Errors.invalid_request ~name:"InvalidSwap"
       (Format.sprintf "swapCommit cid %s did not match last commit cid %s"
          (Cid.to_string (Option.get swap_commit))
-         (match t.commit with Some c -> Cid.to_string c | None -> "null") ) ;
+         (match t.commit with Some (c, _) -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
   (* need to cache this so in the end, we only emit new blocks *)
   let prev_blocks =
@@ -426,25 +426,33 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   in
   Lwt.return {commit= new_commit; results}
 
-let load did : t Lwt.t =
-  let%lwt data_store_conn = Data_store.connect () in
-  let%lwt user_db = User_store.connect did in
+let load ?write ?(ensure_active = false) ?ds did : t Lwt.t =
+  let%lwt data_store_conn =
+    match ds with
+    | Some ds ->
+        Lwt.return ds
+    | None ->
+        Data_store.connect ?write ()
+  in
+  let%lwt user_db =
+    try%lwt User_store.connect did
+    with _ ->
+      Errors.invalid_request ~name:"RepoNotFound"
+        "your princess is in another castle"
+  in
   let%lwt () = User_store.init user_db in
   let%lwt {signing_key; _} =
     match%lwt Data_store.get_actor_by_identifier did data_store_conn with
-    | Some actor ->
+    | Some actor when ensure_active = false || actor.deactivated_at = None ->
         Lwt.return actor
+    | Some _ ->
+        Errors.invalid_request ~name:"RepoDeactivated"
+          ("repository " ^ did ^ " is deactivated")
     | None ->
         failwith ("failed to retrieve actor for " ^ did)
   in
   let key = Kleidos.parse_multikey_str signing_key in
-  let%lwt commit =
-    match%lwt User_store.get_commit user_db with
-    | Some (cid, _) ->
-        Lwt.return_some cid
-    | None ->
-        Lwt.return_none
-  in
+  let%lwt commit = User_store.get_commit user_db in
   Lwt.return {key; did; db= user_db; block_map= None; commit}
 
 let export_car t : Car.stream Lwt.t =
