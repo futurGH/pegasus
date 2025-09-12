@@ -82,11 +82,11 @@ module type Intf = sig
 
   val build_map : t -> Cid.t StringMap.t Lwt.t
 
-  val path_to_entry : t -> Cid.t -> string -> (Cid.t * bytes) list Lwt.t
-
   val to_blocks_stream : t -> (Cid.t * bytes) Lwt_seq.t
 
   val serialize : t -> node -> (Cid.t * bytes, exn) Lwt_result.t
+
+  val proof_for_key : t -> Cid.t -> string -> Block_map.t Lwt.t
 
   val get_covering_proof : t -> string -> Storage.Block_map.t Lwt.t
 
@@ -272,78 +272,6 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
       traverse t (fun path cid -> map := StringMap.add path cid !map)
     in
     Lwt.return !map
-
-  (* returns cids and blocks that form the path from a given node to a given entry *)
-  let rec path_to_entry t node key : (Cid.t * bytes) list Lwt.t =
-    let%lwt root_bytes = Store.get_bytes t.blockstore node in
-    let%lwt root_raw =
-      match root_bytes with
-      | None ->
-          Lwt.return_none
-      | Some bytes ->
-          Lwt.return_some (decode_block_raw bytes)
-    in
-    let%lwt root =
-      match root_raw with
-      | None ->
-          Lwt.return_none
-      | Some root ->
-          hydrate_node t root |> Lwt.map Option.some
-    in
-    (* if there is a left child, try to find a path through the left subtree *)
-    let%lwt path_through_left =
-      match root_raw with
-      | None ->
-          Lwt.return_some []
-      | Some raw -> (
-        match raw.l with
-        | None ->
-            Lwt.return_none
-        | Some left -> (
-            match%lwt path_to_entry t left key with
-            | [] ->
-                Lwt.return_none
-            | path ->
-                (* Option.get is safe because root is Some only when root_bytes is Some *)
-                Lwt.return_some (path @ [(node, Option.get root_bytes)]) ) )
-    in
-    match path_through_left with
-    | Some path ->
-        Lwt.return path
-    | None -> (
-        (* if a left subtree path couldn't be found, find the entry whose right subtree this key would belong to *)
-        (* this branch is only reached when root/root_raw/root_bytes are not None;
-        if they were, path_through_left would be Some [] *)
-        let entries = (Option.get root).entries in
-        let entries_len = List.length entries in
-        let entry_index =
-          match List.find_index (fun (e : entry) -> e.key >= key) entries with
-          | Some index ->
-              index
-          | None ->
-              entries_len
-        in
-        (* path_through_left is None -> root_bytes is Some *)
-        let path_tail = [(node, Option.get root_bytes)] in
-        (* entry_index here is actually the entry to the right of the subtree the key would belong to *)
-        match entry_index with
-        | _
-        (* because entries[entry_index] might turn out to be the entry we're looking for *)
-          when entry_index < entries_len
-               && (List.nth entries entry_index).key = key ->
-            Lwt.return path_tail
-        | _ -> (
-          (* otherwise, we continue down the right subtree of the entry before entry_index *)
-          (* path_through_left is None -> root_raw is Some *)
-          match Util.last (Option.get root_raw).e with
-          | Some last when last.t <> None ->
-              let%lwt path_through_right =
-                (* when last.t <> None *)
-                path_to_entry t (Option.get last.t) key
-              in
-              Lwt.return (path_through_right @ path_tail)
-          | _ ->
-              Lwt.return path_tail ) )
 
   (* returns all mst entries in order for a car stream *)
   let to_blocks_stream t : (Cid.t * bytes) Lwt_seq.t =
@@ -556,10 +484,15 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
         let keys = node_entry_keys raw in
         let seq = interleave_raw raw keys in
         let index = find_gte_leaf_index key seq in
-        let blocks_lwt =
+        let%lwt blocks =
           match Util.at_index index seq with
-          | Some (Leaf (k, _, _)) when k = key ->
-              Lwt.return Block_map.empty
+          | Some (Leaf (k, v, _)) when k = key -> (
+              (* include the found leaf block to prove existence *)
+              match%lwt Store.get_bytes t.blockstore v with
+              | Some leaf_bytes ->
+                  Lwt.return (Block_map.set v leaf_bytes Block_map.empty)
+              | None ->
+                  Lwt.return Block_map.empty )
           | _ -> (
               let prev =
                 if index - 1 >= 0 then Util.at_index (index - 1) seq else None
@@ -568,9 +501,46 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
               | Some (Tree c) ->
                   proof_for_key t c key
               | _ ->
-                  Lwt.return Block_map.empty )
+                  (* include bounding neighbor leaf blocks (if any) to prove nonexistence *)
+                  let left_leaf =
+                    match prev with
+                    | Some (Leaf (_, v_left, _)) ->
+                        Some v_left
+                    | _ ->
+                        None
+                  in
+                  let right_leaf =
+                    match Util.at_index index seq with
+                    | Some (Leaf (_, v_right, _)) ->
+                        Some v_right
+                    | _ ->
+                        None
+                  in
+                  let%lwt bm =
+                    match left_leaf with
+                    | Some cid_left -> (
+                        match%lwt Store.get_bytes t.blockstore cid_left with
+                        | Some b ->
+                            Lwt.return
+                              (Block_map.set cid_left b Block_map.empty)
+                        | None ->
+                            Lwt.return Block_map.empty )
+                    | None ->
+                        Lwt.return Block_map.empty
+                  in
+                  let%lwt bm =
+                    match right_leaf with
+                    | Some cid_right -> (
+                        match%lwt Store.get_bytes t.blockstore cid_right with
+                        | Some b ->
+                            Lwt.return (Block_map.set cid_right b bm)
+                        | None ->
+                            Lwt.return bm )
+                    | None ->
+                        Lwt.return bm
+                  in
+                  Lwt.return bm )
         in
-        let%lwt blocks = blocks_lwt in
         Lwt.return (Block_map.set cid bytes blocks)
 
   (* returns all mst nodes needed to prove the value of a given key's left sibling *)
@@ -583,17 +553,22 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
         let keys = node_entry_keys raw in
         let seq = interleave_raw raw keys in
         let index = find_gte_leaf_index key seq in
-        let blocks_lwt =
+        let%lwt blocks =
           let prev =
             if index - 1 >= 0 then Util.at_index (index - 1) seq else None
           in
           match prev with
           | Some (Tree c) ->
               proof_for_left_sibling t c key
+          | Some (Leaf (_, v_left, _)) -> (
+              match%lwt Store.get_bytes t.blockstore v_left with
+              | Some b ->
+                  Lwt.return (Block_map.set v_left b Block_map.empty)
+              | None ->
+                  Lwt.return Block_map.empty )
           | _ ->
               Lwt.return Block_map.empty
         in
-        let%lwt blocks = blocks_lwt in
         Lwt.return (Block_map.set cid bytes blocks)
 
   (* returns all mst nodes needed to prove the value of a given key's right sibling *)
@@ -613,7 +588,7 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
           | some ->
               some
         in
-        let blocks_lwt =
+        let%lwt blocks =
           match found with
           | Some (Tree c) ->
               proof_for_right_sibling t c key
@@ -626,12 +601,17 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
               match neighbor with
               | Some (Tree c) ->
                   proof_for_right_sibling t c key
+              | Some (Leaf (_, v_right, _)) -> (
+                  match%lwt Store.get_bytes t.blockstore v_right with
+                  | Some b ->
+                      Lwt.return (Block_map.set v_right b Block_map.empty)
+                  | None ->
+                      Lwt.return Block_map.empty )
               | _ ->
                   Lwt.return Block_map.empty )
           | None ->
               Lwt.return Block_map.empty
         in
-        let%lwt blocks = blocks_lwt in
         Lwt.return (Block_map.set cid bytes blocks)
 
   (* a covering proof is all mst nodes needed to prove the value of a given leaf
