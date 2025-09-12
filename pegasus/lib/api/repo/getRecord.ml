@@ -8,7 +8,7 @@ let handler =
   Xrpc.handler (fun ctx ->
       let input = Xrpc.parse_query ctx.req query_of_yojson in
       let%lwt input_did = Xrpc.resolve_repo_did ctx input.repo in
-      let%lwt repo = Repository.load input_did in
+      let%lwt repo = Repository.load ~ensure_active:true input_did in
       let path = input.collection ^ "/" ^ input.rkey in
       let uri = "at://" ^ input_did ^ "/" ^ path in
       match%lwt Repository.get_record repo path with

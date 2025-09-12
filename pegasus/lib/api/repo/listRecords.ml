@@ -23,7 +23,7 @@ let handler =
             100
       in
       let%lwt input_did = Xrpc.resolve_repo_did ctx input.repo in
-      let%lwt db = User_store.connect input_did in
+      let%lwt {db; _} = Repository.load ~ensure_active:true input_did in
       let%lwt results =
         User_store.list_records db ~limit ?cursor:input.cursor
           ?reverse:input.reverse input.collection
