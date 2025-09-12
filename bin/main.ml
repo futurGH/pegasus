@@ -14,14 +14,12 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.identity.resolveHandle"
     , Api.Identity.ResolveHandle.handler )
-  ; ( get
-    , "/xrpc/com.atproto.sync.subscribeRepos"
-    , Api.Server.SubscribeRepos.handler )
   ; ( post
     , "/xrpc/com.atproto.server.createSession"
     , Api.Server.CreateSession.handler )
   ; (get, "/xrpc/com.atproto.repo.getRecord", Api.Repo.GetRecord.handler)
   ; (get, "/xrpc/com.atproto.repo.listRecords", Api.Repo.ListRecords.handler)
+  ; (get, "/xrpc/com.atproto.repo.describeRepo", Api.Repo.DescribeRepo.handler)
   ; (* account *)
     (get, "/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
   ; ( post
@@ -50,6 +48,9 @@ let handlers =
   ; (get, "/xrpc/com.atproto.sync.getBlocks", Api.Sync.GetBlocks.handler)
   ; (get, "/xrpc/com.atproto.sync.getBlob", Api.Sync.GetBlob.handler)
   ; (get, "/xrpc/com.atproto.sync.listBlobs", Api.Sync.ListBlobs.handler)
+  ; ( get
+    , "/xrpc/com.atproto.sync.subscribeRepos"
+    , Api.Server.SubscribeRepos.handler )
   ; (* preferences *)
     ( get
     , "/xrpc/com.atproto.actor.getPreferences"
