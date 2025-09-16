@@ -8,7 +8,9 @@ let handler =
         Xrpc.parse_query ctx.req query_of_yojson
       in
       let path = collection ^ "/" ^ rkey in
-      let%lwt {db; commit; _} = Repository.load did ~write:false ~ds:ctx.db in
+      let%lwt {db; commit; _} =
+        Repository.load did ~ensure_active:true ~write:false ~ds:ctx.db
+      in
       let commit_cid, commit_signed = Option.get commit in
       let commit_block =
         commit_signed |> User_store.Types.signed_commit_to_yojson
