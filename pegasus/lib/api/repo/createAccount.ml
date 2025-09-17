@@ -17,9 +17,22 @@ type response =
 let handler =
   Xrpc.handler (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
-      if input.invite_code = None && Env.invite_required = true then
-        Errors.invalid_request ~name:"InvalidInviteCode"
-          "no invite code provided" ;
+      let%lwt () =
+        match input.invite_code with
+        | None when Env.invite_required = true ->
+            Errors.invalid_request ~name:"InvalidInviteCode"
+              "no invite code provided"
+        | Some code when Env.invite_required = true -> (
+            let%lwt invite = Data_store.get_invite ~code ctx.db in
+            match invite with
+            | Some i when i.remaining > 0 ->
+                Lwt.return_unit
+            | _ ->
+                Errors.invalid_request ~name:"InvalidInviteCode"
+                  "invalid invite code" )
+        | _ ->
+            Lwt.return_unit
+      in
       let () =
         match Util.validate_handle input.handle with
         | Ok _ ->
@@ -69,6 +82,17 @@ let handler =
                 Lwt.return did
             | Error e ->
                 failwith e )
+      in
+      let%lwt _ =
+        match input.invite_code with
+        | Some code -> (
+            match%lwt Data_store.use_invite ~code ctx.db with
+            | Some _ ->
+                Lwt.return ()
+            | None ->
+                failwith "failed to use invite code" )
+        | None ->
+            Lwt.return ()
       in
       let sk_priv_mk = Kleidos.P256.privkey_to_multikey signing_key in
       let%lwt () =

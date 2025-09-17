@@ -13,6 +13,8 @@ module Types = struct
     ; created_at: int
     ; deactivated_at: int option }
 
+  type invite_code = {code: string; did: string; remaining: int}
+
   type firehose_event = {seq: int; time: int; t: string; data: bytes}
 end
 
@@ -131,6 +133,30 @@ module Queries = struct
         {sql| UPDATE actors SET preferences = %Json{preferences} WHERE did = %string{did}
         |sql}]
 
+  (* invites *)
+  let create_invite =
+    [%rapper
+      execute
+        {sql| INSERT INTO invite_codes (code, did, remaining)
+              VALUES (%string{code}, %string{did}, %int{remaining})
+        |sql}]
+
+  let get_invite =
+    [%rapper
+      get_opt
+        {sql| SELECT @string{code}, @string{did}, @int{remaining}
+              FROM invite_codes WHERE code = %string{code}
+        |sql}
+        record_out]
+
+  let use_invite =
+    [%rapper
+      get_opt
+        {sql| UPDATE invite_codes SET remaining = remaining - 1
+              WHERE code = %string{code} AND remaining > 0
+              RETURNING @int{remaining}
+        |sql}]
+
   (* firehose *)
   let firehose_insert =
     [%rapper
@@ -228,6 +254,14 @@ let list_actors ?(cursor = "") ?(limit = 100) conn =
 
 let put_preferences ~did ~prefs conn =
   unwrap @@ Queries.put_preferences ~did ~preferences:prefs conn
+
+(* invite codes *)
+let create_invite ~code ~did ~remaining conn =
+  unwrap @@ Queries.create_invite ~code ~did ~remaining conn
+
+let get_invite ~code conn = unwrap @@ Queries.get_invite ~code conn
+
+let use_invite ~code conn = unwrap @@ Queries.use_invite ~code conn
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =

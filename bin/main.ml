@@ -11,17 +11,21 @@ let handlers =
     ( get
     , "/xrpc/com.atproto.server.describeServer"
     , Api.Server.DescribeServer.handler )
+  ; (get, "/xrpc/com.atproto.repo.describeRepo", Api.Repo.DescribeRepo.handler)
   ; ( get
     , "/xrpc/com.atproto.identity.resolveHandle"
     , Api.Identity.ResolveHandle.handler )
+  ; (* account *)
+    ( post
+    , "/xrpc/com.atproto.server.createInviteCode"
+    , Api.Server.CreateInviteCode.handler )
+  ; ( post
+    , "/xrpc/com.atproto.repo.createAccount"
+    , Api.Repo.CreateAccount.handler )
   ; ( post
     , "/xrpc/com.atproto.server.createSession"
     , Api.Server.CreateSession.handler )
-  ; (get, "/xrpc/com.atproto.repo.getRecord", Api.Repo.GetRecord.handler)
-  ; (get, "/xrpc/com.atproto.repo.listRecords", Api.Repo.ListRecords.handler)
-  ; (get, "/xrpc/com.atproto.repo.describeRepo", Api.Repo.DescribeRepo.handler)
-  ; (* account *)
-    (get, "/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
+  ; (get, "/xrpc/com.atproto.server.getSession", Api.Server.GetSession.handler)
   ; ( post
     , "/xrpc/com.atproto.server.refreshSession"
     , Api.Server.RefreshSession.handler )
@@ -35,6 +39,8 @@ let handlers =
     (post, "/xrpc/com.atproto.repo.applyWrites", Api.Repo.ApplyWrites.handler)
   ; (post, "/xrpc/com.atproto.repo.createRecord", Api.Repo.CreateRecord.handler)
   ; (post, "/xrpc/com.atproto.repo.putRecord", Api.Repo.PutRecord.handler)
+  ; (get, "/xrpc/com.atproto.repo.getRecord", Api.Repo.GetRecord.handler)
+  ; (get, "/xrpc/com.atproto.repo.listRecords", Api.Repo.ListRecords.handler)
   ; (post, "/xrpc/com.atproto.repo.deleteRecord", Api.Repo.DeleteRecord.handler)
   ; (post, "/xrpc/com.atproto.repo.uploadBlob", Api.Repo.UploadBlob.handler)
   ; (* sync *)
