@@ -1,27 +1,5 @@
 type request = {handle: string} [@@deriving yojson]
 
-let validate_handle handle =
-  if not @@ String.ends_with ~suffix:("." ^ Env.hostname) handle then
-    Error (Errors.InvalidRequestError ("InvalidHandle", "invalid handle suffix"))
-  else
-    let front =
-      String.sub handle 0
-        (String.length handle - (String.length Env.hostname + 1))
-    in
-    if String.contains front '.' then
-      Error
-        (Errors.InvalidRequestError
-           ("InvalidHandle", "invalid characters in handle") )
-    else
-      match String.length front with
-      | l when l < 3 ->
-          Error
-            (Errors.InvalidRequestError ("InvalidHandle", "handle too short"))
-      | l when l > 18 ->
-          Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
-      | _ ->
-          Ok ()
-
 let handler =
   Xrpc.handler ~auth:Auth.Verifiers.authorization (fun {req; auth; db} ->
       let did = Auth.get_authed_did_exn auth in
@@ -33,7 +11,7 @@ let handler =
         | Error _ ->
             Errors.invalid_request "invalid request body"
       in
-      match validate_handle handle with
+      match Util.validate_handle handle with
       | Error e ->
           raise e
       | Ok () -> (

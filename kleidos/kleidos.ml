@@ -212,3 +212,7 @@ let parse_multikey_str multikey : key =
 let sign ~privkey ~msg : bytes =
   let privkey, (module Curve : CURVE) = privkey in
   Curve.sign ~privkey ~msg
+
+let pubkey_to_did_key pubkey : string =
+  let pubkey, (module Curve : CURVE) = pubkey in
+  Curve.pubkey_to_did_key pubkey

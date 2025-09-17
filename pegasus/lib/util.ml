@@ -261,3 +261,25 @@ let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
 
 (* returns whether the value is None *)
 let is_none = function None -> true | _ -> false
+
+let validate_handle handle =
+  if not @@ String.ends_with ~suffix:("." ^ Env.hostname) handle then
+    Error (Errors.InvalidRequestError ("InvalidHandle", "invalid handle suffix"))
+  else
+    let front =
+      String.sub handle 0
+        (String.length handle - (String.length Env.hostname + 1))
+    in
+    if String.contains front '.' then
+      Error
+        (Errors.InvalidRequestError
+           ("InvalidHandle", "invalid characters in handle") )
+    else
+      match String.length front with
+      | l when l < 3 ->
+          Error
+            (Errors.InvalidRequestError ("InvalidHandle", "handle too short"))
+      | l when l > 18 ->
+          Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
+      | _ ->
+          Ok ()

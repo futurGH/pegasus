@@ -196,7 +196,7 @@ let init conn : unit Lwt.t = unwrap @@ Queries.create_tables conn
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
-  let now = Unix.gettimeofday () *. 1000. |> int_of_float in
+  let now = Util.now_ms () in
   let$! () =
     Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
       ~created_at:now

@@ -134,6 +134,45 @@ let signed_operation_to_yojson = function
     | _ ->
         failwith "unexpected json structure" )
 
+let signed_operation_of_yojson (json : Yojson.Safe.t) =
+  let open Yojson.Safe.Util in
+  let type' = json |> member "type" |> to_string in
+  match type' with
+  | "plc_operation" ->
+      let rotation_keys =
+        json |> member "rotationKeys" |> to_list |> List.map to_string
+      in
+      let verification_methods =
+        json
+        |> member "verificationMethods"
+        |> to_assoc
+        |> List.map (fun (k, v) -> (k, v |> to_string))
+      in
+      let also_known_as =
+        json |> member "alsoKnownAs" |> to_list |> List.map to_string
+      in
+      let services =
+        json |> member "services" |> to_assoc
+        |> List.map (fun (k, v) -> (k, Result.get_ok @@ service_of_yojson v))
+      in
+      let prev = json |> member "prev" |> to_string_option in
+      let signature = json |> member "sig" |> to_string in
+      Ok
+        (Operation
+           { type'
+           ; rotation_keys
+           ; verification_methods
+           ; also_known_as
+           ; services
+           ; prev
+           ; signature } )
+  | "plc_tombstone" ->
+      let prev = json |> member "prev" |> to_string in
+      let signature = json |> member "sig" |> to_string in
+      Ok (Tombstone {type'; prev; signature})
+  | t ->
+      Error ("unexpected operation type " ^ t)
+
 type audit_log_operation =
   { signature: string [@key "sig"]
   ; prev: string option
