@@ -1,15 +1,19 @@
-FROM ocaml/opam:debian-12-ocaml-5.2 AS build
+FROM --platform=linux/amd64 ocaml/opam:debian-12-ocaml-5.2 AS build
 
 RUN sudo apt-get install -y cmake git libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev pkg-config
 
 WORKDIR /home/opam
 
+RUN curl -fsSL https://get.dune.build/install | sh
+
+ENV PATH="/home/opam/.local/bin:${PATH}"
+ENV DUNE_CACHE="enabled"
+
 ADD . .
-RUN opam install . --deps-only --with-test --unlock-base
-RUN opam exec -- dune build
+RUN dune pkg lock
+RUN dune build
 
-
-FROM ocaml/opam:debian-12-ocaml-5.2 AS run
+FROM --platform=linux/amd64 ocaml/opam:debian-12-ocaml-5.2 AS run
 
 RUN sudo apt-get install -y libev-dev
 
