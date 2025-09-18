@@ -1,20 +1,22 @@
 module Constants = struct
+  let data_dir =
+    Core.Filename.to_absolute_exn Env.data_dir
+      ~relative_to:(Core_unix.getcwd ())
+
   let pegasus_db_location =
-    Filename.concat Env.data_dir "pegasus.db"
-    |> Format.sprintf "sqlite3://%s.db"
-    |> Uri.of_string
+    "sqlite3://" ^ Filename.concat data_dir "pegasus.db" |> Uri.of_string
 
   let user_db_location did =
     did
     |> Str.global_replace (Str.regexp ":") "_"
-    |> Filename.concat Env.data_dir
+    |> (Filename.concat data_dir "store" |> Filename.concat)
     |> Format.sprintf "sqlite3://%s.db"
     |> Uri.of_string
 
   let user_blobs_location did =
     did
     |> Str.global_replace (Str.regexp ":") "_"
-    |> (Filename.concat Env.data_dir "blobs" |> Filename.concat)
+    |> (Filename.concat data_dir "blobs" |> Filename.concat)
 end
 
 module Syntax = struct
