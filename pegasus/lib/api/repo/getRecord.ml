@@ -1,4 +1,8 @@
-type query = {repo: string; collection: string; rkey: string; cid: string option}
+type query =
+  { repo: string
+  ; collection: string
+  ; rkey: string
+  ; cid: string option [@default None] }
 [@@deriving yojson]
 
 type response = {uri: string; cid: string; value: Mist.Lex.repo_record}

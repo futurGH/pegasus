@@ -1,5 +1,8 @@
 type query =
-  {did: string; since: string option; limit: int option; cursor: string option}
+  { did: string
+  ; since: string option [@default None]
+  ; limit: int option [@default None]
+  ; cursor: string option [@default None] }
 [@@deriving yojson]
 
 type response = {cursor: string option; cids: string list} [@@deriving yojson]

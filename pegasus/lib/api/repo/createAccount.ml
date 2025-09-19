@@ -1,10 +1,10 @@
 type request =
   { email: string
   ; handle: string
-  ; did: string option
+  ; did: string option [@default None]
   ; password: string
-  ; invite_code: string option [@key "inviteCode"]
-  ; recovery_key: string option [@key "recoveryKey"] }
+  ; invite_code: string option [@key "inviteCode"] [@default None]
+  ; recovery_key: string option [@key "recoveryKey"] [@default None] }
 [@@deriving yojson {strict= false}]
 
 type response =

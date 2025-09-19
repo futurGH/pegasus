@@ -2,10 +2,10 @@ type request =
   { repo: string
   ; collection: string
   ; rkey: string
-  ; validate: bool option
+  ; validate: bool option [@default None]
   ; record: Mist.Lex.repo_record
-  ; swap_record: string option [@key "swapRecord"]
-  ; swap_commit: string option [@key "swapCommit"] }
+  ; swap_record: string option [@key "swapRecord"] [@default None]
+  ; swap_commit: string option [@key "swapCommit"] [@default None] }
 [@@deriving yojson]
 
 type response =

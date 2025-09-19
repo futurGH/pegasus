@@ -1,9 +1,9 @@
 type query =
   { repo: string
   ; collection: string
-  ; limit: int option
-  ; cursor: string option
-  ; reverse: bool option }
+  ; limit: int option [@default None]
+  ; cursor: string option [@default None]
+  ; reverse: bool option [@default None] }
 [@@deriving yojson]
 
 type response = {cursor: string option; records: response_record list}

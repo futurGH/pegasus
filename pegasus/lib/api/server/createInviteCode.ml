@@ -1,6 +1,6 @@
 type request =
   { use_count: int [@key "useCount"]
-  ; for_account: string option [@key "forAccount"] }
+  ; for_account: string option [@key "forAccount"] [@default None] }
 [@@deriving yojson]
 
 type response = {code: string} [@@deriving yojson]

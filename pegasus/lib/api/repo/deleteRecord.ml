@@ -2,8 +2,8 @@ type request =
   { repo: string
   ; collection: string
   ; rkey: string
-  ; swap_record: string option [@key "swapRecord"]
-  ; swap_commit: string option [@key "swapCommit"] }
+  ; swap_record: string option [@key "swapRecord"] [@default None]
+  ; swap_commit: string option [@key "swapCommit"] [@default None] }
 [@@deriving yojson]
 
 type response = {commit: res_commit option} [@@deriving yojson]

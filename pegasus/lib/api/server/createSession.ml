@@ -1,7 +1,7 @@
 type request =
   { identifier: string
   ; password: string
-  ; auth_factor_token: string option [@key "authFactorToken"] }
+  ; auth_factor_token: string option [@key "authFactorToken"] [@default None] }
 [@@deriving yojson {strict= false}]
 
 type response =

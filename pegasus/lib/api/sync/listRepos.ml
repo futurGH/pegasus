@@ -1,4 +1,6 @@
-type query = {cursor: string option; limit: int option} [@@deriving yojson]
+type query =
+  {cursor: string option [@default None]; limit: int option [@default None]}
+[@@deriving yojson]
 
 type response = {cursor: string option; repos: res_repo list}
 [@@deriving yojson]

@@ -1,8 +1,8 @@
 type request =
   { repo: string
-  ; validate: bool option
+  ; validate: bool option [@default None]
   ; writes: Repository.repo_write list
-  ; swap_commit: string option [@key "swapCommit"] }
+  ; swap_commit: string option [@key "swapCommit"] [@default None] }
 [@@deriving yojson]
 
 type response =
