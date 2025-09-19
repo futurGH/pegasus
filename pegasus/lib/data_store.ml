@@ -35,11 +35,17 @@ module Queries = struct
                 preferences TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 deactivated_at INTEGER
-              );
-              CREATE INDEX IF NOT EXISTS actors_did_idx ON actors (did);
-              CREATE INDEX IF NOT EXISTS actors_handle_idx ON actors (handle);
-              CREATE INDEX IF NOT EXISTS actors_email_idx ON actors (email);
+              )
         |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE INDEX IF NOT EXISTS actors_did_idx ON actors (did);
+                CREATE INDEX IF NOT EXISTS actors_handle_idx ON actors (handle);
+                CREATE INDEX IF NOT EXISTS actors_email_idx ON actors (email);
+          |sql}]
         () conn
     in
     let$! () =
@@ -49,7 +55,7 @@ module Queries = struct
               code TEXT PRIMARY KEY,
               did TEXT NOT NULL,
               remaining INTEGER NOT NULL
-            );
+            )
         |sql}]
         () conn
     in
@@ -61,9 +67,8 @@ module Queries = struct
               time INTEGER NOT NULL,
               t TEXT NOT NULL,
               data BLOB NOT NULL
-            );
-        |sql}
-          syntax_off]
+            )
+        |sql}]
         () conn
     in
     [%rapper
@@ -74,7 +79,7 @@ module Queries = struct
             jti TEXT NOT NULL,
             revoked_at INTEGER NOT NULL,
             PRIMARY KEY (did, jti)
-          );
+          )
        |sql}]
       () conn
 

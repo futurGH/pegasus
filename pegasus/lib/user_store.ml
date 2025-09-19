@@ -71,7 +71,7 @@ module Queries = struct
           {sql| CREATE TABLE IF NOT EXISTS mst (
                   cid TEXT NOT NULL PRIMARY KEY,
                   data BLOB NOT NULL
-                );
+                )
           |sql}]
         () conn
     in
@@ -142,19 +142,25 @@ module Queries = struct
       ~cid ~data
 
   (* record storage *)
-  let create_records_table =
-    [%rapper
-      execute
-        {sql| CREATE TABLE IF NOT EXISTS records (
+  let create_records_table conn =
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS records (
                 path TEXT NOT NULL PRIMARY KEY,
                 cid TEXT NOT NULL,
                 since TEXT NOT NULL,
                 data BLOB NOT NULL
-              );
-              CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
+              )
+        |sql}]
+        () conn
+    in
+    [%rapper
+      execute
+        {sql| CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
               CREATE INDEX IF NOT EXISTS records_since_idx ON records (since);
         |sql}]
-      ()
+      () conn
 
   let get_record_by_path =
     [%rapper
@@ -201,7 +207,7 @@ module Queries = struct
                 id INTEGER PRIMARY KEY,
                 cid TEXT NOT NULL,
                 mimetype TEXT NOT NULL
-              );
+              )
           |sql}]
         () conn
     in
@@ -212,7 +218,7 @@ module Queries = struct
                   blob_id INTEGER NOT NULL REFERENCES blobs(id) ON DELETE CASCADE,
                   record_path TEXT NOT NULL REFERENCES records(path) ON DELETE CASCADE,
                   PRIMARY KEY (blob_id, record_path)
-                );
+                )
           |sql}]
         () conn
     in
@@ -225,7 +231,7 @@ module Queries = struct
                   WHERE id NOT IN (
                     SELECT DISTINCT blob_id FROM blobs_records
                   );
-                END;
+                END
         |sql}
         syntax_off]
       () conn
