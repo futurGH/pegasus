@@ -218,29 +218,26 @@ module Queries = struct
         {sql| INSERT INTO revoked_tokens (did, jti, revoked_at) VALUES (%string{did}, %string{jti}, %int{now}) |sql}]
 end
 
-type t = (module Rapper_helper.CONNECTION)
+type t = Util.caqti_pool
 
 let connect ?create ?write () : t Lwt.t =
   Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
 
-let init conn : unit Lwt.t = unwrap @@ Queries.create_tables conn
+let init conn : unit Lwt.t = Util.use_pool conn Queries.create_tables
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
   let now = Util.now_ms () in
-  let$! () =
-    Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
-      ~created_at:now
-      ~preferences:(Yojson.Safe.from_string "{}")
-      conn
-  in
-  Lwt.return_unit
+  Util.use_pool conn
+  @@ Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
+       ~created_at:now
+       ~preferences:(Yojson.Safe.from_string "{}")
 
 let get_actor_by_identifier id conn =
-  unwrap @@ Queries.get_actor_by_identifier ~id conn
+  Util.use_pool conn @@ Queries.get_actor_by_identifier ~id
 
 let update_actor_handle ~did ~handle conn =
-  unwrap @@ Queries.update_actor_handle ~did ~handle conn
+  Util.use_pool conn @@ Queries.update_actor_handle ~did ~handle
 
 let try_login ~id ~password conn =
   match%lwt get_actor_by_identifier id conn with
@@ -255,42 +252,42 @@ let try_login ~id ~password conn =
           Lwt.return_none )
 
 let list_actors ?(cursor = "") ?(limit = 100) conn =
-  unwrap @@ Queries.list_actors ~cursor ~limit conn
+  Util.use_pool conn @@ Queries.list_actors ~cursor ~limit
 
 let put_preferences ~did ~prefs conn =
-  unwrap @@ Queries.put_preferences ~did ~preferences:prefs conn
+  Util.use_pool conn @@ Queries.put_preferences ~did ~preferences:prefs
 
 (* invite codes *)
 let create_invite ~code ~did ~remaining conn =
-  unwrap @@ Queries.create_invite ~code ~did ~remaining conn
+  Util.use_pool conn @@ Queries.create_invite ~code ~did ~remaining
 
-let get_invite ~code conn = unwrap @@ Queries.get_invite ~code conn
+let get_invite ~code conn = Util.use_pool conn @@ Queries.get_invite ~code
 
-let use_invite ~code conn = unwrap @@ Queries.use_invite ~code conn
+let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =
-  unwrap @@ Queries.firehose_insert ~time ~t ~data conn
+  Util.use_pool conn @@ Queries.firehose_insert ~time ~t ~data
 
 let list_firehose_since conn ~since ~limit : firehose_event list Lwt.t =
-  unwrap @@ Queries.firehose_since ~since ~limit conn
+  Util.use_pool conn @@ Queries.firehose_since ~since ~limit
 
 let next_firehose_event conn ~cursor : firehose_event option Lwt.t =
-  unwrap @@ Queries.firehose_next ~cursor conn
+  Util.use_pool conn @@ Queries.firehose_next ~cursor
 
 let earliest_firehose_after_time conn ~time : firehose_event option Lwt.t =
-  unwrap @@ Queries.firehose_earliest_after ~time conn
+  Util.use_pool conn @@ Queries.firehose_earliest_after ~time
 
 let latest_firehose_seq conn : int option Lwt.t =
-  unwrap @@ Queries.firehose_latest_seq conn
+  Util.use_pool conn @@ Queries.firehose_latest_seq
 
 let next_firehose_seq conn : int Lwt.t =
-  Queries.firehose_latest_seq conn
-  >$! fun s -> s |> Option.map succ |> Option.value ~default:0
+  let%lwt seq = Util.use_pool conn Queries.firehose_latest_seq in
+  Option.map succ seq |> Option.value ~default:0 |> Lwt.return
 
 (* jwts *)
 let is_token_revoked conn ~did ~jti =
-  unwrap @@ Queries.get_revoked_token conn ~did ~jti
+  Util.use_pool conn @@ Queries.get_revoked_token ~did ~jti
 
 let revoke_token conn ~did ~jti =
-  unwrap @@ Queries.revoke_token conn ~did ~jti ~now:(Util.now_ms ())
+  Util.use_pool conn @@ Queries.revoke_token ~did ~jti ~now:(Util.now_ms ())

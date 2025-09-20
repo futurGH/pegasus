@@ -164,6 +164,8 @@ module Did_doc_types = struct
         Error "invalid field value"
 end
 
+type caqti_pool = (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t
+
 (* turns a caqti error into an exception *)
 let caqti_result_exn = function
   | Ok x ->
@@ -172,8 +174,7 @@ let caqti_result_exn = function
       Error (Caqti_error.Exn caqti_err)
 
 let _init_connection conn =
-  let open Syntax in
-  let$! () =
+  match%lwt
     [%rapper
       execute
         {sql|
@@ -183,18 +184,25 @@ let _init_connection conn =
         |sql}
         syntax_off]
       () conn
-  in
-  Lwt.return conn
+  with
+  | Ok conn ->
+      Lwt.return conn
+  | Error e ->
+      raise (Caqti_error.Exn e)
 
-(* opens an sqlite connection *)
-let connect_sqlite ?(create = false) ?(write = true) db_uri =
+(* creates an sqlite pool *)
+let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
   let uri =
     Uri.add_query_params' db_uri
       [("create", string_of_bool create); ("write", string_of_bool write)]
   in
-  match%lwt Caqti_lwt_unix.connect uri with
-  | Ok c ->
-      _init_connection c
+  match
+    Caqti_lwt_unix.connect_pool
+      ~post_connect:(fun conn -> Lwt_result.ok @@ _init_connection conn)
+      uri
+  with
+  | Ok pool ->
+      Lwt.return pool
   | Error e ->
       raise (Caqti_error.Exn e)
 
@@ -209,42 +217,53 @@ let with_connection db_uri f =
   | Error e ->
       raise (Caqti_error.Exn e)
 
+let use_pool pool (f : Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t)
+    : 'a Lwt.t =
+  match%lwt Caqti_lwt_unix.Pool.use f pool with
+  | Ok res ->
+      Lwt.return res
+  | Error e ->
+      raise (Caqti_error.Exn e)
+
 (* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
-let multi_query connection
-    (queries : (unit -> ('a, Caqti_error.t) Lwt_result.t) list) :
-    (int, exn) Lwt_result.t =
+let multi_query pool
+    (queries : (Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t) list)
+    : (int, exn) Lwt_result.t =
   let open Syntax in
-  let module C = (val connection : Caqti_lwt.CONNECTION) in
-  let$! () = C.start () in
-  let is_ignorable_error e =
-    match (e : Caqti_error.t) with
-    | `Request_failed qe | `Response_failed qe -> (
-      match Caqti_error.cause (`Request_failed qe) with
-      | `Not_null_violation | `Unique_violation ->
-          true
-      | _ ->
-          false )
-    | _ ->
-        false
-  in
-  let rec aux acc queries =
-    match acc with
-    | Error e ->
-        Lwt.return_error e
-    | Ok count -> (
-      match queries with
-      | [] ->
-          Lwt.return (Ok count)
-      | query :: rest -> (
-          let%lwt result = query () in
-          match result with
-          | Ok _ ->
-              aux (Ok (count + 1)) rest
-          | Error e ->
-              if is_ignorable_error e then aux (Ok count) rest
-              else Lwt.return_error (Caqti_error.Exn e) ) )
-  in
-  aux (Ok 0) queries
+  Lwt_result.catch (fun () ->
+      use_pool pool (fun connection ->
+          let module C = (val connection : Caqti_lwt.CONNECTION) in
+          let$! () = C.start () in
+          let is_ignorable_error e =
+            match (e : Caqti_error.t) with
+            | `Request_failed qe | `Response_failed qe -> (
+              match Caqti_error.cause (`Request_failed qe) with
+              | `Not_null_violation | `Unique_violation ->
+                  true
+              | _ ->
+                  false )
+            | _ ->
+                false
+          in
+          let rec aux acc queries =
+            match acc with
+            | Error e ->
+                Lwt.return_error e
+            | Ok count -> (
+              match queries with
+              | [] ->
+                  Lwt.return (Ok count)
+              | query :: rest -> (
+                  let%lwt result = query connection in
+                  match result with
+                  | Ok _ ->
+                      aux (Ok (count + 1)) rest
+                  | Error e ->
+                      if is_ignorable_error e then aux (Ok count) rest
+                      else Lwt.return_error e ) )
+          in
+          let%lwt result = aux (Ok 0) queries in
+          Lwt.return result ) )
 
 (* unix timestamp *)
 let now_ms () : int = int_of_float (Unix.gettimeofday () *. 1000.)

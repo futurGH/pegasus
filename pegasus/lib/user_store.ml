@@ -303,7 +303,7 @@ module Queries = struct
       ~path ~cids
 end
 
-type t = {did: string; db: (module Rapper_helper.CONNECTION)}
+type t = {did: string; db: Util.caqti_pool}
 
 let connect ?create ?write did : t Lwt.t =
   let%lwt db =
@@ -312,19 +312,19 @@ let connect ?create ?write did : t Lwt.t =
   Lwt.return {did; db}
 
 let init t : unit Lwt.t =
-  let$! () = Queries.create_blocks_tables t.db in
-  let$! () = Queries.create_records_table t.db in
-  let$! () = Queries.create_blobs_tables t.db in
+  let%lwt () = Util.use_pool t.db Queries.create_blocks_tables in
+  let%lwt () = Util.use_pool t.db Queries.create_records_table in
+  let%lwt () = Util.use_pool t.db Queries.create_blobs_tables in
   Lwt.return_unit
 
 (* mst blocks; implements Writable_blockstore *)
 
 let get_bytes t cid : Blob.t option Lwt.t =
-  Queries.get_block cid t.db
-  >$! function Some {data; _} -> Some data | None -> None
+  Util.use_pool t.db @@ Queries.get_block cid
+  >|= function Some {data; _} -> Some data | None -> None
 
 let get_blocks t cids : Block_map.with_missing Lwt.t =
-  let$! blocks = Queries.get_blocks cids t.db in
+  let%lwt blocks = Util.use_pool t.db @@ Queries.get_blocks cids in
   Lwt.return
     (List.fold_left
        (fun (acc : Block_map.with_missing) cid ->
@@ -337,79 +337,88 @@ let get_blocks t cids : Block_map.with_missing Lwt.t =
        cids )
 
 let has t cid : bool Lwt.t =
-  Queries.has_block cid t.db >$! function Some _ -> true | None -> false
+  Util.use_pool t.db @@ Queries.has_block cid
+  >|= function Some _ -> true | None -> false
 
 let put_block t cid block : (bool, exn) Lwt_result.t =
-  Queries.put_block cid block t.db
-  |> Lwt.map Util.caqti_result_exn
-  |> Lwt.map (Result.map (function Some _ -> true | None -> false))
+  Lwt_result.catch
+  @@ fun () ->
+  match%lwt Util.use_pool t.db @@ Queries.put_block cid block with
+  | Some _ ->
+      Lwt.return true
+  | None ->
+      Lwt.return false
 
 let put_many t bm : (int, exn) Lwt_result.t =
   Util.multi_query t.db
     (List.map
-       (fun (cid, block) -> fun () -> Queries.put_block cid block t.db)
+       (fun (cid, block) -> Queries.put_block cid block)
        (Block_map.entries bm) )
 
 let delete_block t cid : (bool, exn) Lwt_result.t =
-  let$! () = Queries.delete_block cid t.db in
-  Lwt.return_ok true
+  Lwt_result.catch
+  @@ fun () -> Util.use_pool t.db @@ Queries.delete_block cid >|= fun _ -> true
 
 let delete_many t cids : (int, exn) Lwt_result.t =
-  Queries.delete_blocks cids t.db >$! List.length >>= Lwt.return_ok
+  Lwt_result.catch
+  @@ fun () -> Util.use_pool t.db @@ Queries.delete_blocks cids >|= List.length
 
 let clear_mst t : unit Lwt.t =
-  let$! () = Queries.clear_mst t.db in
+  let%lwt () = Util.use_pool t.db Queries.clear_mst in
   Lwt.return_unit
 
 (* repo commit *)
 
 let get_commit t : (Cid.t * signed_commit) option Lwt.t =
-  Queries.get_commit t.db
-  >$! Option.map (fun (cid, data) ->
-          ( cid
-          , data |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
-            |> Result.get_ok ) )
+  let%lwt commit = Util.use_pool t.db Queries.get_commit in
+  Lwt.return
+  @@ Option.map
+       (fun (cid, data) ->
+         ( cid
+         , data |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
+           |> Result.get_ok ) )
+       commit
 
 let put_commit t commit : (Cid.t, exn) Lwt_result.t =
   let data = commit |> signed_commit_to_yojson |> Dag_cbor.encode_yojson in
   let cid = Cid.create Dcbor data in
-  let$! () = Queries.put_commit cid data t.db in
-  Lwt.return_ok cid
+  ( Lwt_result.catch
+  @@ fun () -> Util.use_pool t.db @@ Queries.put_commit cid data )
+  |> Lwt_result.map (fun () -> cid)
 
 (* records *)
 
 let get_record_by_path t path : record option Lwt.t =
-  Queries.get_record_by_path ~path t.db
-  >$! Option.map (fun (cid, data, since) ->
+  Util.use_pool t.db @@ Queries.get_record_by_path ~path
+  >|= Option.map (fun (cid, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
-  >>= Lwt.return
 
 let get_record_by_cid t cid : record option Lwt.t =
-  Queries.get_record_by_cid ~cid t.db
-  >$! Option.map (fun (path, data, since) ->
+  Util.use_pool t.db @@ Queries.get_record_by_cid ~cid
+  >|= Option.map (fun (path, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
-  >>= Lwt.return
 
 let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
     record list Lwt.t =
   let fn =
     if reverse then Queries.list_records_reverse else Queries.list_records
   in
-  fn ~collection ~limit ~cursor t.db
-  >$! List.map (fun (path, cid, data, since) ->
+  Util.use_pool t.db @@ fn ~collection ~limit ~cursor
+  >|= List.map (fun (path, cid, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
-  >>= Lwt.return
 
 let put_record t record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in
   let since = Tid.now () in
-  let$! () = Queries.put_record ~path ~cid ~data ~since t.db in
+  let%lwt () =
+    Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
+  in
   Lwt.return (cid, data)
 
 (* blobs *)
 
 let get_blob t cid : blob_with_contents option Lwt.t =
-  match%lwt unwrap @@ Queries.get_blob t.db ~cid with
+  match%lwt Util.use_pool t.db @@ Queries.get_blob ~cid with
   | None ->
       Lwt.return_none
   | Some blob ->
@@ -425,13 +434,13 @@ let get_blob t cid : blob_with_contents option Lwt.t =
       Lwt.return_some {id; cid; mimetype; data}
 
 let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
-  unwrap
+  Util.use_pool t.db
   @@
   match since with
   | Some since ->
-      Queries.list_blobs_since t.db ~limit ~cursor ~since
+      Queries.list_blobs_since ~limit ~cursor ~since
   | None ->
-      Queries.list_blobs t.db ~limit ~cursor
+      Queries.list_blobs ~limit ~cursor
 
 let put_blob t cid mimetype data : int Lwt.t =
   let file =
@@ -440,20 +449,18 @@ let put_blob t cid mimetype data : int Lwt.t =
       (Cid.to_string cid)
   in
   let _ = Out_channel.with_open_bin file Out_channel.output_bytes data in
-  unwrap @@ Queries.put_blob cid mimetype t.db
+  Util.use_pool t.db @@ Queries.put_blob cid mimetype
 
 let list_blob_refs t path : Cid.t list Lwt.t =
-  unwrap @@ Queries.list_blob_refs path t.db
+  Util.use_pool t.db @@ Queries.list_blob_refs path
 
 let put_blob_ref t path cid : unit Lwt.t =
-  unwrap @@ Queries.put_blob_ref path cid t.db
+  Util.use_pool t.db @@ Queries.put_blob_ref path cid
 
 let put_blob_refs t path cids : (unit, exn) Lwt_result.t =
   Lwt_result.map (fun _ -> ())
   @@ Util.multi_query t.db
-       (List.map
-          (fun cid -> fun () -> Queries.put_blob_ref cid path t.db)
-          cids )
+       (List.map (fun cid -> Queries.put_blob_ref cid path) cids)
 
 let clear_blob_refs t path cids : unit Lwt.t =
-  unwrap @@ Queries.clear_blob_refs path cids t.db
+  Util.use_pool t.db @@ Queries.clear_blob_refs path cids

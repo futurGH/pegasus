@@ -23,12 +23,13 @@ let decode_frame frame =
 
 let with_db (f : Data_store.t -> unit Lwt.t) : unit Lwt.t =
   let tmp = Filename.temp_file "pegasus_sequencer_test" ".db" in
-  Util.with_connection
-    (Uri.of_string ("sqlite3://" ^ tmp))
-    (fun conn ->
-      let%lwt () = Data_store.init conn in
-      let%lwt () = f conn in
-      Lwt.return_ok () )
+  let%lwt pool =
+    Util.connect_sqlite ~create:true ~write:true
+      (Uri.of_string ("sqlite3://" ^ tmp))
+  in
+  let%lwt () = Data_store.init pool in
+  let%lwt () = f pool in
+  Lwt.return ()
 
 let mk_cid () =
   let block =
