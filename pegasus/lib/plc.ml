@@ -30,20 +30,19 @@ let unsigned_operation_to_yojson = function
         [ ("type", `String type')
         ; ("rotationKeys", `List (List.map (fun k -> `String k) rotation_keys))
         ; ( "verificationMethods"
-          , `List
+          , `Assoc
               (List.map
-                 (fun ((k, v) : string * string) -> `Assoc [(k, `String v)])
+                 (fun ((k, v) : string * string) -> (k, `String v))
                  verification_methods ) )
         ; ("alsoKnownAs", `List (List.map (fun k -> `String k) also_known_as))
         ; ( "services"
-          , `List
+          , `Assoc
               (List.map
                  (fun ((k, v) : string * service) ->
-                   `Assoc
-                     [ ( k
-                       , `Assoc
-                           [ ("type", `String v.type')
-                           ; ("endpoint", `String v.endpoint) ] ) ] )
+                   ( k
+                   , `Assoc
+                       [ ("type", `String v.type')
+                       ; ("endpoint", `String v.endpoint) ] ) )
                  services ) )
         ; ("prev", match prev with Some p -> `String p | None -> `Null) ]
   | Tombstone {type'; prev} ->
@@ -58,22 +57,15 @@ let unsigned_operation_of_yojson (json : Yojson.Safe.t) =
   let verification_methods =
     json
     |> member "verificationMethods"
-    |> to_list
-    |> List.map (fun json ->
-           let key = json |> member "key" |> to_string in
-           let value = json |> member "value" |> to_string in
-           (key, value) )
+    |> to_assoc
+    |> List.map (fun (key, value) -> (key, to_string value))
   in
   let also_known_as =
     json |> member "alsoKnownAs" |> to_list |> List.map to_string
   in
   let services =
-    json |> member "services" |> to_list
-    |> List.map (fun json ->
-           let key = json |> member "key" |> to_string in
-           let type' = json |> member "type" |> to_string in
-           let endpoint = json |> member "endpoint" |> to_string in
-           (key, {type'; endpoint}) )
+    json |> member "services" |> to_assoc
+    |> List.map (fun (k, v) -> (k, Result.get_ok @@ service_of_yojson v))
   in
   let prev = json |> member "prev" |> to_string_option in
   match type' with
@@ -146,7 +138,7 @@ let signed_operation_of_yojson (json : Yojson.Safe.t) =
         json
         |> member "verificationMethods"
         |> to_assoc
-        |> List.map (fun (k, v) -> (k, v |> to_string))
+        |> List.map (fun (k, v) -> (k, to_string v))
       in
       let also_known_as =
         json |> member "alsoKnownAs" |> to_list |> List.map to_string
@@ -213,7 +205,8 @@ let sign_operation (key : Kleidos.key) operation : signed_operation =
   let cbor = unsigned_operation_to_yojson operation |> Dag_cbor.encode_yojson in
   let sig_bytes = Kleidos.sign ~privkey:key ~msg:cbor in
   let sig_str =
-    Result.get_ok @@ Multibase.encode_t `Base64url (Bytes.to_string sig_bytes)
+    Base64.encode_exn ~pad:false ~alphabet:Base64.uri_safe_alphabet
+      (Bytes.to_string sig_bytes)
   in
   match operation with
   | Operation
@@ -249,7 +242,9 @@ let submit_operation ?(endpoint = default_endpoint) did operation :
 let did_of_operation operation : string =
   let cbor = signed_operation_to_yojson operation |> Dag_cbor.encode_yojson in
   let digest = Digestif.SHA256.(cbor |> digest_bytes |> to_raw_string) in
-  let hash = Result.get_ok @@ Multibase.encode_t `Base32 digest in
+  let hash =
+    Result.get_ok @@ Multibase.Base32.encode digest |> String.lowercase_ascii
+  in
   let did = "did:plc:" ^ String.sub hash 0 24 in
   did
 
@@ -291,7 +286,9 @@ let submit_genesis ?endpoint (pds_rotation_key : Kleidos.key)
       Lwt.return_ok did
   | Error (status, error) ->
       Lwt.return_error
-      @@ Format.sprintf "error %d while submitting operation; %s" status error
+      @@ Format.sprintf "error %d while submitting operation %s\n\n%s" status
+           (Yojson.Safe.to_string (signed_operation_to_yojson signed))
+           error
 
 let get_audit_log ?endpoint did : (audit_log, string) Lwt_result.t =
   let uri =

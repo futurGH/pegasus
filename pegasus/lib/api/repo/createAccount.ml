@@ -65,14 +65,7 @@ let handler =
         | None -> (
             let sk_did = Kleidos.P256.pubkey_to_did_key signing_pubkey in
             let rotation_did_keys =
-              [Kleidos.pubkey_to_did_key Env.rotation_key]
-            in
-            let rotation_did_keys =
-              match input.recovery_key with
-              | Some rk ->
-                  rk :: rotation_did_keys
-              | None ->
-                  rotation_did_keys
+              match input.recovery_key with Some rk -> [rk] | None -> []
             in
             match%lwt
               Plc.submit_genesis Env.rotation_key sk_did ~rotation_did_keys
