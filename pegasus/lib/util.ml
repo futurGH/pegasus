@@ -3,15 +3,17 @@ module Constants = struct
     Core.Filename.to_absolute_exn Env.data_dir
       ~relative_to:(Core_unix.getcwd ())
 
-  let pegasus_db_location =
-    "sqlite3://" ^ Filename.concat data_dir "pegasus.db" |> Uri.of_string
+  let pegasus_db_filepath = Filename.concat data_dir "pegasus.db"
+
+  let pegasus_db_location = "sqlite3://" ^ pegasus_db_filepath |> Uri.of_string
+
+  let user_db_filepath did =
+    let dirname = Filename.concat data_dir "store" in
+    let filename = Str.global_replace (Str.regexp ":") "_" did in
+    Filename.concat dirname filename ^ ".db"
 
   let user_db_location did =
-    did
-    |> Str.global_replace (Str.regexp ":") "_"
-    |> (Filename.concat data_dir "store" |> Filename.concat)
-    |> Format.sprintf "sqlite3://%s.db"
-    |> Uri.of_string
+    "sqlite3://" ^ user_db_filepath did |> Uri.of_string
 
   let user_blobs_location did =
     did
@@ -196,6 +198,7 @@ let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
     Uri.add_query_params' db_uri
       [("create", string_of_bool create); ("write", string_of_bool write)]
   in
+  Dream.log "%s" (Uri.to_string uri) ;
   match
     Caqti_lwt_unix.connect_pool
       ~post_connect:(fun conn -> Lwt_result.ok @@ _init_connection conn)
@@ -304,3 +307,7 @@ let validate_handle handle =
           Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
       | _ ->
           Ok ()
+
+let mkfile_p path ~perm =
+  Core_unix.mkdir_p (Filename.dirname path) ~perm:0o644 ;
+  Core_unix.openfile ~mode:[O_CREAT; O_WRONLY] ~perm path |> Core_unix.close

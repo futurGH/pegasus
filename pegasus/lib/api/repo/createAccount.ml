@@ -92,7 +92,9 @@ let handler =
         Data_store.create_actor ~did ~handle:input.handle ~email:input.email
           ~password:input.password ~signing_key:sk_priv_mk ctx.db
       in
-      let%lwt _ = User_store.connect ~create:true ~write:true did in
+      let () =
+        Util.mkfile_p (Util.Constants.user_db_filepath did) ~perm:0o644
+      in
       let%lwt repo = Repository.load ~write:true ~ds:ctx.db did in
       let%lwt _ = Repository.put_initial_commit repo in
       let%lwt _ =

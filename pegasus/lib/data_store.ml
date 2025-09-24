@@ -102,7 +102,7 @@ module Queries = struct
                 %string{signing_key},
                 %Json{preferences},
                 %int{created_at}
-              );
+              )
         |sql}]
 
   let get_actor_by_identifier id =

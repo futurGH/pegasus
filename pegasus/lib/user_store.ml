@@ -81,7 +81,7 @@ module Queries = struct
                 id INTEGER PRIMARY KEY CHECK (id = 0),
                 cid TEXT NOT NULL,
                 data BLOB NOT NULL
-              );
+              )
         |sql}]
       () conn
 
@@ -448,6 +448,7 @@ let put_blob t cid mimetype data : int Lwt.t =
       (Util.Constants.user_blobs_location t.did)
       (Cid.to_string cid)
   in
+  let () = Util.mkfile_p file ~perm:0o644 in
   let _ = Out_channel.with_open_bin file Out_channel.output_bytes data in
   Util.use_pool t.db @@ Queries.put_blob cid mimetype
 
