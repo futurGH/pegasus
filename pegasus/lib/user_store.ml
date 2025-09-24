@@ -77,7 +77,7 @@ module Queries = struct
     in
     [%rapper
       execute
-        {sql| CREATE TABLE IF NOT EXISTS commit (
+        {sql| CREATE TABLE IF NOT EXISTS repo_commit (
                 id INTEGER PRIMARY KEY CHECK (id = 0),
                 cid TEXT NOT NULL,
                 data BLOB NOT NULL
@@ -126,14 +126,14 @@ module Queries = struct
     [%rapper
       get_opt
         {sql| SELECT @CID{cid}, @Blob{data}
-            FROM commit WHERE id = 0
+            FROM repo_commit WHERE id = 0
       |sql}]
       ()
 
   let put_commit cid data =
     [%rapper
       execute
-        {sql| INSERT INTO commit (id, cid, data)
+        {sql| INSERT INTO repo_commit (id, cid, data)
             VALUES (0, %CID{cid}, %Blob{data})
             ON CONFLICT(id) DO UPDATE SET
               cid = excluded.cid,

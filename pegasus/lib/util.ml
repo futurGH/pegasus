@@ -198,7 +198,6 @@ let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
     Uri.add_query_params' db_uri
       [("create", string_of_bool create); ("write", string_of_bool write)]
   in
-  Dream.log "%s" (Uri.to_string uri) ;
   match
     Caqti_lwt_unix.connect_pool
       ~post_connect:(fun conn -> Lwt_result.ok @@ _init_connection conn)
@@ -309,5 +308,5 @@ let validate_handle handle =
           Ok ()
 
 let mkfile_p path ~perm =
-  Core_unix.mkdir_p (Filename.dirname path) ~perm:0o644 ;
+  Core_unix.mkdir_p (Filename.dirname path) ~perm:0o755 ;
   Core_unix.openfile ~mode:[O_CREAT; O_WRONLY] ~perm path |> Core_unix.close

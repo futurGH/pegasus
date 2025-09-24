@@ -419,8 +419,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let%lwt blocks =
     Car.blocks_to_stream commit_cid block_stream |> Car.collect_stream
   in
+  let%lwt ds = Data_store.connect () in
   let%lwt _ =
-    Sequencer.sequence_commit t.db.db ~did:t.did ~commit:commit_cid
+    Sequencer.sequence_commit ds ~did:t.did ~commit:commit_cid
       ~rev:commit_signed.rev ~blocks ~ops:!commit_ops ~since:commit.rev
       ~prev_data:commit.data ()
   in

@@ -53,7 +53,7 @@ let handler =
         | _ ->
             Lwt.return ()
       in
-      let signing_key, signing_pubkey = Kleidos.P256.generate_keypair () in
+      let signing_key, signing_pubkey = Kleidos.K256.generate_keypair () in
       let%lwt did =
         match input.did with
         | Some did -> (
@@ -63,7 +63,7 @@ let handler =
             | None ->
                 Lwt.return did )
         | None -> (
-            let sk_did = Kleidos.P256.pubkey_to_did_key signing_pubkey in
+            let sk_did = Kleidos.K256.pubkey_to_did_key signing_pubkey in
             let rotation_did_keys =
               match input.recovery_key with Some rk -> [rk] | None -> []
             in
@@ -87,7 +87,7 @@ let handler =
         | None ->
             Lwt.return ()
       in
-      let sk_priv_mk = Kleidos.P256.privkey_to_multikey signing_key in
+      let sk_priv_mk = Kleidos.K256.privkey_to_multikey signing_key in
       let%lwt () =
         Data_store.create_actor ~did ~handle:input.handle ~email:input.email
           ~password:input.password ~signing_key:sk_priv_mk ctx.db
