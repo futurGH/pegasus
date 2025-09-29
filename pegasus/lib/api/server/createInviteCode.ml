@@ -6,7 +6,7 @@ type request =
 type response = {code: string} [@@deriving yojson]
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.admin (fun {req; db; _} ->
+  Xrpc.handler ~auth:Admin (fun {req; db; _} ->
       let%lwt {use_count; for_account} =
         Xrpc.parse_body req request_of_yojson
       in

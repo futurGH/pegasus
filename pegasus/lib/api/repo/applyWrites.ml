@@ -12,7 +12,7 @@ type response =
 and res_commit = {cid: string; rev: string} [@@deriving yojson]
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.authorization (fun ctx ->
+  Xrpc.handler ~auth:Authorization (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       let%lwt repo = Repository.load did in

@@ -7,9 +7,9 @@ type context = {req: Dream.request; db: Data_store.t; auth: Auth.credentials}
 
 type handler = context -> Dream.response Lwt.t
 
-let handler ?(auth : Auth.Verifiers.verifier = Auth.Verifiers.any)
-    (hdlr : handler) (init : init) =
+let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
   let open Errors in
+  let auth = Auth.Verifiers.of_t auth in
   match%lwt auth init with
   | Ok creds -> (
       try%lwt hdlr {req= init.req; db= init.db; auth= creds}
@@ -118,9 +118,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
 let service_proxy_middleware db inner_handler req =
   match Dream.header req "atproto-proxy" with
   | Some header ->
-      handler ~auth:Auth.Verifiers.access
-        (fun ctx -> service_proxy ctx header)
-        {req; db}
+      handler ~auth:Access (fun ctx -> service_proxy ctx header) {req; db}
   | None ->
       inner_handler req
 

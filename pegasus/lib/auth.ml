@@ -256,4 +256,20 @@ module Verifiers = struct
 
   let any : verifier =
    fun ctx -> try authorization ctx with _ -> unauthenticated ctx
+
+  type t = Unauthenticated | Admin | Access | Refresh | Authorization | Any
+
+  let of_t = function
+    | Unauthenticated ->
+        unauthenticated
+    | Admin ->
+        admin
+    | Access ->
+        access
+    | Refresh ->
+        refresh
+    | Authorization ->
+        authorization
+    | Any ->
+        any
 end

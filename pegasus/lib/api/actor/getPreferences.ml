@@ -1,5 +1,5 @@
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.authorization (fun {db; auth; _} ->
+  Xrpc.handler ~auth:Authorization (fun {db; auth; _} ->
       let did = Auth.get_authed_did_exn auth in
       let%lwt prefs =
         match%lwt Data_store.get_actor_by_identifier did db with

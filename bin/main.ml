@@ -56,7 +56,7 @@ let handlers =
   ; (get, "/xrpc/com.atproto.sync.listBlobs", Api.Sync.ListBlobs.handler)
   ; ( get
     , "/xrpc/com.atproto.sync.subscribeRepos"
-    , Api.Server.SubscribeRepos.handler )
+    , Api.Sync.SubscribeRepos.handler )
   ; (* preferences *)
     ( get
     , "/xrpc/com.atproto.actor.getPreferences"

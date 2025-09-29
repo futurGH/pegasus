@@ -1,7 +1,7 @@
 type response = {blob: Mist.Blob_ref.typed_json_ref} [@@deriving yojson]
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.authorization (fun ctx ->
+  Xrpc.handler ~auth:Authorization (fun ctx ->
       let did = Auth.get_authed_did_exn ctx.auth in
       let mime_type =
         Option.value ~default:"application/octet-stream"

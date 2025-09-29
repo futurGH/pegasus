@@ -8,7 +8,7 @@ type response =
 [@@deriving yojson {strict= false}]
 
 let handler =
-  Xrpc.handler ~auth:Auth.Verifiers.refresh (fun {db; auth; _} ->
+  Xrpc.handler ~auth:Refresh (fun {db; auth; _} ->
       let did, jti =
         match auth with
         | Refresh {did; jti} ->
