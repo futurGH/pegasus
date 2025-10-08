@@ -31,7 +31,7 @@ let z_to_bytes32 (z : Z.t) : bytes =
 
 (* bits2int for qbits=256 (leftmost 256 bits is whole 32 bytes here) *)
 let bits2int_256 (bs : bytes) : Z.t =
-  (* If bs > 32 bytes (not the case here), we'd truncate *)
+  (* if bs > 32 bytes (not the case here), we'd truncate *)
   let len = Bytes.length bs in
   let take = if len <= 32 then len else 32 in
   let acc = ref Z.zero in
@@ -50,42 +50,12 @@ let bits2octets_256 ~q h1 =
   let z2 = Z.(z1 mod q) in
   z_to_bytes32 z2
 
-(* hmac sha256 using only hash function *)
-let hmac_sha256 ~(hash : bytes -> bytes) ~(key : bytes) (data : bytes) : bytes =
-  let block_size = 64 in
-  let key0 = if Bytes.length key > block_size then hash key else key in
-  let key_block =
-    if Bytes.length key0 = block_size then key0
-    else
-      let b = Bytes.make block_size '\x00' in
-      Bytes.blit key0 0 b 0 (Bytes.length key0) ;
-      b
-  in
-  let ipad = 0x36 and opad = 0x5c in
-  let inner_pad = Bytes.create block_size
-  and outer_pad = Bytes.create block_size in
-  for i = 0 to block_size - 1 do
-    let kc = Char.code (Bytes.get key_block i) in
-    Bytes.set inner_pad i (Char.chr (kc lxor ipad)) ;
-    Bytes.set outer_pad i (Char.chr (kc lxor opad))
-  done ;
-  let concat a b =
-    let out = Bytes.create (Bytes.length a + Bytes.length b) in
-    Bytes.blit a 0 out 0 (Bytes.length a) ;
-    Bytes.blit b 0 out (Bytes.length a) (Bytes.length b) ;
-    out
-  in
-  let inner = hash (concat inner_pad data) in
-  hash (concat outer_pad inner)
-
 (* returns 32-byte k for given order q *)
 let rfc6979_k_256_bytes ~(q : Z.t) ~(privkey : bytes) ~(msg : bytes) : bytes =
   if Bytes.length privkey <> 32 then invalid_arg "privkey must be 32 bytes" ;
   let x = bytes32_to_z privkey in
   if x <= Z.zero || x >= q then invalid_arg "privkey scalar out of range" ;
-  let module H = Hacl_star.Hacl.SHA2_256 in
-  let hash = H.hash in
-  let hmac = hmac_sha256 ~hash in
+  let hash = Hacl_star.Hacl.SHA2_256.hash in
   let h1 = hash msg in
   (* 32-byte SHA-256 digest *)
   let x_octets = privkey in
@@ -104,23 +74,27 @@ let rfc6979_k_256_bytes ~(q : Z.t) ~(privkey : bytes) ~(msg : bytes) : bytes =
          0 parts ;
     out
   in
+  let hmac k v =
+    Digestif.SHA256.(hmac_bytes ~key:(Bytes.to_string k) v |> to_raw_string)
+    |> Bytes.of_string
+  in
   (* step: K = HMAC_K(V || 0x00 || x || h1); V = HMAC_K(V) *)
-  let k = hmac ~key:k (concat [v; Bytes.of_string "\x00"; x_octets; h1_red]) in
-  let v = hmac ~key:k v in
+  let k = hmac k (concat [v; Bytes.of_string "\x00"; x_octets; h1_red]) in
+  let v = hmac k v in
   (* step: K = HMAC_K(V || 0x01 || x || h1); V = HMAC_K(V) *)
-  let k = hmac ~key:k (concat [v; Bytes.of_string "\x01"; x_octets; h1_red]) in
-  let v = hmac ~key:k v in
+  let k = hmac k (concat [v; Bytes.of_string "\x01"; x_octets; h1_red]) in
+  let v = hmac k v in
   (* loop *)
   let rec loop k v =
     (* a. V = HMAC_K(V) *)
-    let v = hmac ~key:k v in
+    let v = hmac k v in
     let t = v in
     let k_candidate = bits2int_256 t in
     if Z.(k_candidate >= one && k_candidate < q) then t
     else
       (* K = HMAC_K(V || 0x00); V = HMAC_K(V) *)
-      let k = hmac ~key:k (concat [v; Bytes.of_string "\x00"]) in
-      let v = hmac ~key:k v in
+      let k = hmac k (concat [v; Bytes.of_string "\x00"]) in
+      let v = hmac k v in
       loop k v
   in
   loop k v
