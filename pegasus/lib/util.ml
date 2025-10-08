@@ -310,3 +310,16 @@ let validate_handle handle =
 let mkfile_p path ~perm =
   Core_unix.mkdir_p (Filename.dirname path) ~perm:0o755 ;
   Core_unix.openfile ~mode:[O_CREAT; O_WRONLY] ~perm path |> Core_unix.close
+
+let sig_matches_some_did_key ~did_keys ~signature ~msg =
+  List.find_opt
+    (fun key ->
+      let raw, (module Curve) =
+        Kleidos.parse_multikey_str (String.sub key 8 (String.length key - 8))
+      in
+      let valid =
+        Curve.verify ~pubkey:(Curve.normalize_pubkey_to_raw raw) ~signature ~msg
+      in
+      valid )
+    did_keys
+  <> None

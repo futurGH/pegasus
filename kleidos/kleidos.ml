@@ -78,8 +78,8 @@ module K256 : CURVE = struct
     let hashed = SHA2_256.hash msg in
     let k = Rfc6979.k_for_k256 ~privkey ~msg in
     match K256.Libsecp256k1.sign ~sk:privkey ~msg:hashed ~k with
-    | Some signature ->
-        signature
+    | Some sgn ->
+        Low_s.normalize_k256 sgn
     | None ->
         failwith "failed to sign message"
 
@@ -146,8 +146,8 @@ module P256 : CURVE = struct
     let hashed = SHA2_256.hash msg in
     let k = Rfc6979.k_for_p256 ~privkey ~msg in
     match P256.sign ~sk:privkey ~msg:hashed ~k with
-    | Some signature ->
-        signature
+    | Some sgn ->
+        Low_s.normalize_p256 sgn
     | None ->
         failwith "failed to sign message"
 

@@ -212,6 +212,9 @@ let sign_operation (key : Kleidos.key) operation : signed_operation =
   | Operation
       {type'; rotation_keys; verification_methods; also_known_as; services; prev}
     ->
+      assert (
+        Util.sig_matches_some_did_key ~did_keys:rotation_keys
+          ~signature:sig_bytes ~msg:cbor ) ;
       Operation
         { type'
         ; rotation_keys
