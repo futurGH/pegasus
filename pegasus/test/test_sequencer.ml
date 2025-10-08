@@ -82,7 +82,7 @@ let test_backfill_then_live () =
       let time0 = Util.now_ms () in
       let mk_raw did =
         let evt : Sequencer.Types.identity_evt = {did; handle= None} in
-        Sequencer.Encode.format_identity evt
+        Dag_cbor.encode_yojson @@ Sequencer.Encode.format_identity evt
       in
       let%lwt _ =
         Sequencer.DB.append_event conn ~t:`Identity ~time:(time0 + 1)
@@ -139,7 +139,7 @@ let test_gap_healing () =
       (* add 2 identity events to db without publishing *)
       let mk_raw did =
         let evt : Sequencer.Types.identity_evt = {did; handle= None} in
-        Sequencer.Encode.format_identity evt
+        Dag_cbor.encode_yojson @@ Sequencer.Encode.format_identity evt
       in
       let%lwt _ =
         Sequencer.DB.append_event conn ~t:`Identity ~time:(time0 + 1)

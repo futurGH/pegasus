@@ -33,26 +33,27 @@ module Types = struct
   type commit_evt_op =
     { action: commit_op_action
     ; path: string
-    ; cid: Cid.t option
-    ; prev: Cid.t option }
+    ; cid: Cid.t option [@default None]
+    ; prev: Cid.t option [@default None] }
   [@@deriving yojson]
 
   type commit_evt =
     { rebase: bool (* always false *)
-    ; too_big: bool (* always false *)
+    ; too_big: bool [@key "tooBig"] (* always false *)
     ; repo: string
     ; commit: Cid.t
     ; rev: string
-    ; since: string option
+    ; since: string option [@default None]
     ; blocks: bytes
     ; ops: commit_evt_op list
     ; blobs: Cid.t list (* always empty *)
-    ; prev_data: Cid.t option }
+    ; prev_data: Cid.t option [@key "prevData"] [@default None] }
   [@@deriving yojson]
 
   type sync_evt = {did: string; blocks: bytes; rev: string} [@@deriving yojson]
 
-  type identity_evt = {did: string; handle: string option} [@@deriving yojson]
+  type identity_evt = {did: string; handle: string option [@default None]}
+  [@@deriving yojson]
 
   let account_status_to_string = function
     | `Active ->
@@ -105,7 +106,10 @@ module Types = struct
           Error "invalid account status"] )
   [@@deriving yojson]
 
-  type account_evt = {did: string; active: bool; status: account_status option}
+  type account_evt =
+    { did: string
+    ; active: bool
+    ; status: account_status option [@default Some `Active] }
   [@@deriving yojson]
 
   type info_evt = {name: string; message: string} [@@deriving yojson]
@@ -205,31 +209,55 @@ module Types = struct
     | Error of error_payload
 
   type event = {seq: int; time: string; kind: event_kind}
-
-  let event_of_db_event (dbe : Data_store.Types.firehose_event) =
-    let t = header_t_of_string dbe.t in
-    match t with
-    | Ok t ->
-        let yj = Dag_cbor.decode_to_yojson dbe.data in
-        let kind =
-          match t with
-          | `Commit ->
-              Message (Commit (Result.get_ok @@ commit_evt_of_yojson yj), t)
-          | `Sync ->
-              Message (Sync (Result.get_ok @@ sync_evt_of_yojson yj), t)
-          | `Identity ->
-              Message (Identity (Result.get_ok @@ identity_evt_of_yojson yj), t)
-          | `Account ->
-              Message (Account (Result.get_ok @@ account_evt_of_yojson yj), t)
-          | `Info ->
-              assert false
-        in
-        Ok {seq= dbe.seq; time= Util.ms_to_iso8601 dbe.time; kind}
-    | Error _ ->
-        Error ("invalid header type " ^ dbe.t)
 end
 
 open Types
+
+module Encode = struct
+  let format_commit
+      ({repo; commit; rev; since; blocks; ops; prev_data; _} : commit_evt) =
+    `Assoc
+      ( [ ("rebase", `Bool false)
+        ; ("tooBig", `Bool false)
+        ; ("repo", `String repo)
+        ; ("commit", Cid.to_yojson commit)
+        ; ("rev", `String rev)
+        ; ("since", match since with Some s -> `String s | None -> `Null)
+        ; ("blocks", Dag_cbor.to_yojson (`Bytes blocks))
+        ; ("ops", `List (List.map commit_evt_op_to_yojson ops))
+        ; ("blobs", `List []) ]
+      @
+      match prev_data with
+      | Some cid ->
+          [("prevData", Cid.to_yojson cid)]
+      | None ->
+          [] )
+
+  let format_sync ({did; blocks; rev; _} : sync_evt) =
+    `Assoc
+      [ ("did", `String did)
+      ; ("blocks", Dag_cbor.to_yojson (`Bytes blocks))
+      ; ("rev", `String rev) ]
+
+  let format_identity ({did; handle; _} : identity_evt) =
+    let fields =
+      [("did", `String did)]
+      @ match handle with Some h -> [("handle", `String h)] | None -> []
+    in
+    `Assoc fields
+
+  let format_account ({did; active; status} : account_evt) =
+    let fields =
+      [("did", `String did); ("active", `Bool active)]
+      @
+      match status with
+      | Some s ->
+          [("status", `String (account_status_to_string s))]
+      | None ->
+          []
+    in
+    `Assoc fields
+end
 
 module Frame = struct
   let message_header t =
@@ -246,19 +274,19 @@ module Frame = struct
       | Commit commit ->
           ( message_header `Commit
           , header_t_to_string `Commit
-          , commit_evt_to_yojson commit )
+          , Encode.format_commit commit )
       | Sync sync ->
           ( message_header `Sync
           , header_t_to_string `Sync
-          , sync_evt_to_yojson sync )
+          , Encode.format_sync sync )
       | Identity identity ->
           ( message_header `Identity
           , header_t_to_string `Identity
-          , identity_evt_to_yojson identity )
+          , Encode.format_identity identity )
       | Account account ->
           ( message_header `Account
           , header_t_to_string `Account
-          , account_evt_to_yojson account )
+          , Encode.format_account account )
       | Info info ->
           ( message_header `Info
           , header_t_to_string `Info
@@ -279,58 +307,6 @@ module Frame = struct
   let encode_error err : bytes =
     let payload = error_payload_to_yojson err |> Dag_cbor.encode_yojson in
     Bytes.cat error_header payload
-end
-
-module Encode = struct
-  let format_commit
-      ({repo; commit; rev; since; blocks; ops; prev_data; _} : commit_evt) =
-    let json =
-      `Assoc
-        ( [ ("rebase", `Bool false)
-          ; ("tooBig", `Bool false)
-          ; ("repo", `String repo)
-          ; ("commit", Cid.to_yojson commit)
-          ; ("rev", `String rev)
-          ; ("since", match since with Some s -> `String s | None -> `Null)
-          ; ("blocks", Dag_cbor.to_yojson (`Bytes blocks))
-          ; ("ops", `List (List.map commit_evt_op_to_yojson ops))
-          ; ("blobs", `List []) ]
-        @
-        match prev_data with
-        | Some cid ->
-            [("prevData", Cid.to_yojson cid)]
-        | None ->
-            [] )
-    in
-    Dag_cbor.encode_yojson json
-
-  let format_sync ({did; blocks; rev; _} : sync_evt) =
-    let json =
-      `Assoc
-        [ ("did", `String did)
-        ; ("blocks", Dag_cbor.to_yojson (`Bytes blocks))
-        ; ("rev", `String rev) ]
-    in
-    Dag_cbor.encode_yojson json
-
-  let format_identity ({did; handle; _} : identity_evt) =
-    let fields =
-      [("did", `String did)]
-      @ match handle with Some h -> [("handle", `String h)] | None -> []
-    in
-    Dag_cbor.encode_yojson (`Assoc fields)
-
-  let format_account ({did; active; status} : account_evt) =
-    let fields =
-      [("did", `String did); ("active", `Bool active)]
-      @
-      match status with
-      | Some s ->
-          [("status", `String (account_status_to_string s))]
-      | None ->
-          []
-    in
-    Dag_cbor.encode_yojson (`Assoc fields)
 end
 
 module Parse = struct
@@ -444,6 +420,35 @@ module Parse = struct
       in
       Ok {did; active; status}
     with e -> Error (Printexc.to_string e)
+
+  let event_of_db_event (dbe : Data_store.Types.firehose_event) =
+    let t = header_t_of_string dbe.t in
+    match t with
+    | Ok t -> (
+        let kind_result =
+          match t with
+          | `Commit ->
+              parse_commit dbe.data
+              |> Result.map (fun evt -> Message (Commit evt, t))
+          | `Sync ->
+              parse_sync dbe.data
+              |> Result.map (fun evt -> Message (Sync evt, t))
+          | `Identity ->
+              parse_identity dbe.data
+              |> Result.map (fun evt -> Message (Identity evt, t))
+          | `Account ->
+              parse_account dbe.data
+              |> Result.map (fun evt -> Message (Account evt, t))
+          | `Info ->
+              Error "Info events not supported in DB"
+        in
+        match kind_result with
+        | Ok kind ->
+            Ok {seq= dbe.seq; time= Util.ms_to_iso8601 dbe.time; kind}
+        | Error e ->
+            Error ("failed to parse event: " ^ e) )
+    | Error _ ->
+        Error ("invalid header type " ^ dbe.t)
 end
 
 module Bus = struct
@@ -561,7 +566,11 @@ module DB = struct
           | Some max when r.seq > max ->
               None
           | _ -> (
-            match event_of_db_event r with Ok e -> Some e | Error _ -> None ) )
+            match Parse.event_of_db_event r with
+            | Ok e ->
+                Some e
+            | Error _ ->
+                None ) )
         rows
     in
     Lwt.return evs
@@ -685,7 +694,7 @@ let sequence_commit (conn : Data_store.t) ~(did : string) ~(commit : Cid.t)
     ; ops
     ; prev_data }
   in
-  let raw = Encode.format_commit evt in
+  let raw = Dag_cbor.encode_yojson @@ Encode.format_commit evt in
   let%lwt seq = DB.append_event conn ~t:`Commit ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Commit evt) in
   let%lwt () = Bus.publish {seq; bytes= frame} in
@@ -696,7 +705,7 @@ let sequence_sync (conn : Data_store.t) ~(did : string) ~(rev : string)
   let time_ms = Util.now_ms () in
   let time_iso = Util.ms_to_iso8601 time_ms in
   let evt : sync_evt = {did; rev; blocks} in
-  let raw = Encode.format_sync evt in
+  let raw = Dag_cbor.encode_yojson @@ Encode.format_sync evt in
   let%lwt seq = DB.append_event conn ~t:`Sync ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Sync evt) in
   let%lwt () = Bus.publish {seq; bytes= frame} in
@@ -707,7 +716,7 @@ let sequence_identity (conn : Data_store.t) ~(did : string)
   let time_ms = Util.now_ms () in
   let time_iso = Util.ms_to_iso8601 time_ms in
   let evt : identity_evt = {did; handle} in
-  let raw = Encode.format_identity evt in
+  let raw = Dag_cbor.encode_yojson @@ Encode.format_identity evt in
   let%lwt seq = DB.append_event conn ~t:`Identity ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Identity evt) in
   let%lwt () = Bus.publish {seq; bytes= frame} in
@@ -718,7 +727,7 @@ let sequence_account (conn : Data_store.t) ~(did : string) ~(active : bool)
   let time_ms = Util.now_ms () in
   let time_iso = Util.ms_to_iso8601 time_ms in
   let evt : account_evt = {did; active; status} in
-  let raw = Encode.format_account evt in
+  let raw = Dag_cbor.encode_yojson @@ Encode.format_account evt in
   let%lwt seq = DB.append_event conn ~t:`Account ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Account evt) in
   let%lwt () = Bus.publish {seq; bytes= frame} in
