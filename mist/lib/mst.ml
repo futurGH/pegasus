@@ -1,5 +1,5 @@
 open Storage
-module StringMap = Dag_cbor.StringMap
+module String_map = Dag_cbor.StringMap
 
 type node_raw =
   { (* link to lower level left subtree with all keys sorting before this node *)
@@ -19,7 +19,7 @@ and entry_raw =
 
 let encode_entry_raw entry : Dag_cbor.value =
   `Map
-    (StringMap.of_list
+    (String_map.of_list
        [ ("p", `Integer (Int64.of_int entry.p))
        ; ("k", `Bytes entry.k)
        ; ("v", `Link entry.v)
@@ -27,7 +27,7 @@ let encode_entry_raw entry : Dag_cbor.value =
 
 let encode_node_raw node : Dag_cbor.value =
   `Map
-    (StringMap.of_list
+    (String_map.of_list
        [ ("l", match node.l with Some l -> `Link l | None -> `Null)
        ; ("e", `Array (Array.of_list (List.map encode_entry_raw node.e))) ] )
 
@@ -64,11 +64,11 @@ let ( >>? ) lazy_opt_lwt f =
   f result
 
 module type Intf = sig
-  type bs
+  module Store : Writable_blockstore
 
-  type t = {blockstore: bs; root: Cid.t}
+  type t = {blockstore: Store.t; root: Cid.t}
 
-  val create : bs -> Cid.t -> t
+  val create : Store.t -> Cid.t -> t
 
   val retrieve_node_raw : t -> Cid.t -> node_raw option Lwt.t
 
@@ -80,7 +80,7 @@ module type Intf = sig
 
   val traverse : t -> (string -> Cid.t -> unit) -> unit Lwt.t
 
-  val build_map : t -> Cid.t StringMap.t Lwt.t
+  val build_map : t -> Cid.t String_map.t Lwt.t
 
   val to_blocks_stream : t -> (Cid.t * bytes) Lwt_seq.t
 
@@ -96,11 +96,11 @@ module type Intf = sig
 
   val all_nodes : t -> (Cid.t * bytes) list Lwt.t
 
-  val create_empty : bs -> (t, exn) Lwt_result.t
+  val create_empty : Store.t -> (t, exn) Lwt_result.t
 
   val get_cid : t -> string -> Cid.t option Lwt.t
 
-  val of_assoc : bs -> (string * Cid.t) list -> t Lwt.t
+  val of_assoc : Store.t -> (string * Cid.t) list -> t Lwt.t
 
   val add : t -> string -> Cid.t -> t Lwt.t
 
@@ -118,7 +118,10 @@ module type Intf = sig
   val equal : t -> t -> bool Lwt.t
 end
 
-module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
+module Make (Store : Writable_blockstore) : Intf with module Store = Store =
+struct
+  module Store = Store
+
   type bs = Store.t
 
   type t = {blockstore: bs; root: Cid.t}
@@ -129,15 +132,15 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
   let decode_block_raw b : node_raw =
     match Dag_cbor.decode b with
     | `Map node ->
-        if not (StringMap.mem "e" node) then
+        if not (String_map.mem "e" node) then
           raise (Invalid_argument "mst node missing 'e'") ;
         let l =
-          if StringMap.mem "l" node then
-            match StringMap.find "l" node with `Link l -> Some l | _ -> None
+          if String_map.mem "l" node then
+            match String_map.find "l" node with `Link l -> Some l | _ -> None
           else None
         in
         let e_array =
-          match StringMap.find "e" node with `Array e -> e | _ -> [||]
+          match String_map.find "e" node with `Array e -> e | _ -> [||]
         in
         let e =
           Array.to_list
@@ -146,28 +149,28 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
                  match entry with
                  | `Map entry ->
                      { p=
-                         ( entry |> StringMap.find "p"
+                         ( entry |> String_map.find "p"
                          |> function
                          | `Integer p ->
                              Int64.to_int p
                          | _ ->
                              raise (Invalid_argument "mst entry missing 'p'") )
                      ; k=
-                         ( entry |> StringMap.find "k"
+                         ( entry |> String_map.find "k"
                          |> function
                          | `Bytes k ->
                              k
                          | _ ->
                              raise (Invalid_argument "mst entry missing 'k'") )
                      ; v=
-                         ( entry |> StringMap.find "v"
+                         ( entry |> String_map.find "v"
                          |> function
                          | `Link v ->
                              v
                          | _ ->
                              raise (Invalid_argument "mst entry missing 'v'") )
                      ; t=
-                         ( entry |> StringMap.find "t"
+                         ( entry |> String_map.find "t"
                          |> function `Link t -> Some t | _ -> None ) }
                  | _ ->
                      raise (Invalid_argument "non-map mst entry") )
@@ -266,10 +269,10 @@ module Make (Store : Writable_blockstore) : Intf with type bs = Store.t = struct
         failwith "root cid not found in repo store"
 
   (* returns a map of key -> cid *)
-  let build_map t : Cid.t StringMap.t Lwt.t =
-    let map = ref StringMap.empty in
+  let build_map t : Cid.t String_map.t Lwt.t =
+    let map = ref String_map.empty in
     let%lwt () =
-      traverse t (fun path cid -> map := StringMap.add path cid !map)
+      traverse t (fun path cid -> map := String_map.add path cid !map)
     in
     Lwt.return !map
 
@@ -1102,4 +1105,56 @@ module Differ (Prev : Intf) (Curr : Intf) = struct
     let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
     Lwt.return
       {adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
+end
+
+module Inductive (M : Intf) = struct
+  module Mem_mst = Make (Memory_blockstore)
+
+  type diff =
+    | Add of {key: string; cid: Cid.t}
+    | Update of {key: string; prev: Cid.t option; cid: Cid.t}
+    | Delete of {key: string; prev: Cid.t}
+
+  (* given an mst diff, returns all new blocks as well as inductive proof blocks *)
+  let generate_proof (curr : M.t) (diff : diff list) (prev_root : Cid.t) :
+      ((Cid.t * bytes) list, exn) Lwt_result.t =
+    try%lwt
+      let%lwt map = M.build_map curr in
+      let%lwt mem_mst =
+        Mem_mst.of_assoc (Memory_blockstore.create ()) (String_map.bindings map)
+      in
+      (* track all accessed cids relevant to inductive proof *)
+      let accessed_cids = ref Cid.Set.empty in
+      (* apply inverse of operations in reverse order *)
+      let%lwt new_mst, added_cids =
+        Lwt_list.fold_right_s
+          (fun (diff : diff) (mst, added_cids) ->
+            match diff with
+            | Delete {key; prev} | Update {key; prev= Some prev; _} ->
+                accessed_cids := Cid.Set.add prev !accessed_cids ;
+                let%lwt mst = Mem_mst.add mst key prev in
+                Lwt.return (mst, Cid.Set.remove prev added_cids)
+            | Add {key; cid} | Update {key; prev= None; cid} ->
+                accessed_cids := Cid.Set.add cid !accessed_cids ;
+                let%lwt mst = Mem_mst.delete mst key in
+                Lwt.return (mst, Cid.Set.add cid added_cids) )
+          diff (mem_mst, Cid.Set.empty)
+      in
+      if not (Cid.equal new_mst.root prev_root) then
+        failwith
+          (Printf.sprintf
+             "inductive proof produced invalid previous cid: expected %s, got \
+              %s"
+             (Cid.to_string prev_root)
+             (Cid.to_string new_mst.root) ) ;
+      let proof_cids =
+        Cid.Set.union added_cids !accessed_cids
+        |> Cid.Set.remove prev_root |> Cid.Set.add new_mst.root
+      in
+      let%lwt {blocks= proof_bm; _} =
+        Memory_blockstore.get_blocks mem_mst.blockstore
+          (Cid.Set.elements proof_cids)
+      in
+      Lwt.return_ok (Block_map.entries proof_bm)
+    with e -> Lwt.return_error e
 end

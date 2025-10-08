@@ -104,7 +104,6 @@ let handler =
       let%lwt {commit= commit_cid, commit; _} =
         Repository.apply_writes repo [] None
       in
-      let open User_store.Types in
       let commit_block =
         commit |> User_store.Types.signed_commit_to_yojson
         |> Dag_cbor.encode_yojson

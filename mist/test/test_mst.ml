@@ -1,9 +1,9 @@
 open Mist
 open Lwt.Infix
 open Lwt_result.Syntax
-module MemMst = Mst.Make (Storage.Memory_blockstore)
-module MemDiff = Mst.Differ (MemMst) (MemMst)
-module StringMap = Dag_cbor.StringMap
+module Mem_mst = Mst.Make (Storage.Memory_blockstore)
+module Mem_diff = Mst.Differ (Mem_mst) (Mem_mst)
+module String_map = Dag_cbor.StringMap
 
 let cid_of_string_exn s =
   match Cid.of_string s with Ok c -> c | Error msg -> failwith msg
@@ -46,23 +46,23 @@ let leaf_cid =
   cid_of_string_exn
     "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
 
-let mst_of_proof root proof : MemMst.t =
+let mst_of_proof root proof : Mem_mst.t =
   let store = Storage.Memory_blockstore.create ~blocks:proof () in
-  MemMst.create store root
+  Mem_mst.create store root
 
 let test_two_deep_split () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst Keys.a0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.b1 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.c0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.e0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.f1 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.g0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.d2 leaf_cid in
-  let%lwt proof = MemMst.get_covering_proof mst Keys.d2 in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst Keys.a0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.b1 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.c0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.e0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.f1 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.g0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.d2 leaf_cid in
+  let%lwt proof = Mem_mst.get_covering_proof mst Keys.d2 in
   let proof_mst = mst_of_proof mst.root proof in
-  let%lwt got = MemMst.get_cid proof_mst Keys.d2 in
+  let%lwt got = Mem_mst.get_cid proof_mst Keys.d2 in
   Alcotest.(check bool)
     "covering proof proves d2" true
     (Option.value
@@ -72,15 +72,15 @@ let test_two_deep_split () =
 
 let test_two_deep_leafless_splits () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst Keys.a0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.b0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.d0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.e0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.c2 leaf_cid in
-  let%lwt proof = MemMst.get_covering_proof mst Keys.c2 in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst Keys.a0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.b0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.d0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.e0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.c2 leaf_cid in
+  let%lwt proof = Mem_mst.get_covering_proof mst Keys.c2 in
   let proof_mst = mst_of_proof mst.root proof in
-  let%lwt got = MemMst.get_cid proof_mst Keys.c2 in
+  let%lwt got = Mem_mst.get_cid proof_mst Keys.c2 in
   Alcotest.(check bool)
     "covering proof proves c2" true
     (Option.value
@@ -90,14 +90,14 @@ let test_two_deep_leafless_splits () =
 
 let test_add_on_edge_with_neighbor_two_layers_down () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst Keys.a0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.b2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.c0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.d2 leaf_cid in
-  let%lwt proof = MemMst.get_covering_proof mst Keys.d2 in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst Keys.a0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.b2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.c0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.d2 leaf_cid in
+  let%lwt proof = Mem_mst.get_covering_proof mst Keys.d2 in
   let proof_mst = mst_of_proof mst.root proof in
-  let%lwt got = MemMst.get_cid proof_mst Keys.d2 in
+  let%lwt got = Mem_mst.get_cid proof_mst Keys.d2 in
   Alcotest.(check bool)
     "covering proof proves d2" true
     (Option.value
@@ -107,75 +107,75 @@ let test_add_on_edge_with_neighbor_two_layers_down () =
 
 let test_merge_and_split_in_multi_op_commit () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst Keys.b0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.c2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.d0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.e2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.f0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.h0 leaf_cid in
-  let%lwt mst = MemMst.delete mst Keys.b2 in
-  let%lwt mst = MemMst.delete mst Keys.d2 in
-  let%lwt mst = MemMst.add mst Keys.c2 leaf_cid in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst Keys.b0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.c2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.d0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.e2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.f0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.h0 leaf_cid in
+  let%lwt mst = Mem_mst.delete mst Keys.b2 in
+  let%lwt mst = Mem_mst.delete mst Keys.d2 in
+  let%lwt mst = Mem_mst.add mst Keys.c2 leaf_cid in
   let%lwt proofs =
     Lwt.all
-      [ MemMst.get_covering_proof mst Keys.b2
-      ; MemMst.get_covering_proof mst Keys.d2
-      ; MemMst.get_covering_proof mst Keys.c2 ]
+      [ Mem_mst.get_covering_proof mst Keys.b2
+      ; Mem_mst.get_covering_proof mst Keys.d2
+      ; Mem_mst.get_covering_proof mst Keys.c2 ]
   in
   let proof =
     List.fold_left Storage.Block_map.merge Storage.Block_map.empty proofs
   in
   let proof_mst = mst_of_proof mst.root proof in
-  let%lwt got_c2 = MemMst.get_cid proof_mst Keys.c2 in
+  let%lwt got_c2 = Mem_mst.get_cid proof_mst Keys.c2 in
   Alcotest.(check bool)
     "covering proof proves c2" true
     (Option.value
        (Option.map (fun x -> Cid.equal leaf_cid x) got_c2)
        ~default:false ) ;
-  let%lwt got_b2 = MemMst.get_cid proof_mst Keys.b2 in
+  let%lwt got_b2 = Mem_mst.get_cid proof_mst Keys.b2 in
   Alcotest.(check bool)
     "covering proof proves non-membership of b2" true (got_b2 = None) ;
-  let%lwt got_d2 = MemMst.get_cid proof_mst Keys.d2 in
+  let%lwt got_d2 = Mem_mst.get_cid proof_mst Keys.d2 in
   Alcotest.(check bool)
     "covering proof proves non-membership of d2" true (got_d2 = None) ;
   Lwt.return_ok ()
 
 let test_complex_multi_op_commit () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst Keys.b0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.c2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.d0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.e2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.f0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.h0 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.a2 leaf_cid in
-  let%lwt mst = MemMst.add mst Keys.g2 leaf_cid in
-  let%lwt mst = MemMst.delete mst Keys.c2 in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst Keys.b0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.c2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.d0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.e2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.f0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.h0 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.a2 leaf_cid in
+  let%lwt mst = Mem_mst.add mst Keys.g2 leaf_cid in
+  let%lwt mst = Mem_mst.delete mst Keys.c2 in
   let%lwt proofs =
     Lwt.all
-      [ MemMst.get_covering_proof mst Keys.a2
-      ; MemMst.get_covering_proof mst Keys.g2
-      ; MemMst.get_covering_proof mst Keys.c2 ]
+      [ Mem_mst.get_covering_proof mst Keys.a2
+      ; Mem_mst.get_covering_proof mst Keys.g2
+      ; Mem_mst.get_covering_proof mst Keys.c2 ]
   in
   let proof =
     List.fold_left Storage.Block_map.merge Storage.Block_map.empty proofs
   in
   let proof_mst = mst_of_proof mst.root proof in
-  let%lwt got_a2 = MemMst.get_cid proof_mst Keys.a2 in
+  let%lwt got_a2 = Mem_mst.get_cid proof_mst Keys.a2 in
   Alcotest.(check bool)
     "covering proof proves a2" true
     (Option.value
        (Option.map (fun x -> Cid.equal leaf_cid x) got_a2)
        ~default:false ) ;
-  let%lwt got_g2 = MemMst.get_cid proof_mst Keys.g2 in
+  let%lwt got_g2 = Mem_mst.get_cid proof_mst Keys.g2 in
   Alcotest.(check bool)
     "covering proof proves g2" true
     (Option.value
        (Option.map (fun x -> Cid.equal leaf_cid x) got_g2)
        ~default:false ) ;
-  let%lwt got_c2 = MemMst.get_cid proof_mst Keys.c2 in
+  let%lwt got_c2 = Mem_mst.get_cid proof_mst Keys.c2 in
   Alcotest.(check bool)
     "covering proof proves non-membership of c2" true (got_c2 = None) ;
   Lwt.return_ok ()
@@ -188,32 +188,32 @@ let test_trims_top_on_delete () =
   in
   let l1root = "bafyreifnqrwbk6ffmyaz5qtujqrzf5qmxf7cbxvgzktl4e3gabuxbtatv4" in
   let l0root = "bafyreie4kjuxbwkhzg2i5dljaswcroeih4dgiqq6pazcmunwt2byd725vi" in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fn2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fn2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
   (* level 1 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fu2j" cid1 in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fu2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (before delete)" 6 cnt ;
-  let%lwt layer_before = MemMst.layer mst in
+  let%lwt layer_before = Mem_mst.layer mst in
   Alcotest.(check int) "root layer before delete" 1 layer_before ;
   let root_before = mst.root in
   Alcotest.(check string)
     "root cid before delete" l1root
     (Cid.to_string root_before) ;
   (* delete level 1 entry, expect trimming to layer 0 *)
-  let%lwt mst' = MemMst.delete mst "com.example.record/3jqfcqzm3fs2j" in
-  let%lwt cnt' = MemMst.leaf_count mst' in
+  let%lwt mst' = Mem_mst.delete mst "com.example.record/3jqfcqzm3fs2j" in
+  let%lwt cnt' = Mem_mst.leaf_count mst' in
   Alcotest.(check int) "leaf count (after delete)" 5 cnt' ;
-  let%lwt layer_after = MemMst.layer mst' in
+  let%lwt layer_after = Mem_mst.layer mst' in
   Alcotest.(check int) "root layer after delete" 0 layer_after ;
   let root_after = mst'.root in
   Alcotest.(check string)
@@ -228,52 +228,52 @@ let test_insertion_splits_two_layers_down () =
   in
   let l1root = "bafyreiettyludka6fpgp33stwxfuwhkzlur6chs4d2v4nkmq2j3ogpdjem" in
   let l2root = "bafyreid2x5eqs4w4qxvc5jiwda4cien3gw2q6cshofxwnvv7iucrmfohpm" in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   (* A; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
   (* B; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
   (* C; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fr2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fr2j" cid1 in
   (* D; level 1 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
   (* E; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
   (* G; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fz2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fz2j" cid1 in
   (* H; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fc2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fc2j" cid1 in
   (* I; level 1 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fd2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fd2j" cid1 in
   (* J; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4ff2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4ff2j" cid1 in
   (* K; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fg2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fg2j" cid1 in
   (* L; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fh2j" cid1 in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fh2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (before F)" 11 cnt ;
-  let%lwt layer_before = MemMst.layer mst in
+  let%lwt layer_before = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (before F)" 1 layer_before ;
   let root_before = mst.root in
   Alcotest.(check string)
     "root cid (before F)" l1root
     (Cid.to_string root_before) ;
   (* insert F; level 2 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
-  let%lwt cnt_after_f = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
+  let%lwt cnt_after_f = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (after F)" 12 cnt_after_f ;
-  let%lwt layer_after_f = MemMst.layer mst in
+  let%lwt layer_after_f = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (after F)" 2 layer_after_f ;
   let root_after_f = mst.root in
   Alcotest.(check string)
     "root cid (after F)" l2root
     (Cid.to_string root_after_f) ;
   (* remove F; should return to previous root/layer *)
-  let%lwt mst = MemMst.delete mst "com.example.record/3jqfcqzm3fx2j" in
-  let%lwt cnt_after_del_f = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.delete mst "com.example.record/3jqfcqzm3fx2j" in
+  let%lwt cnt_after_del_f = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (after del F)" 11 cnt_after_del_f ;
-  let%lwt layer_after_del_f = MemMst.layer mst in
+  let%lwt layer_after_del_f = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (after del F)" 1 layer_after_del_f ;
   let root_after_del_f = mst.root in
   Alcotest.(check string)
@@ -290,47 +290,47 @@ let test_new_layers_two_higher_than_existing () =
   let l0root = "bafyreidfcktqnfmykz2ps3dbul35pepleq7kvv526g47xahuz3rqtptmky" in
   let l2root = "bafyreiavxaxdz7o7rbvr3zg2liox2yww46t7g6hkehx4i4h3lwudly7dhy" in
   let l2root2 = "bafyreig4jv3vuajbsybhyvb7gggvpwh2zszwfyttjrj6qwvcsp24h6popu" in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   (* A; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
   (* C; level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fz2j" cid1 in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fz2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (A,C)" 2 cnt ;
-  let%lwt layer_ac = MemMst.layer mst in
+  let%lwt layer_ac = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (A,C)" 0 layer_ac ;
   let root_ac = mst.root in
   Alcotest.(check string) "root cid (A,C)" l0root (Cid.to_string root_ac) ;
   (* insert B (level 2) *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
-  let%lwt cnt_abc = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
+  let%lwt cnt_abc = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (A,B,C)" 3 cnt_abc ;
-  let%lwt layer_abc = MemMst.layer mst in
+  let%lwt layer_abc = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (A,B,C)" 2 layer_abc ;
   let root_abc = mst.root in
   Alcotest.(check string) "root cid (A,B,C)" l2root (Cid.to_string root_abc) ;
   (* remove B → back to l0root *)
-  let%lwt mst = MemMst.delete mst "com.example.record/3jqfcqzm3fx2j" in
-  let%lwt cnt_ac = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.delete mst "com.example.record/3jqfcqzm3fx2j" in
+  let%lwt cnt_ac = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (A,C again)" 2 cnt_ac ;
-  let%lwt layer_ac2 = MemMst.layer mst in
+  let%lwt layer_ac2 = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (A,C again)" 0 layer_ac2 ;
   let root_ac2 = mst.root in
   Alcotest.(check string) "root cid (A,C again)" l0root (Cid.to_string root_ac2) ;
   (* insert B (level 2) and D (level 1) *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fd2j" cid1 in
-  let%lwt cnt_abcd = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fd2j" cid1 in
+  let%lwt cnt_abcd = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (A,B,C,D)" 4 cnt_abcd ;
-  let%lwt layer_abcd = MemMst.layer mst in
+  let%lwt layer_abcd = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (A,B,C,D)" 2 layer_abcd ;
   let root_abcd = mst.root in
   Alcotest.(check string) "root cid (A,B,C,D)" l2root2 (Cid.to_string root_abcd) ;
   (* remove D → match l2root *)
-  let%lwt mst = MemMst.delete mst "com.example.record/3jqfcqzm4fd2j" in
-  let%lwt cnt_abc2 = MemMst.leaf_count mst in
+  let%lwt mst = Mem_mst.delete mst "com.example.record/3jqfcqzm4fd2j" in
+  let%lwt cnt_abc2 = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (A,B,C again)" 3 cnt_abc2 ;
-  let%lwt layer_abc2 = MemMst.layer mst in
+  let%lwt layer_abc2 = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (A,B,C again)" 2 layer_abc2 ;
   let root_abc2 = mst.root in
   Alcotest.(check string)
@@ -375,8 +375,8 @@ let rec unique_keys n acc =
 let generate_bulk_data_keys store count =
   let keys = unique_keys count [] in
   Lwt_list.fold_left_s
-    (fun acc k -> put_random_block store >|= fun cid -> StringMap.add k cid acc)
-    StringMap.empty keys
+    (fun acc k -> put_random_block store >|= fun cid -> String_map.add k cid acc)
+    String_map.empty keys
 
 let shuffle lst =
   let arr = Array.of_list lst in
@@ -388,7 +388,7 @@ let shuffle lst =
   done ;
   Array.to_list arr
 
-let assoc_of_map m = StringMap.bindings m
+let assoc_of_map m = String_map.bindings m
 
 let rec take n lst =
   match (n, lst) with
@@ -412,16 +412,16 @@ let () = Random.self_init ()
 
 let test_adds () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 1000 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst' =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
   let%lwt () =
     Lwt_list.iter_s
       (fun (k, v) ->
-        let%lwt got = MemMst.get_cid mst' k in
+        let%lwt got = Mem_mst.get_cid mst' k in
         Alcotest.(check bool)
           "added records retrievable" true
           (Option.value
@@ -430,31 +430,31 @@ let test_adds () =
         |> Lwt.return )
       shuffled
   in
-  let%lwt total = MemMst.leaf_count mst' in
+  let%lwt total = Mem_mst.leaf_count mst' in
   Alcotest.(check int) "leaf count after adds" 1000 total ;
   Lwt.return_ok ()
 
 let test_edits () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 1000 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
   let to_edit = take 100 shuffled in
   let%lwt edited_mst, edited =
     Lwt_list.fold_left_s
       (fun (t, acc) (k, _old) ->
         let%lwt new_cid = put_random_block store in
-        MemMst.add t k new_cid >|= fun t' -> (t', (k, new_cid) :: acc) )
+        Mem_mst.add t k new_cid >|= fun t' -> (t', (k, new_cid) :: acc) )
       (mst, []) to_edit
   in
   let edited = List.rev edited in
   let%lwt () =
     Lwt_list.iter_s
       (fun (k, v) ->
-        let%lwt got = MemMst.get_cid edited_mst k in
+        let%lwt got = Mem_mst.get_cid edited_mst k in
         Alcotest.(check bool)
           "updated records retrievable" true
           (Option.value
@@ -463,17 +463,17 @@ let test_edits () =
         |> Lwt.return )
       edited
   in
-  let%lwt total = MemMst.leaf_count edited_mst in
+  let%lwt total = Mem_mst.leaf_count edited_mst in
   Alcotest.(check int) "leaf count stable after edits" 1000 total ;
   Lwt.return_ok ()
 
 let test_deletes () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 1000 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
   let to_delete, the_rest =
     let rec split n acc rest =
@@ -488,14 +488,14 @@ let test_deletes () =
     split 100 [] shuffled
   in
   let%lwt deleted_mst =
-    Lwt_list.fold_left_s (fun t (k, _) -> MemMst.delete t k) mst to_delete
+    Lwt_list.fold_left_s (fun t (k, _) -> Mem_mst.delete t k) mst to_delete
   in
-  let%lwt total = MemMst.leaf_count deleted_mst in
+  let%lwt total = Mem_mst.leaf_count deleted_mst in
   Alcotest.(check int) "leaf count after deletes" 900 total ;
   let%lwt () =
     Lwt_list.iter_s
       (fun (k, _) ->
-        let%lwt got = MemMst.get_cid deleted_mst k in
+        let%lwt got = Mem_mst.get_cid deleted_mst k in
         Alcotest.(check bool) "deleted record missing" true (got = None)
         |> Lwt.return )
       to_delete
@@ -503,7 +503,7 @@ let test_deletes () =
   let%lwt () =
     Lwt_list.iter_s
       (fun (k, v) ->
-        let%lwt got = MemMst.get_cid deleted_mst k in
+        let%lwt got = Mem_mst.get_cid deleted_mst k in
         Alcotest.(check bool)
           "remaining records intact" true
           (Option.value
@@ -516,19 +516,21 @@ let test_deletes () =
 
 let test_order_independent () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 1000 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
-  let%lwt all_nodes = MemMst.all_nodes mst in
-  let* recreated = MemMst.create_empty store in
+  let%lwt all_nodes = Mem_mst.all_nodes mst in
+  let* recreated = Mem_mst.create_empty store in
   let reshuffled = shuffle (assoc_of_map mapping) in
   let%lwt recreated =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) recreated reshuffled
+    Lwt_list.fold_left_s
+      (fun t (k, v) -> Mem_mst.add t k v)
+      recreated reshuffled
   in
-  let%lwt all_reshuffled = MemMst.all_nodes recreated in
+  let%lwt all_reshuffled = Mem_mst.all_nodes recreated in
   Alcotest.(check int)
     "node count equal" (List.length all_nodes)
     (List.length all_reshuffled) ;
@@ -542,15 +544,15 @@ let test_order_independent () =
 
 let test_save_load () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 300 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
-  let loaded = MemMst.create store mst.root in
-  let%lwt orig_nodes = MemMst.all_nodes mst in
-  let%lwt loaded_nodes = MemMst.all_nodes loaded in
+  let loaded = Mem_mst.create store mst.root in
+  let%lwt orig_nodes = Mem_mst.all_nodes mst in
+  let%lwt loaded_nodes = Mem_mst.all_nodes loaded in
   Alcotest.(check int)
     "node count equal" (List.length orig_nodes) (List.length loaded_nodes) ;
   List.iter2
@@ -563,11 +565,11 @@ let test_save_load () =
 
 let test_diffs () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst0 = MemMst.create_empty store in
+  let* mst0 = Mem_mst.create_empty store in
   let%lwt mapping = generate_bulk_data_keys store 1000 in
   let shuffled = shuffle (assoc_of_map mapping) in
   let%lwt mst =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) mst0 shuffled
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst0 shuffled
   in
   (* additions *)
   let%lwt add_map = generate_bulk_data_keys store 100 in
@@ -577,26 +579,29 @@ let test_diffs () =
   (* deletes from existing *)
   let to_del = take 100 (drop 400 shuffled) in
   let expected_adds =
-    List.fold_left (fun m (k, v) -> StringMap.add k v m) StringMap.empty to_add
+    List.fold_left
+      (fun m (k, v) -> String_map.add k v m)
+      String_map.empty to_add
   in
   let%lwt to_diff, expected_updates =
     Lwt_list.fold_left_s
       (fun (t, m) (k, old_v) ->
         let%lwt updated = put_random_block store in
-        let m' = StringMap.add k (old_v, updated) m in
-        MemMst.add t k updated >|= fun t' -> (t', m') )
-      (mst, StringMap.empty) to_edit
+        let m' = String_map.add k (old_v, updated) m in
+        Mem_mst.add t k updated >|= fun t' -> (t', m') )
+      (mst, String_map.empty) to_edit
   in
   let%lwt to_diff, expected_dels =
     Lwt_list.fold_left_s
       (fun (t, m) (k, v) ->
-        MemMst.delete t k >|= fun t' -> (t', StringMap.add k v m) )
-      (to_diff, StringMap.empty) to_del
+        Mem_mst.delete t k >|= fun t' -> (t', String_map.add k v m) )
+      (to_diff, String_map.empty)
+      to_del
   in
   let%lwt to_diff =
-    Lwt_list.fold_left_s (fun t (k, v) -> MemMst.add t k v) to_diff to_add
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) to_diff to_add
   in
-  let%lwt diff = MemDiff.diff ~t_curr:to_diff ~t_prev:mst in
+  let%lwt diff = Mem_diff.diff ~t_curr:to_diff ~t_prev:mst in
   (* lengths *)
   Alcotest.(check int) "adds length" 100 (List.length diff.adds) ;
   Alcotest.(check int) "updates length" 100 (List.length diff.updates) ;
@@ -604,27 +609,27 @@ let test_diffs () =
   (* contents: convert to maps to compare *)
   let adds_map =
     List.fold_left
-      (fun m (a : Mst.diff_add) -> StringMap.add a.key a.cid m)
-      StringMap.empty diff.adds
+      (fun m (a : Mst.diff_add) -> String_map.add a.key a.cid m)
+      String_map.empty diff.adds
   in
   let updates_map =
     List.fold_left
-      (fun m (u : Mst.diff_update) -> StringMap.add u.key (u.prev, u.cid) m)
-      StringMap.empty diff.updates
+      (fun m (u : Mst.diff_update) -> String_map.add u.key (u.prev, u.cid) m)
+      String_map.empty diff.updates
   in
   let deletes_map =
     List.fold_left
-      (fun m (d : Mst.diff_delete) -> StringMap.add d.key d.cid m)
-      StringMap.empty diff.deletes
+      (fun m (d : Mst.diff_delete) -> String_map.add d.key d.cid m)
+      String_map.empty diff.deletes
   in
   (* compare adds *)
   Alcotest.(check int)
     "adds map size equal"
-    (StringMap.cardinal expected_adds)
-    (StringMap.cardinal adds_map) ;
-  StringMap.iter
+    (String_map.cardinal expected_adds)
+    (String_map.cardinal adds_map) ;
+  String_map.iter
     (fun k v ->
-      match StringMap.find_opt k adds_map with
+      match String_map.find_opt k adds_map with
       | Some v' ->
           Alcotest.(check bool) "add cid equal" true (Cid.equal v v')
       | None ->
@@ -633,11 +638,11 @@ let test_diffs () =
   (* compare updates *)
   Alcotest.(check int)
     "updates map size equal"
-    (StringMap.cardinal expected_updates)
-    (StringMap.cardinal updates_map) ;
-  StringMap.iter
+    (String_map.cardinal expected_updates)
+    (String_map.cardinal updates_map) ;
+  String_map.iter
     (fun k (prev, cid) ->
-      match StringMap.find_opt k updates_map with
+      match String_map.find_opt k updates_map with
       | Some (prev', cid') ->
           Alcotest.(check bool) "update prev equal" true (Cid.equal prev prev') ;
           Alcotest.(check bool) "update cid equal" true (Cid.equal cid cid')
@@ -647,18 +652,18 @@ let test_diffs () =
   (* compare deletes *)
   Alcotest.(check int)
     "deletes map size equal"
-    (StringMap.cardinal expected_dels)
-    (StringMap.cardinal deletes_map) ;
-  StringMap.iter
+    (String_map.cardinal expected_dels)
+    (String_map.cardinal deletes_map) ;
+  String_map.iter
     (fun k v ->
-      match StringMap.find_opt k deletes_map with
+      match String_map.find_opt k deletes_map with
       | Some v' ->
           Alcotest.(check bool) "delete cid equal" true (Cid.equal v v')
       | None ->
           Alcotest.failf "missing delete key %s" k )
     expected_dels ;
   (* ensure we correctly report all added CIDs *)
-  let%lwt leaves = MemMst.leaves_of_root to_diff in
+  let%lwt leaves = Mem_mst.leaves_of_root to_diff in
   let node_cid_set =
     List.fold_left
       (fun s (c, _) -> Cid.Set.add c s)
@@ -680,7 +685,7 @@ let test_diffs () =
 
 let test_allowable_keys () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   let cid1 =
     Cid.of_string "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
     |> Result.get_ok
@@ -688,7 +693,7 @@ let test_allowable_keys () =
   let expect_reject key =
     Lwt.catch
       (fun () ->
-        MemMst.add mst key cid1
+        Mem_mst.add mst key cid1
         >>= fun _ ->
         Alcotest.failf "expected invalid key to be rejected: %s" key )
       (function
@@ -698,7 +703,7 @@ let test_allowable_keys () =
             Alcotest.failf "unexpected exception for %s: %s" key
               (Printexc.to_string exn) )
   in
-  let expect_allow key = MemMst.add mst key cid1 >|= fun _ -> () in
+  let expect_allow key = Mem_mst.add mst key cid1 >|= fun _ -> () in
   let* () = expect_reject "" in
   let* () = expect_reject "asdf" in
   let* () = expect_reject "nested/collection/asdf" in
@@ -741,8 +746,8 @@ let test_allowable_keys () =
 
 let test_empty_root () =
   let store = Storage.Memory_blockstore.create () in
-  let* mst = MemMst.create_empty store in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (empty)" 0 cnt ;
   Alcotest.(check string)
     "empty root cid"
@@ -751,14 +756,14 @@ let test_empty_root () =
   Lwt.return_ok ()
 
 let test_trivial_root () =
-  let store : MemMst.bs = Storage.Memory_blockstore.create () in
+  let store : Mem_mst.Store.t = Storage.Memory_blockstore.create () in
   let cid1 =
     cid_of_string_exn
       "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
   in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (trivial)" 1 cnt ;
   Alcotest.(check string)
     "trivial root cid"
@@ -772,11 +777,11 @@ let test_singlelayer2_root () =
     cid_of_string_exn
       "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
   in
-  let* mst = MemMst.create_empty store in
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
-  let%lwt cnt = MemMst.leaf_count mst in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fx2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (singlelayer2)" 1 cnt ;
-  let%lwt layer = MemMst.layer mst in
+  let%lwt layer = Mem_mst.layer mst in
   Alcotest.(check int) "root layer (singlelayer2)" 2 layer ;
   Alcotest.(check string)
     "singlelayer2 root cid"
@@ -790,19 +795,19 @@ let test_simple_root () =
     cid_of_string_exn
       "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
   in
-  let* mst = MemMst.create_empty store in
+  let* mst = Mem_mst.create_empty store in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fp2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fr2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fr2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
   (* level 1 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3ft2j" cid1 in
   (* level 0 *)
-  let%lwt mst = MemMst.add mst "com.example.record/3jqfcqzm4fc2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm4fc2j" cid1 in
   (* level 0 *)
-  let%lwt cnt = MemMst.leaf_count mst in
+  let%lwt cnt = Mem_mst.leaf_count mst in
   Alcotest.(check int) "leaf count (simple)" 5 cnt ;
   Alcotest.(check string)
     "simple root cid"
@@ -839,8 +844,8 @@ let test_roundtrip () =
           failwith "root not found in blockstore"
     in
     let mst =
-      MemMst.create store
-        ( match StringMap.find "data" commit with
+      Mem_mst.create store
+        ( match String_map.find "data" commit with
         | `Link cid ->
             cid
         | _ ->
@@ -852,7 +857,7 @@ let test_roundtrip () =
   let%lwt car = Lwt_io.read ic >|= Bytes.of_string in
   let%lwt () = Lwt_io.close ic in
   let%lwt commit, mst = mst_of_car_bytes car in
-  let mst_stream = MemMst.to_blocks_stream mst in
+  let mst_stream = Mem_mst.to_blocks_stream mst in
   let commit_bytes = Dag_cbor.encode (`Map commit) in
   let commit_cid = Cid.create Dcbor commit_bytes in
   let%lwt car' =
@@ -860,7 +865,7 @@ let test_roundtrip () =
       (Lwt_seq.append (Lwt_seq.of_list [(commit_cid, commit_bytes)]) mst_stream)
   in
   let%lwt _, mst' = mst_of_car_bytes car' in
-  let%lwt eq = MemMst.equal mst mst' in
+  let%lwt eq = Mem_mst.equal mst mst' in
   Lwt.return (Alcotest.(check bool) "mst roundtrip" true eq)
 
 let () =
