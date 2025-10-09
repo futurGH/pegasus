@@ -23,3 +23,12 @@ struct
 
   module Readable : Blockstore.Readable with type t = Impl.t = Impl
 end
+
+module Cache_blockstore (Bs : Blockstore.Writable) = struct
+  module Impl = Cache_blockstore.Make (Bs)
+  include Impl
+
+  module Readable : Blockstore.Readable with type t = Impl.t = Impl
+
+  module Writable : Blockstore.Writable with type t = Impl.t = Impl
+end

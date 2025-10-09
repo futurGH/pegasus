@@ -48,9 +48,8 @@ let rec of_ipld (v : Dag_cbor.value) : value =
   match v with
   | `Map m ->
       if
-        StringMap.mem "$type" m
+        (StringMap.mem "$type" m && StringMap.find "$type" m = `String "blob")
         || (StringMap.mem "cid" m && StringMap.mem "mimeType" m)
-        || (StringMap.mem "size" m && StringMap.mem "mimeType" m)
       then `BlobRef (Blob_ref.of_ipld (`Map m))
       else `LexMap (StringMap.map of_ipld m)
   | `Array a ->

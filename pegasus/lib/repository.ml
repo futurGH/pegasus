@@ -226,6 +226,8 @@ let put_commit t ?(previous : signed_commit option = None) mst_root :
     User_store.put_commit t.db signed |> Lwt_result.get_exn
   in
   t.commit <- Some (commit_cid, signed) ;
+  (* clear cached blocks so next get_map call rebuilds from the new commit *)
+  t.block_map <- None ;
   Lwt.return (commit_cid, signed)
 
 let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
@@ -401,7 +403,10 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
       [] !commit_ops
   in
   let%lwt proof_blocks =
-    match%lwt Inductive.generate_proof new_mst diff prev_commit.data with
+    match%lwt
+      Inductive.generate_proof !block_map diff ~new_root:new_mst.root
+        ~prev_root:prev_commit.data
+    with
     | Ok blocks ->
         Lwt.return blocks
     | Error err ->

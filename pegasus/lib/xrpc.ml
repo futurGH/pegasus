@@ -38,7 +38,9 @@ let parse_body (req : Dream.request)
   try%lwt
     let%lwt body = Dream.body req in
     body |> Yojson.Safe.from_string |> of_yojson |> Result.get_ok |> Lwt.return
-  with _ -> Errors.invalid_request "Invalid request body"
+  with e ->
+    Errors.log_exn e ;
+    Errors.invalid_request "Invalid request body"
 
 let service_proxy (ctx : context) (proxy_header : string) =
   let did = Auth.get_authed_did_exn ctx.auth in
