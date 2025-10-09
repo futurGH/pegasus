@@ -21,7 +21,7 @@ let handler =
         Mst.proof_for_key {blockstore= db; root= mst_root} mst_root path
       in
       let blocks_stream =
-        Repository.BlockMap.entries blocks |> Lwt_seq.of_list
+        Repository.Block_map.entries blocks |> Lwt_seq.of_list
       in
       let car_stream =
         Lwt_seq.cons (commit_cid, commit_block) blocks_stream

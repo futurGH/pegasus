@@ -119,43 +119,43 @@ module Did_doc_types = struct
     | _ ->
         Error "invalid field value"
 
-  type string_or_string_map = [`String of string | `StringMap of string_map]
+  type string_or_string_map = [`String of string | `String_map of string_map]
 
   let string_or_string_map_to_yojson = function
     | `String c ->
         `String c
-    | `StringMap m ->
+    | `String_map m ->
         `Assoc (List.map (fun (k, v) -> (k, `String v)) m)
 
   let string_or_string_map_of_yojson = function
     | `String c ->
-        Ok (`StringMap [(c, "")])
+        Ok (`String_map [(c, "")])
     | `Assoc m ->
         Ok
-          (`StringMap
+          (`String_map
              (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
     | _ ->
         Error "invalid field value"
 
   type string_or_string_map_or_either_list =
     [ `String of string
-    | `StringMap of string_map
+    | `String_map of string_map
     | `List of string_or_string_map list ]
 
   let string_or_string_map_or_either_list_to_yojson = function
     | `String c ->
         `String c
-    | `StringMap m ->
+    | `String_map m ->
         `Assoc (List.map (fun (k, v) -> (k, `String v)) m)
     | `List l ->
         `List (List.map string_or_string_map_to_yojson l)
 
   let string_or_string_map_or_either_list_of_yojson = function
     | `String c ->
-        Ok (`StringMap [(c, "")])
+        Ok (`String_map [(c, "")])
     | `Assoc m ->
         Ok
-          (`StringMap
+          (`String_map
              (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
     | `List l ->
         Ok
@@ -281,7 +281,7 @@ let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
     (fun acc (_, value) ->
       match value with `BlobRef blob -> blob :: acc | _ -> acc )
     []
-    (Mist.Lex.StringMap.bindings record)
+    (Mist.Lex.String_map.bindings record)
 
 (* returns whether the value is None *)
 let is_none = function None -> true | _ -> false

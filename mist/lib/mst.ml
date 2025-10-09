@@ -1,5 +1,5 @@
 open Storage
-module String_map = Dag_cbor.StringMap
+module String_map = Dag_cbor.String_map
 
 type node_raw =
   { (* link to lower level left subtree with all keys sorting before this node *)

@@ -1,9 +1,8 @@
 open User_store.Types
-module BlockMap = User_store.Block_map
+module Block_map = User_store.Block_map
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
-module MemMst = Mist.Mst.Make (Mist.Storage.Memory_blockstore)
-module StringMap = Lex.StringMap
+module String_map = Lex.String_map
 module Tid = Mist.Tid
 
 module Write_op = struct
@@ -140,10 +139,10 @@ type t =
   { key: Kleidos.key
   ; did: string
   ; db: User_store.t
-  ; mutable block_map: Cid.t StringMap.t option
+  ; mutable block_map: Cid.t String_map.t option
   ; mutable commit: (Cid.t * signed_commit) option }
 
-let get_map t : Cid.t StringMap.t Lwt.t =
+let get_map t : Cid.t String_map.t Lwt.t =
   let%lwt root, commit =
     match%lwt User_store.get_commit t.db with
     | Some (r, c) ->
@@ -162,7 +161,7 @@ let get_map t : Cid.t StringMap.t Lwt.t =
 
 let get_record_cid t path : Cid.t option Lwt.t =
   let%lwt map = get_map t in
-  Lwt.return @@ StringMap.find_opt path map
+  Lwt.return @@ String_map.find_opt path map
 
 let get_record t path : record option Lwt.t =
   User_store.get_record_by_path t.db path
@@ -170,7 +169,7 @@ let get_record t path : record option Lwt.t =
 let list_collections t : string list Lwt.t =
   let module Set = Set.Make (String) in
   let%lwt map = get_map t in
-  StringMap.bindings map
+  String_map.bindings map
   |> List.fold_left
        (fun (acc : Set.t) (path, _) ->
          let collection = String.split_on_char '/' path |> List.hd in
@@ -180,7 +179,7 @@ let list_collections t : string list Lwt.t =
 
 let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
   let%lwt map = get_map t in
-  StringMap.bindings map
+  String_map.bindings map
   |> List.filter (fun (path, _) ->
          String.starts_with ~prefix:(path ^ "/") collection )
   |> Lwt_list.fold_left_s
@@ -255,7 +254,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let%lwt block_map = Lwt.map ref (get_map t) in
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
   let commit_ops : commit_evt_op list ref = ref [] in
-  let added_leaves = ref BlockMap.empty in
+  let added_leaves = ref Block_map.empty in
   let%lwt results =
     List.map
       (fun (w : repo_write) ->
@@ -265,7 +264,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             let path = Format.sprintf "%s/%s" collection rkey in
             let uri = Format.sprintf "at://%s/%s" t.did path in
             let%lwt () =
-              match StringMap.find_opt path !block_map with
+              match String_map.find_opt path !block_map with
               | Some cid ->
                   Errors.invalid_request ~name:"InvalidSwap"
                     (Format.sprintf
@@ -276,14 +275,14 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   Lwt.return ()
             in
             let record_with_type : Lex.repo_record =
-              if StringMap.mem "$type" value then value
-              else StringMap.add "$type" (`String collection) value
+              if String_map.mem "$type" value then value
+              else String_map.add "$type" (`String collection) value
             in
             let%lwt cid, block =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
-            block_map := StringMap.add path cid !block_map ;
-            added_leaves := BlockMap.set cid block !added_leaves ;
+            block_map := String_map.add path cid !block_map ;
+            added_leaves := Block_map.set cid block !added_leaves ;
             commit_ops :=
               !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
             let refs =
@@ -304,7 +303,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
         | Update {collection; rkey; value; swap_record; _} ->
             let path = Format.sprintf "%s/%s" collection rkey in
             let uri = Format.sprintf "at://%s/%s" t.did path in
-            let old_cid = StringMap.find_opt path !block_map in
+            let old_cid = String_map.find_opt path !block_map in
             ( if
                 (swap_record <> None && swap_record <> old_cid)
                 || (swap_record = None && old_cid = None)
@@ -336,14 +335,14 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   Lwt.return_unit
             in
             let record_with_type : Lex.repo_record =
-              if StringMap.mem "$type" value then value
-              else StringMap.add "$type" (`String collection) value
+              if String_map.mem "$type" value then value
+              else String_map.add "$type" (`String collection) value
             in
             let%lwt new_cid, new_block =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
-            added_leaves := BlockMap.set new_cid new_block !added_leaves ;
-            block_map := StringMap.add path new_cid !block_map ;
+            added_leaves := Block_map.set new_cid new_block !added_leaves ;
+            block_map := String_map.add path new_cid !block_map ;
             commit_ops :=
               !commit_ops
               @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
@@ -354,7 +353,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                  ; cid= new_cid } )
         | Delete {collection; rkey; swap_record; _} ->
             let path = Format.sprintf "%s/%s" collection rkey in
-            let cid = StringMap.find_opt path !block_map in
+            let cid = String_map.find_opt path !block_map in
             ( if cid = None || (swap_record <> None && swap_record <> cid) then
                 let cid_str =
                   match cid with
@@ -378,7 +377,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               | None ->
                   Lwt.return_unit
             in
-            block_map := StringMap.remove path !block_map ;
+            block_map := String_map.remove path !block_map ;
             commit_ops :=
               !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
             Lwt.return
@@ -387,7 +386,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     |> Lwt.all
   in
   let%lwt () = User_store.clear_mst t.db in
-  let%lwt new_mst = Mst.of_assoc t.db (StringMap.bindings !block_map) in
+  let%lwt new_mst = Mst.of_assoc t.db (String_map.bindings !block_map) in
   let%lwt new_commit = put_commit t new_mst.root ~previous:(Some prev_commit) in
   let new_commit_cid, new_commit_signed = new_commit in
   let commit_block =
@@ -412,12 +411,12 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
         ~prev_root:prev_commit.data
     with
     | Ok blocks ->
-        Lwt.return (BlockMap.merge blocks !added_leaves)
+        Lwt.return (Block_map.merge blocks !added_leaves)
     | Error err ->
         raise err
   in
   let block_stream =
-    proof_blocks |> BlockMap.entries |> Lwt_seq.of_list
+    proof_blocks |> Block_map.entries |> Lwt_seq.of_list
     |> Lwt_seq.cons (new_commit_cid, commit_block)
   in
   let%lwt blocks =

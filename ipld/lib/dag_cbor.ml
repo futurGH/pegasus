@@ -1,7 +1,7 @@
-module StringMap = Map.Make (String)
+module String_map = Map.Make (String)
 
-let ordered_map_keys (m : 'a StringMap.t) : string list =
-  let keys = StringMap.bindings m |> List.map fst in
+let ordered_map_keys (m : 'a String_map.t) : string list =
+  let keys = String_map.bindings m |> List.map fst in
   List.sort
     (fun a b ->
       let la = String.length a in
@@ -24,7 +24,7 @@ type value =
   | `Bytes of bytes
   | `String of string
   | `Array of value Array.t
-  | `Map of value StringMap.t
+  | `Map of value String_map.t
   | `Link of Cid.t ]
 
 let rec of_yojson (json : Yojson.Safe.t) : value =
@@ -35,7 +35,7 @@ let rec of_yojson (json : Yojson.Safe.t) : value =
       `Link (Result.get_ok (Cid.of_string s))
   | `Assoc assoc_list ->
       `Map
-        (StringMap.of_list
+        (String_map.of_list
            (List.map (fun (k, v) -> (k, of_yojson v)) assoc_list) )
   | `List lst ->
       `Array (Array.of_list (List.map of_yojson lst))
@@ -55,7 +55,8 @@ let rec of_yojson (json : Yojson.Safe.t) : value =
 let rec to_yojson (value : value) : Yojson.Safe.t =
   match value with
   | `Map map ->
-      `Assoc (StringMap.to_list map |> List.map (fun (k, v) -> (k, to_yojson v)))
+      `Assoc
+        (String_map.to_list map |> List.map (fun (k, v) -> (k, to_yojson v)))
   | `Array arr ->
       `List (Array.to_list arr |> List.map to_yojson)
   | `Bytes bytes ->
@@ -192,12 +193,12 @@ module Encoder = struct
         write_type_and_argument t 4 (Int64.of_int len) ;
         Array.iter (write_value t) lst
     | `Map m ->
-        let len = StringMap.cardinal m in
+        let len = String_map.cardinal m in
         write_type_and_argument t 5 (Int64.of_int len) ;
         ordered_map_keys m
         |> List.iter (fun k ->
                write_string t k ;
-               write_value t (StringMap.find k m) )
+               write_value t (String_map.find k m) )
     | `Link cid ->
         write_cid t cid
 
@@ -353,7 +354,7 @@ module Decoder = struct
           let len = read_argument t info in
           if len < 0L then invalid_arg "decode_first: negative map length" ;
           let rec decode_map acc n =
-            if n <= 0 then StringMap.of_seq (List.to_seq acc)
+            if n <= 0 then String_map.of_seq (List.to_seq acc)
             else
               let key = decode_string_key t in
               let value = decode_first' () in

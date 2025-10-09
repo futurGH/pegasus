@@ -3,7 +3,7 @@ open Lwt.Infix
 open Lwt_result.Syntax
 module Mem_mst = Mst.Make (Storage.Memory_blockstore)
 module Mem_diff = Mst.Differ (Mem_mst) (Mem_mst)
-module String_map = Dag_cbor.StringMap
+module String_map = Dag_cbor.String_map
 
 let cid_of_string_exn s =
   match Cid.of_string s with Ok c -> c | Error msg -> failwith msg

@@ -1,4 +1,4 @@
-module StringMap = Dag_cbor.StringMap
+module String_map = Dag_cbor.String_map
 
 type typed_json_ref =
   { type': string [@key "$type"]
@@ -66,8 +66,8 @@ let of_json_ref json =
       ; mime_type
       ; size= 0L }
 
-let to_ipld blob : Dag_cbor.value StringMap.t =
-  StringMap.of_list
+let to_ipld blob : Dag_cbor.value String_map.t =
+  String_map.of_list
     [ ("$type", `String "blob")
     ; ("ref", `Link blob.ref)
     ; ("mimeType", `String blob.mime_type)
@@ -77,46 +77,46 @@ let of_ipld (ipld : Dag_cbor.value) =
   match ipld with
   | `Map m -> (
     try
-      if StringMap.mem "$type" m then
+      if String_map.mem "$type" m then
         let type' =
-          match StringMap.find "$type" m with
+          match String_map.find "$type" m with
           | `String "blob" ->
               "blob"
           | _ ->
               invalid_arg "of_ipld: invalid blob ref $type"
         in
         let ref =
-          match StringMap.find "ref" m with
+          match String_map.find "ref" m with
           | `Link ref ->
               ref
           | _ ->
               invalid_arg "of_ipld: invalid blob ref ref"
         in
         let mime_type =
-          match StringMap.find "mimeType" m with
+          match String_map.find "mimeType" m with
           | `String mime_type ->
               mime_type
           | _ ->
               invalid_arg "of_ipld: invalid blob ref mimeType"
         in
         let size =
-          match StringMap.find "size" m with
+          match String_map.find "size" m with
           | `Integer size ->
               size
           | _ ->
               invalid_arg "of_ipld: invalid blob ref size"
         in
         of_json_ref (Typed {type'; ref; mime_type; size})
-      else if StringMap.mem "cid" m then
+      else if String_map.mem "cid" m then
         let cid =
-          match StringMap.find "cid" m with
+          match String_map.find "cid" m with
           | `String cid ->
               cid
           | _ ->
               invalid_arg "of_ipld: invalid blob ref cid"
         in
         let mime_type =
-          match StringMap.find "mimeType" m with
+          match String_map.find "mimeType" m with
           | `String mime_type ->
               mime_type
           | _ ->

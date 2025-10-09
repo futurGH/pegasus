@@ -1,7 +1,7 @@
-module StringMap = Dag_cbor.StringMap
+module String_map = Dag_cbor.String_map
 
 let rec stringify_map m =
-  StringMap.bindings m
+  String_map.bindings m
   |> List.map (fun (k, v) ->
          Format.sprintf "\"%s\": %s" k (stringify_ipld_value v) )
   |> String.concat ", " |> Format.sprintf "{%s}"
@@ -29,7 +29,7 @@ and stringify_ipld_value (value : Dag_cbor.value) =
   | `Link cid ->
       Format.sprintf "%s"
         (stringify_map
-           (StringMap.singleton "$link" (`String (Cid.to_string cid))) )
+           (String_map.singleton "$link" (`String (Cid.to_string cid))) )
   | `Null ->
       Format.sprintf "null"
 
@@ -48,7 +48,7 @@ let rec ipld_value_eq a b =
   | `Bytes a, `Bytes b ->
       a = b
   | `Map a, `Map b ->
-      StringMap.equal ipld_value_eq a b
+      String_map.equal ipld_value_eq a b
   | `Array a, `Array b ->
       Array.for_all2 ipld_value_eq a b
   | `Link a, `Link b ->
@@ -166,24 +166,24 @@ let test_round_trip () =
           by taking our honey, you're not only taking away everything we have, \
           but everything we are!" |]
   in
-  let nested_map = StringMap.add "hello" (`String "world") StringMap.empty in
+  let nested_map = String_map.add "hello" (`String "world") String_map.empty in
   let object_map =
-    StringMap.empty
-    |> StringMap.add "key" (`String "value")
-    |> StringMap.add "link" (`Link test_cid)
-    |> StringMap.add "bytes" (`Bytes test_bytes)
-    |> StringMap.add "answer" (`Integer 42L)
-    |> StringMap.add "correct" (`Boolean true)
-    |> StringMap.add "wrong" (`Boolean false)
-    |> StringMap.add "blank" `Null
-    |> StringMap.add "b16" (`Integer 262L)
-    |> StringMap.add "b32" (`Integer 65542L)
-    |> StringMap.add "minInteger" (`Integer (-9007199254740991L))
-    |> StringMap.add "maxInteger" (`Integer 9007199254740991L)
-    |> StringMap.add "pi" (`Float 3.141592653589793)
-    |> StringMap.add "npi" (`Float (-3.141592653589793))
-    |> StringMap.add "nested" (`Map nested_map)
-    |> StringMap.add "bee" (`Array bee_array)
+    String_map.empty
+    |> String_map.add "key" (`String "value")
+    |> String_map.add "link" (`Link test_cid)
+    |> String_map.add "bytes" (`Bytes test_bytes)
+    |> String_map.add "answer" (`Integer 42L)
+    |> String_map.add "correct" (`Boolean true)
+    |> String_map.add "wrong" (`Boolean false)
+    |> String_map.add "blank" `Null
+    |> String_map.add "b16" (`Integer 262L)
+    |> String_map.add "b32" (`Integer 65542L)
+    |> String_map.add "minInteger" (`Integer (-9007199254740991L))
+    |> String_map.add "maxInteger" (`Integer 9007199254740991L)
+    |> String_map.add "pi" (`Float 3.141592653589793)
+    |> String_map.add "npi" (`Float (-3.141592653589793))
+    |> String_map.add "nested" (`Map nested_map)
+    |> String_map.add "bee" (`Array bee_array)
   in
   let original = `Map object_map in
   let encoded = Dag_cbor.encode original in
@@ -192,12 +192,12 @@ let test_round_trip () =
     "round trip preserves structure" original decoded
 
 let test_atproto_post_records () =
-  let record1_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record1_embed_images_0_aspect_ratio : Dag_cbor.value String_map.t =
+    String_map.(
       empty |> add "height" (`Integer 885L) |> add "width" (`Integer 665L) )
   in
-  let record1_embed_images_0_image : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record1_embed_images_0_image : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "$type" (`String "blob")
       |> add "ref"
@@ -209,8 +209,8 @@ let test_atproto_post_records () =
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 645553L) )
   in
-  let record1_embed_images_0 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record1_embed_images_0 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "alt"
            (`String
@@ -219,15 +219,15 @@ let test_atproto_post_records () =
       |> add "aspectRatio" (`Map record1_embed_images_0_aspect_ratio)
       |> add "image" (`Map record1_embed_images_0_image) )
   in
-  let record1_embed : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record1_embed : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "$type" (`String "app.bsky.embed.images")
       |> add "images" (`Array [|`Map record1_embed_images_0|]) )
   in
   let record1 : Dag_cbor.value =
     `Map
-      StringMap.(
+      String_map.(
         empty
         |> add "$type" (`String "app.bsky.feed.post")
         |> add "createdAt" (`String "2024-08-13T01:16:06.453Z")
@@ -240,12 +240,12 @@ let test_atproto_post_records () =
     "atproto record 1 encodes correctly"
     "bafyreicbb3p4hmtm7iw3k7kiydzqp7qhufq3jdc5sbc4gxa4mxqd6bywba"
     Cid.(create Dcbor encoded1 |> to_string) ;
-  let record2_embed_images_0_aspect_ratio : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_embed_images_0_aspect_ratio : Dag_cbor.value String_map.t =
+    String_map.(
       empty |> add "height" (`Integer 2000L) |> add "width" (`Integer 1500L) )
   in
-  let record2_embed_images_0_image : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_embed_images_0_image : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "$type" (`String "blob")
       |> add "ref"
@@ -257,82 +257,82 @@ let test_atproto_post_records () =
       |> add "mimeType" (`String "image/jpeg")
       |> add "size" (`Integer 531257L) )
   in
-  let record2_embed_images_0 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_embed_images_0 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "alt" (`String "")
       |> add "aspectRatio" (`Map record2_embed_images_0_aspect_ratio)
       |> add "image" (`Map record2_embed_images_0_image) )
   in
-  let record2_embed : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_embed : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "$type" (`String "app.bsky.embed.images")
       |> add "images" (`Array [|`Map record2_embed_images_0|]) )
   in
-  let record2_facets_0 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_facets_0 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "features"
            (`Array
               [| `Map
-                   ( StringMap.empty
-                   |> StringMap.add "$type"
+                   ( String_map.empty
+                   |> String_map.add "$type"
                         (`String "app.bsky.richtext.facet#tag")
-                   |> StringMap.add "tag" (`String "写真") ) |] )
+                   |> String_map.add "tag" (`String "写真") ) |] )
       |> add "index"
            (`Map
-              ( StringMap.empty
-              |> StringMap.add "byteEnd" (`Integer 109L)
-              |> StringMap.add "byteStart" (`Integer 100L) ) ) )
+              ( String_map.empty
+              |> String_map.add "byteEnd" (`Integer 109L)
+              |> String_map.add "byteStart" (`Integer 100L) ) ) )
   in
-  let record2_facets_1 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_facets_1 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "features"
            (`Array
               [| `Map
-                   ( StringMap.empty
-                   |> StringMap.add "$type"
+                   ( String_map.empty
+                   |> String_map.add "$type"
                         (`String "app.bsky.richtext.facet#tag")
-                   |> StringMap.add "tag" (`String "日の出") ) |] )
+                   |> String_map.add "tag" (`String "日の出") ) |] )
       |> add "index"
            (`Map
-              ( StringMap.empty
-              |> StringMap.add "byteEnd" (`Integer 122L)
-              |> StringMap.add "byteStart" (`Integer 110L) ) ) )
+              ( String_map.empty
+              |> String_map.add "byteEnd" (`Integer 122L)
+              |> String_map.add "byteStart" (`Integer 110L) ) ) )
   in
-  let record2_facets_2 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_facets_2 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "features"
            (`Array
               [| `Map
-                   ( StringMap.empty
-                   |> StringMap.add "$type"
+                   ( String_map.empty
+                   |> String_map.add "$type"
                         (`String "app.bsky.richtext.facet#tag")
-                   |> StringMap.add "tag" (`String "日常") ) |] )
+                   |> String_map.add "tag" (`String "日常") ) |] )
       |> add "index"
            (`Map
-              ( StringMap.empty
-              |> StringMap.add "byteEnd" (`Integer 132L)
-              |> StringMap.add "byteStart" (`Integer 123L) ) ) )
+              ( String_map.empty
+              |> String_map.add "byteEnd" (`Integer 132L)
+              |> String_map.add "byteStart" (`Integer 123L) ) ) )
   in
-  let record2_facets_3 : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_facets_3 : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "features"
            (`Array
               [| `Map
-                   ( StringMap.empty
-                   |> StringMap.add "$type"
+                   ( String_map.empty
+                   |> String_map.add "$type"
                         (`String "app.bsky.richtext.facet#tag")
-                   |> StringMap.add "tag" (`String "キリトリセカイ") ) |] )
+                   |> String_map.add "tag" (`String "キリトリセカイ") ) |] )
       |> add "index"
            (`Map
-              ( StringMap.empty
-              |> StringMap.add "byteEnd" (`Integer 157L)
-              |> StringMap.add "byteStart" (`Integer 133L) ) ) )
+              ( String_map.empty
+              |> String_map.add "byteEnd" (`Integer 157L)
+              |> String_map.add "byteStart" (`Integer 133L) ) ) )
   in
   let record2_facets =
     [| `Map record2_facets_0
@@ -340,8 +340,8 @@ let test_atproto_post_records () =
      ; `Map record2_facets_2
      ; `Map record2_facets_3 |]
   in
-  let record2_map : Dag_cbor.value StringMap.t =
-    StringMap.(
+  let record2_map : Dag_cbor.value String_map.t =
+    String_map.(
       empty
       |> add "$type" (`String "app.bsky.feed.post")
       |> add "createdAt" (`String "2025-01-02T23:29:41.149Z")
@@ -373,8 +373,8 @@ let test_invalid_numbers () =
       ignore (Dag_cbor.encode (`Integer (-9007199254740992L))) )
 
 let test_decode_multiple_objects () =
-  let obj1 = `Map (StringMap.add "foo" (`Boolean true) StringMap.empty) in
-  let obj2 = `Map (StringMap.add "bar" (`Boolean false) StringMap.empty) in
+  let obj1 = `Map (String_map.add "foo" (`Boolean true) String_map.empty) in
+  let obj2 = `Map (String_map.add "bar" (`Boolean false) String_map.empty) in
   let encoded1 = Dag_cbor.encode obj1 in
   let encoded2 = Dag_cbor.encode obj2 in
   let combined = Bytes.create (Bytes.length encoded1 + Bytes.length encoded2) in

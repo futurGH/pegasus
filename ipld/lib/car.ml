@@ -65,7 +65,7 @@ let blocks_to_stream (root : Cid.t) (blocks : block_stream) : stream =
   let header =
     Dag_cbor.encode
       (`Map
-         (Dag_cbor.StringMap.of_list
+         (Dag_cbor.String_map.of_list
             [("version", `Integer 1L); ("roots", `Array [|`Link root|])] ) )
   in
   let seq = Lwt_seq.of_list [Varint.encode (Bytes.length header); header] in
@@ -183,7 +183,7 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
     match header with
     | `Map m -> (
         let roots_v =
-          try Some (Dag_cbor.StringMap.find "roots" m) with Not_found -> None
+          try Some (Dag_cbor.String_map.find "roots" m) with Not_found -> None
         in
         match roots_v with
         | Some (`Array arr) ->

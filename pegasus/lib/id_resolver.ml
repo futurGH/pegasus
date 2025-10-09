@@ -131,8 +131,12 @@ module Did = struct
       | `String e ->
           e
       | `List l -> (
-        match List.hd l with `String e -> e | `StringMap m -> List.hd m |> snd )
-      | `StringMap m ->
+        match List.hd l with
+        | `String e ->
+            e
+        | `String_map m ->
+            List.hd m |> snd )
+      | `String_map m ->
           List.hd m |> snd
 
     let get_service t fragment =

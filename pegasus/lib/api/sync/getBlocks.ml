@@ -15,7 +15,7 @@ let handler =
       match%lwt User_store.get_blocks db cids with
       | {blocks; missing= []} ->
           let blocks_stream =
-            Repository.BlockMap.entries blocks |> Lwt_seq.of_list
+            Repository.Block_map.entries blocks |> Lwt_seq.of_list
           in
           let car_stream =
             Lwt_seq.cons (commit_cid, commit_block) blocks_stream
