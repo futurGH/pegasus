@@ -176,8 +176,8 @@ module Queries = struct
     [%rapper
       get_many
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
-              WHERE path LIKE %string{collection}/%
-              AND since < %string{cursor}
+              WHERE path LIKE concat(%string{collection}, '/', '%')
+              AND (since < %string{cursor} OR %string{cursor} = '')
               ORDER BY since DESC LIMIT %int{limit}
         |sql}]
 
@@ -185,8 +185,8 @@ module Queries = struct
     [%rapper
       get_many
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
-              WHERE path LIKE %string{collection}/%
-              AND since > %string{cursor}
+              WHERE path LIKE concat(%string{collection}, '/', '%')
+              AND (since > %string{cursor} OR %string{cursor} = '')
         	  ORDER BY since ASC LIMIT %int{limit}
         |sql}]
 
