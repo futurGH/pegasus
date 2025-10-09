@@ -92,6 +92,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
               let%lwt body = Body.to_string body in
               Lwt.return @@ Dream.response ~status:`OK body
           | e ->
+              let%lwt () = Body.drain_body body in
               Dream.error (fun log ->
                   log "error when proxying to %s: %s" (Uri.to_string uri)
                     (Http.Status.to_string e) ) ;
@@ -106,6 +107,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
               let%lwt body = Body.to_string body in
               Lwt.return @@ Dream.response ~status:`OK body
           | e ->
+              let%lwt () = Body.drain_body body in
               Dream.error (fun log ->
                   log "error when proxying to %s: %s" (Uri.to_string uri)
                     (Http.Status.to_string e) ) ;

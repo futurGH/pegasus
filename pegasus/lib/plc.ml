@@ -237,6 +237,7 @@ let submit_operation ?(endpoint = default_endpoint) did operation :
   let%lwt res, body = Client.post ~headers ~body endpoint in
   match res.status with
   | `OK ->
+      let%lwt () = Body.drain_body body in
       Lwt.return_ok ()
   | _ ->
       let%lwt body_str = Body.to_string body in

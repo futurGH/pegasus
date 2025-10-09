@@ -18,6 +18,7 @@ module Handle = struct
           let%lwt did = Body.to_string body in
           Lwt.return_ok did
       | _ ->
+          let%lwt () = Body.drain_body body in
           Lwt.return_error "failed to resolve"
     with exn -> Lwt.return_error (Printexc.to_string exn)
 
@@ -167,6 +168,7 @@ module Did = struct
             let%lwt body = Body.to_string body in
             body |> Yojson.Safe.from_string |> Document.of_yojson |> Lwt.return
         | _ ->
+            let%lwt () = Body.drain_body body in
             Lwt.return_error "failed to resolve"
       with e -> Lwt.return_error (Printexc.to_string e)
 
@@ -188,6 +190,7 @@ module Did = struct
             let%lwt body = Body.to_string body in
             body |> Yojson.Safe.from_string |> Document.of_yojson |> Lwt.return
         | _ ->
+            let%lwt () = Body.drain_body body in
             Lwt.return_error "failed to resolve"
       with e -> Lwt.return_error (Printexc.to_string e)
 
