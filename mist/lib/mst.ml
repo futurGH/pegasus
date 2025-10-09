@@ -1123,8 +1123,8 @@ module Inductive (M : Intf) = struct
 
   (* given an mst diff, returns all new blocks as well as inductive proof blocks *)
   let generate_proof (map : Cid.t String_map.t) (diff : diff list)
-      ~(new_root : Cid.t) ~(prev_root : Cid.t) :
-      ((Cid.t * bytes) list, exn) Lwt_result.t =
+      ~(new_root : Cid.t) ~(prev_root : Cid.t) : (Block_map.t, exn) Lwt_result.t
+      =
     try%lwt
       let%lwt mem_mst =
         Mem_mst.of_assoc
@@ -1161,6 +1161,6 @@ module Inductive (M : Intf) = struct
       let {blocks= proof_bm; _} : Block_map.with_missing =
         Block_map.get_many (Cid.Set.elements proof_cids) block_map
       in
-      Lwt.return_ok (Block_map.entries proof_bm)
+      Lwt.return_ok proof_bm
     with e -> Lwt.return_error e
 end

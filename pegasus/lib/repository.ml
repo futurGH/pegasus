@@ -238,6 +238,7 @@ let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
 
 let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     : write_result Lwt.t =
+  let open Sequencer.Types in
   let module Inductive = Mist.Mst.Inductive (Mst) in
   let%lwt prev_commit =
     match%lwt User_store.get_commit t.db with
@@ -253,7 +254,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
          (match t.commit with Some (c, _) -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
-  let commit_ops : Sequencer.Types.commit_evt_op list ref = ref [] in
+  let commit_ops : commit_evt_op list ref = ref [] in
+  let added_leaves = ref BlockMap.empty in
   let%lwt results =
     List.map
       (fun (w : repo_write) ->
@@ -277,10 +279,11 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               if StringMap.mem "$type" value then value
               else StringMap.add "$type" (`String collection) value
             in
-            let%lwt cid, _ =
+            let%lwt cid, block =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
             block_map := StringMap.add path cid !block_map ;
+            added_leaves := BlockMap.set cid block !added_leaves ;
             commit_ops :=
               !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
             let refs =
@@ -336,9 +339,10 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               if StringMap.mem "$type" value then value
               else StringMap.add "$type" (`String collection) value
             in
-            let%lwt new_cid, _ =
+            let%lwt new_cid, new_block =
               User_store.put_record t.db (`LexMap record_with_type) path
             in
+            added_leaves := BlockMap.set new_cid new_block !added_leaves ;
             block_map := StringMap.add path new_cid !block_map ;
             commit_ops :=
               !commit_ops
@@ -392,7 +396,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let diff : Inductive.diff list =
     List.fold_left
       (fun (acc : Inductive.diff list)
-           ({action; path; cid; prev} : Sequencer.Types.commit_evt_op) ->
+           ({action; path; cid; prev} : commit_evt_op) ->
         match action with
         | `Create ->
             acc @ [Add {key= path; cid= Option.get cid}]
@@ -408,12 +412,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
         ~prev_root:prev_commit.data
     with
     | Ok blocks ->
-        Lwt.return blocks
+        Lwt.return (BlockMap.merge blocks !added_leaves)
     | Error err ->
         raise err
   in
   let block_stream =
-    Lwt_seq.of_list proof_blocks |> Lwt_seq.cons (new_commit_cid, commit_block)
+    proof_blocks |> BlockMap.entries |> Lwt_seq.of_list
+    |> Lwt_seq.cons (new_commit_cid, commit_block)
   in
   let%lwt blocks =
     Car.blocks_to_stream new_commit_cid block_stream |> Car.collect_stream
