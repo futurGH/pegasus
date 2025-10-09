@@ -162,15 +162,10 @@ module Queries = struct
         |sql}]
       () conn
 
-  let get_record_by_path =
+  let get_record =
     [%rapper
       get_opt
         {sql| SELECT @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path = %string{path} |sql}]
-
-  let get_record_by_cid =
-    [%rapper
-      get_opt
-        {sql| SELECT @string{path}, @Blob{data}, @string{since} FROM records WHERE cid = %CID{cid} |sql}]
 
   let list_records =
     [%rapper
@@ -388,14 +383,9 @@ let put_commit t commit : (Cid.t, exn) Lwt_result.t =
 
 (* records *)
 
-let get_record_by_path t path : record option Lwt.t =
-  Util.use_pool t.db @@ Queries.get_record_by_path ~path
+let get_record t path : record option Lwt.t =
+  Util.use_pool t.db @@ Queries.get_record ~path
   >|= Option.map (fun (cid, data, since) ->
-          {path; cid; value= Lex.of_cbor data; since} )
-
-let get_record_by_cid t cid : record option Lwt.t =
-  Util.use_pool t.db @@ Queries.get_record_by_cid ~cid
-  >|= Option.map (fun (path, data, since) ->
           {path; cid; value= Lex.of_cbor data; since} )
 
 let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :

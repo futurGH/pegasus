@@ -163,8 +163,7 @@ let get_record_cid t path : Cid.t option Lwt.t =
   let%lwt map = get_map t in
   Lwt.return @@ String_map.find_opt path map
 
-let get_record t path : record option Lwt.t =
-  User_store.get_record_by_path t.db path
+let get_record t path : record option Lwt.t = User_store.get_record t.db path
 
 let list_collections t : string list Lwt.t =
   let module Set = Set.Make (String) in
@@ -184,7 +183,7 @@ let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
          String.starts_with ~prefix:(path ^ "/") collection )
   |> Lwt_list.fold_left_s
        (fun acc (path, cid) ->
-         match%lwt User_store.get_record_by_cid t.db cid with
+         match%lwt User_store.get_record t.db path with
          | Some record ->
              Lwt.return
                ((Format.sprintf "at://%s/%s" t.did path, cid, record) :: acc)
@@ -321,7 +320,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             let%lwt () =
               match old_cid with
               | Some _ -> (
-                  match%lwt User_store.get_record_by_path t.db path with
+                  match%lwt User_store.get_record t.db path with
                   | Some record ->
                       let refs =
                         Util.find_blob_refs record.value
@@ -366,7 +365,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   (Format.sprintf "attempted to delete record %s with cid %s"
                      path cid_str ) ) ;
             let%lwt () =
-              match%lwt User_store.get_record_by_path t.db path with
+              match%lwt User_store.get_record t.db path with
               | Some record ->
                   let refs =
                     Util.find_blob_refs record.value
