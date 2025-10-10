@@ -1,8 +1,9 @@
 let handler =
   Xrpc.handler (fun _ ->
       Dream.respond
+        ~headers:[("Content-Type", "text/plain; charset=utf-8")]
         {|
-	⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡆⠀⠀⠀⠀⠀⠀
+	⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀     ⢀⣠⣴⡆⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣤⣤⣶⣶⠿⠿⢛⡛⠉⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣤⣤⣴⣶⣿⢻⣿⣿⣶⣶⣢⣆⠀⠀⠀⣀⣀⣤⣤⣶⣶⣾⣿⡿⠿⣛⣛⣭⣵⣶⠾⢟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣧⣾⣿⡟⣻⣿⣿⣿⣿⣿⣿⣭⣭⢠⣾⣿⣯⣭⣤⡬⣩⣭⣽⡶⠿⢟⣛⣯⣭⡶⣶⡛⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -27,6 +28,6 @@ let handler =
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠿⣷⠄⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⠿⠆⠀⠀⠀⠀⠀⠀
 
-this is [pegasus](https://github.com/futurGH/pegasus)
-it's going to be an atproto personal data server eventually
+    this is [pegasus](https://tangled.org/@futur.blue/pegasus)
+    it's going to be an atproto personal data server eventually
 |} )
