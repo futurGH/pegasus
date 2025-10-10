@@ -7,6 +7,12 @@ let handlers =
   ; (get, "/robots.txt", Api.Robots.handler)
   ; (get, "/xrpc/_health", Api.Health.handler)
   ; (get, "/.well-known/did.json", Api.Well_known.did_json)
+  ; ( get
+    , "/.well-known/oauth-protected-resource"
+    , Api.Well_known.oauth_protected_resource )
+  ; ( get
+    , "/.well-known/oauth-authorization-server"
+    , Api.Well_known.oauth_authorization_server )
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"
