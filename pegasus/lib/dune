@@ -10,7 +10,6 @@
   dns-client.unix
   dream
   ipld
-  jwto
   kleidos
   lwt
   lwt.unix

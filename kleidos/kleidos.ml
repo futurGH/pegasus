@@ -213,6 +213,10 @@ let sign ~privkey ~msg : bytes =
   let privkey, (module Curve : CURVE) = privkey in
   Curve.sign ~privkey ~msg
 
+let verify ~pubkey ~msg ~signature : bool =
+  let pubkey, (module Curve : CURVE) = pubkey in
+  Curve.verify ~pubkey ~msg ~signature
+
 let pubkey_to_did_key pubkey : string =
   let pubkey, (module Curve : CURVE) = pubkey in
   Curve.pubkey_to_did_key pubkey

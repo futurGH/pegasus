@@ -69,15 +69,16 @@ let service_proxy (ctx : context) (proxy_header : string) =
         | None ->
             Errors.invalid_request "failed to resolve destination service"
       in
-      let%lwt signing_key =
+      let%lwt signing_multikey =
         match%lwt Data_store.get_actor_by_identifier did ctx.db with
         | Some {signing_key; _} ->
             Lwt.return signing_key
         | None ->
             Errors.internal_error ~msg:"user not found" ()
       in
+      let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let jwt =
-        Auth.generate_service_jwt ~did ~aud:service_did ~lxm:nsid ~signing_key
+        Jwt.generate_service_jwt ~did ~aud:service_did ~lxm:nsid ~signing_key
       in
       let uri =
         host ^ "/" ^ String.concat "/" @@ (Dream.path [@warning "-3"]) ctx.req

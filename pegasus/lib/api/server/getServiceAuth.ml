@@ -10,12 +10,13 @@ let handler =
         | _ ->
             Errors.invalid_request "missing aud or lxm"
       in
-      let%lwt signing_key =
+      let%lwt signing_multikey =
         match%lwt Data_store.get_actor_by_identifier did db with
         | Some {signing_key; _} ->
             Lwt.return signing_key
         | None ->
             Errors.internal_error ~msg:"actor not found" ()
       in
-      let token = Auth.generate_service_jwt ~did ~aud ~lxm ~signing_key in
+      let signing_key = Kleidos.parse_multikey_str signing_multikey in
+      let token = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
       Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {token} )

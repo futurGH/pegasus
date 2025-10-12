@@ -46,7 +46,6 @@
   (cohttp-lwt-unix (>= 6.1.1))
   (dns-client (>= 10.2.0))
   dream
-  (jwto (>= 0.4.0))
   (re (>= 1.13.2))
   (safepass (>= 3.1))
   (timedesc (>= 3.1.0))

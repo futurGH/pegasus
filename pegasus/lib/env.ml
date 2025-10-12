@@ -10,6 +10,6 @@ let invite_required = Sys.getenv "INVITE_CODE_REQUIRED" = "true"
 let rotation_key =
   Sys.getenv "ROTATION_KEY_MULTIBASE" |> Kleidos.parse_multikey_str
 
-let admin_password = Sys.getenv "ADMIN_PASSWORD"
+let jwt_key = Sys.getenv "JWK_MULTIBASE" |> Kleidos.parse_multikey_str
 
-let jwt_secret = Sys.getenv "JWT_SECRET"
+let admin_password = Sys.getenv "ADMIN_PASSWORD"

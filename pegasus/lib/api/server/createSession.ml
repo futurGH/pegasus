@@ -26,7 +26,7 @@ let handler =
         Lwt_result.catch @@ fun () -> Data_store.try_login ~id ~password db
       with
       | Ok (Some actor) when Auth.verify_auth auth actor.did ->
-          let access_jwt, refresh_jwt = Auth.generate_jwt actor.did in
+          let access_jwt, refresh_jwt = Jwt.generate_jwt actor.did in
           let active, status =
             match actor.deactivated_at with
             | None ->

@@ -115,6 +115,6 @@ let handler =
       let%lwt _ =
         Sequencer.sequence_sync ctx.db ~did ~rev:commit.rev ~blocks ()
       in
-      let access_jwt, refresh_jwt = Auth.generate_jwt did in
+      let access_jwt, refresh_jwt = Jwt.generate_jwt did in
       Dream.json @@ Yojson.Safe.to_string
       @@ response_to_yojson {access_jwt; refresh_jwt; did; handle= input.handle} )
