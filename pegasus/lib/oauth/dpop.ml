@@ -29,8 +29,7 @@ let compute_nonce secret counter =
   Bytes.set_int64_be data 0 counter ;
   Digestif.SHA256.(
     hmac_bytes ~key:(Bytes.to_string secret) data
-    |> to_raw_string
-    |> Base64.encode_exn ~pad:false )
+    |> to_raw_string |> Jwt.b64_encode )
 
 let create_nonce_state secret =
   let counter =
@@ -79,9 +78,6 @@ let normalize_url url =
     ?port:(Uri.port uri) ~path:(Uri.path uri) ()
   |> Uri.to_string
 
-let b64url_decode s =
-  Base64.decode_exn ~alphabet:Base64.uri_safe_alphabet ~pad:false s
-
 let compute_jwk_thumbprint jwk =
   let open Yojson.Safe.Util in
   let crv = jwk |> member "crv" |> to_string in
@@ -92,8 +88,7 @@ let compute_jwk_thumbprint jwk =
     (* keys must be in lexicographic order *)
     Printf.sprintf {|{"crv":"%s","kty":"%s","x":"%s","y":"%s"}|} crv kty x y
   in
-  Digestif.SHA256.(
-    digest_string tp |> to_raw_string |> Base64.encode_exn ~pad:false )
+  Digestif.SHA256.(digest_string tp |> to_raw_string |> Jwt.b64_encode)
 
 let verify_signature jwt jwk =
   let open Yojson.Safe.Util in
@@ -101,15 +96,12 @@ let verify_signature jwt jwk =
   match parts with
   | [header_b64; payload_b64; sig_b64] ->
       let signing_input = header_b64 ^ "." ^ payload_b64 in
-      let msg =
-        Digestif.SHA256.(digest_string signing_input |> to_raw_string)
-        |> Bytes.of_string
-      in
+      let msg = Bytes.of_string signing_input in
       let x =
-        jwk |> member "x" |> to_string |> b64url_decode |> Bytes.of_string
+        jwk |> member "x" |> to_string |> Jwt.b64_decode |> Bytes.of_string
       in
       let y =
-        jwk |> member "y" |> to_string |> b64url_decode |> Bytes.of_string
+        jwk |> member "y" |> to_string |> Jwt.b64_decode |> Bytes.of_string
       in
       let crv = jwk |> member "crv" |> to_string in
       let pubkey = Bytes.cat (Bytes.of_string "\x04") (Bytes.cat x y) in
@@ -123,7 +115,7 @@ let verify_signature jwt jwk =
           | _ ->
               failwith "unsupported algorithm" )
       in
-      let sig_bytes = b64url_decode sig_b64 |> Bytes.of_string in
+      let sig_bytes = Jwt.b64_decode sig_b64 |> Bytes.of_string in
       let r = Bytes.sub sig_bytes 0 32 in
       let s = Bytes.sub sig_bytes 32 32 in
       let signature = Bytes.cat r s in
@@ -139,8 +131,8 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
       let open Yojson.Safe.Util in
       match String.split_on_char '.' jwt with
       | [header_b64; payload_b64; _] -> (
-          let header = Yojson.Safe.from_string (b64url_decode header_b64) in
-          let payload = Yojson.Safe.from_string (b64url_decode payload_b64) in
+          let header = Yojson.Safe.from_string (Jwt.b64_decode header_b64) in
+          let payload = Yojson.Safe.from_string (Jwt.b64_decode payload_b64) in
           let typ = header |> member "typ" |> to_string in
           if typ <> "dpop+jwt" then Lwt.return_error "invalid typ in dpop proof"
           else
@@ -202,7 +194,7 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
                             let expected_ath =
                               Digestif.SHA256.(
                                 digest_string token |> to_raw_string
-                                |> Base64.encode_exn ~pad:false )
+                                |> Jwt.b64_encode )
                             in
                             if Some expected_ath <> ath_claim then
                               Lwt.return_error "ath mismatch"
