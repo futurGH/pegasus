@@ -3,7 +3,11 @@ open Cohttp_lwt_unix
 
 type init = Auth.Verifiers.ctx
 
-type context = {req: Dream.request; db: Data_store.t; auth: Auth.credentials}
+type context =
+  { req: Dream.request
+  ; db: Data_store.t
+  ; auth: Auth.credentials
+  ; dpop: Oauth.Dpop.context }
 
 type handler = context -> Dream.response Lwt.t
 
@@ -12,7 +16,12 @@ let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
   let auth = Auth.Verifiers.of_t auth in
   match%lwt auth init with
   | Ok creds -> (
-      try%lwt hdlr {req= init.req; db= init.db; auth= creds}
+      try%lwt
+        hdlr
+          { req= init.req
+          ; db= init.db
+          ; auth= creds
+          ; dpop= Oauth.Dpop.create_context Env.dpop_nonce_secret }
       with e ->
         ( match is_xrpc_error e with
         | true ->

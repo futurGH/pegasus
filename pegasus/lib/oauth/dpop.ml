@@ -8,6 +8,8 @@ type nonce_state =
 
 type proof = {jti: string; jkt: string; htm: string; htu: string}
 
+type context = {nonce_state: nonce_state; jti_cache: (string, int) Hashtbl.t}
+
 let create_nonce_state ?(rotation_interval_ms = 60_000L) secret =
   let counter =
     Int64.div
@@ -101,7 +103,7 @@ let verify_signature jwt jwk alg =
   | _ ->
       false
 
-let verify_dpop_proof ~nonce_state ~jti_cache ~mthd ~url ~dpop_header
+let verify_dpop_proof {nonce_state; jti_cache} ~mthd ~url ~dpop_header
     ?access_token () =
   match dpop_header with
   | None ->
@@ -173,3 +175,7 @@ let verify_dpop_proof ~nonce_state ~jti_cache ~mthd ~url ~dpop_header
                             else Lwt.return_ok {jti; jkt; htm; htu} ) )
       | _ ->
           Lwt.return_error "invalid dpop jwt" )
+
+let create_context ?rotation_interval_ms secret =
+  { nonce_state= create_nonce_state secret ?rotation_interval_ms
+  ; jti_cache= Hashtbl.create 1000 }

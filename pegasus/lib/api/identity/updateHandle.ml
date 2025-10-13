@@ -1,7 +1,7 @@
 type request = {handle: string} [@@deriving yojson]
 
 let handler =
-  Xrpc.handler ~auth:Authorization (fun {req; auth; db} ->
+  Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
       let did = Auth.get_authed_did_exn auth in
       let%lwt body = Dream.body req in
       let handle =
