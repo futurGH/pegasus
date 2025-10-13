@@ -121,7 +121,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
 let service_proxy_middleware db inner_handler req =
   match Dream.header req "atproto-proxy" with
   | Some header ->
-      handler ~auth:Access (fun ctx -> service_proxy ctx header) {req; db}
+      handler ~auth:Authorization (fun ctx -> service_proxy ctx header) {req; db}
   | None ->
       inner_handler req
 

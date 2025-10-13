@@ -140,7 +140,7 @@ module Verifiers = struct
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
 
-  let access : verifier =
+  let bearer : verifier =
    fun {req; db} ->
     match parse_bearer req with
     | Ok jwt -> (
@@ -159,6 +159,53 @@ module Verifiers = struct
             Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+
+  let oauth : verifier =
+   fun {req; db} ->
+    match Dream.header req "Authorization" with
+    | None ->
+        Lwt.return_error @@ Errors.auth_required "missing authorization header"
+    | Some auth ->
+        if String.starts_with ~prefix:"DPoP " auth then
+          let token = String.sub auth 5 (String.length auth - 5) in
+          let dpop_header = Dream.header req "DPoP" in
+          let full_url = "https://" ^ Env.hostname ^ Dream.target req in
+          let%lwt dpop_result =
+            Oauth.Dpop.verify_dpop_proof ~nonce_state:!dpop_nonce_state
+              ~mthd:(Dream.method_to_string @@ Dream.method_ req)
+              ~url:full_url ~dpop_header ~access_token:token ()
+          in
+          match dpop_result with
+          | Error e ->
+              Lwt.return_error @@ Errors.auth_required ("dpop: " ^ e)
+          | Ok proof -> (
+            match Jwt.decode_jwt token with
+            | Error e ->
+                Lwt.return_error @@ Errors.auth_required e
+            | Ok (_header, claims) -> (
+                let open Yojson.Safe.Util in
+                try
+                  let did = claims |> member "sub" |> to_string in
+                  let exp = claims |> member "exp" |> to_int in
+                  let jkt_claim =
+                    claims |> member "cnf" |> member "jkt" |> to_string
+                  in
+                  if jkt_claim <> proof.jkt then
+                    Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
+                  else
+                    let now = int_of_float (Unix.gettimeofday ()) in
+                    if exp < now then
+                      Lwt.return_error @@ Errors.auth_required "token expired"
+                    else
+                      match Jwt.verify_jwt token Env.jwt_key with
+                      | Error e ->
+                          Lwt.return_error @@ Errors.auth_required e
+                      | Ok _ ->
+                          Lwt.return_ok (Access {did})
+                with _ ->
+                  Lwt.return_error
+                  @@ Errors.auth_required "malformed JWT claims" ) )
+        else bearer {req; db}
 
   let refresh : verifier =
    fun {req; db} ->
@@ -189,7 +236,9 @@ module Verifiers = struct
     | Some ("Basic" :: _) ->
         admin ctx
     | Some ("Bearer" :: _) ->
-        access ctx
+        bearer ctx
+    | Some ("DPoP" :: _) ->
+        oauth ctx
     | _ ->
         Lwt.return_error
         @@ Errors.auth_required ~name:"InvalidToken"
@@ -198,15 +247,24 @@ module Verifiers = struct
   let any : verifier =
    fun ctx -> try authorization ctx with _ -> unauthenticated ctx
 
-  type t = Unauthenticated | Admin | Access | Refresh | Authorization | Any
+  type t =
+    | Unauthenticated
+    | Admin
+    | Bearer
+    | Oauth
+    | Refresh
+    | Authorization
+    | Any
 
   let of_t = function
     | Unauthenticated ->
         unauthenticated
     | Admin ->
         admin
-    | Access ->
-        access
+    | Bearer ->
+        bearer
+    | Oauth ->
+        oauth
     | Refresh ->
         refresh
     | Authorization ->

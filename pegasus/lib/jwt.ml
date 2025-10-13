@@ -118,17 +118,3 @@ let generate_service_jwt ~did ~aud ~lxm ~signing_key =
   let exp = now_s + Defaults.service_token_exp in
   let payload = service_jwt_to_yojson {iss= did; aud; lxm; exp} in
   sign_jwt payload signing_key
-
-let extract_claim claims key =
-  try
-    let open Yojson.Safe.Util in
-    let rec find_nested json keys =
-      match keys with
-      | [] ->
-          Some json
-      | k :: rest ->
-          find_nested (json |> member k) rest
-    in
-    let keys = String.split_on_char '.' key in
-    find_nested claims keys
-  with _ -> None
