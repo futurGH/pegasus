@@ -18,7 +18,9 @@ let fetch_client_metadata client_id =
   in
   if status <> `OK then
     let%lwt () = Cohttp_lwt.Body.drain_body res in
-    Errors.invalid_request "client metadata not found"
+    failwith
+      (Printf.sprintf "client metadata not found; http %d"
+         (Cohttp.Code.code_of_status status) )
   else
     let%lwt body = Cohttp_lwt.Body.to_string res in
     let json = Yojson.Safe.from_string body in
@@ -40,25 +42,31 @@ let fetch_client_metadata client_id =
       ; dpop_bound_access_tokens=
           json |> member "dpop_bound_access_tokens" |> to_bool
       ; jwks_uri= json |> member "jwks_uri" |> to_string_option
-      ; jwks= json |> member "jwks" |> to_option Fun.id }
+      ; jwks= json |> member "jwks" |> to_option (fun j -> j) }
     in
-    if metadata.client_id <> client_id then
-      Errors.invalid_request "client_id mismatch"
+    if metadata.client_id <> client_id then failwith "client_id mismatch"
     else
       let scopes = String.split_on_char ' ' metadata.scope in
       if not (List.mem "atproto" scopes) then
-        Errors.invalid_request "scope must include 'atproto'"
+        failwith "scope must include 'atproto'"
       else
         List.iter
-          (fun uri ->
-            let u = Uri.of_string uri in
-            match Uri.scheme u with
-            | Some "https" ->
+          (function
+            | "authorization_code" | "refresh_token" ->
                 ()
-            | Some "http"
-              when Uri.host u = Some "127.0.0.1" || Uri.host u = Some "[::1]" ->
-                ()
-            | _ ->
-                Errors.invalid_request ("invalid redirect_uri: " ^ uri) )
-          metadata.redirect_uris ;
+            | grant ->
+                failwith ("invalid grant type: " ^ grant) )
+          metadata.grant_types ;
+      List.iter
+        (fun uri ->
+          let u = Uri.of_string uri in
+          let host = Uri.host u in
+          match Uri.scheme u with
+          | Some "https" when host <> Some "localhost" ->
+              ()
+          | Some "http" when host = Some "127.0.0.1" || host = Some "[::1]" ->
+              ()
+          | _ ->
+              failwith ("invalid redirect_uri: " ^ uri) )
+        metadata.redirect_uris ;
       Lwt.return metadata

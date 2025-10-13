@@ -8,27 +8,41 @@ type nonce_state =
 
 type proof = {jti: string; jkt: string; htm: string; htu: string}
 
-type context = {nonce_state: nonce_state; jti_cache: (string, int) Hashtbl.t}
+let max_age_s = 60
 
-let create_nonce_state ?(rotation_interval_ms = 60_000L) secret =
+let rotation_interval_ms = 60_000L
+
+let jti_ttl_s = 3600
+
+let jti_cache_size = 10_000
+
+let jti_cache : (string, int) Hashtbl.t = Hashtbl.create jti_cache_size
+
+let cleanup_jti_cache () =
+  let now = int_of_float (Unix.gettimeofday ()) in
+  Hashtbl.filter_map_inplace
+    (fun _ expires_at -> if expires_at > now then Some expires_at else None)
+    jti_cache
+
+let compute_nonce secret counter =
+  let data = Bytes.create 8 in
+  Bytes.set_int64_be data 0 counter ;
+  Digestif.SHA256.(
+    hmac_bytes ~key:(Bytes.to_string secret) data
+    |> to_raw_string
+    |> Base64.encode_exn ~pad:false )
+
+let create_nonce_state secret =
   let counter =
     Int64.div
       (Int64.of_float (Unix.gettimeofday () *. 1000.))
       rotation_interval_ms
   in
-  let compute_nonce cnt =
-    let data = Bytes.create 8 in
-    Bytes.set_int64_be data 0 cnt ;
-    Digestif.SHA256.(
-      hmac_bytes ~key:(Bytes.to_string secret) data
-      |> to_raw_string
-      |> Base64.encode_exn ~pad:false )
-  in
   { secret
   ; counter
-  ; prev= compute_nonce (Int64.pred counter)
-  ; curr= compute_nonce counter
-  ; next= compute_nonce (Int64.succ counter)
+  ; prev= compute_nonce secret (Int64.pred counter)
+  ; curr= compute_nonce secret counter
+  ; next= compute_nonce secret (Int64.succ counter)
   ; rotation_interval_ms }
 
 let next_nonce state =
@@ -40,13 +54,7 @@ let next_nonce state =
   if now_counter <> state.counter then (
     state.prev <- state.curr ;
     state.curr <- state.next ;
-    let data = Bytes.create 8 in
-    Bytes.set_int64_be data 0 (Int64.succ now_counter) ;
-    state.next <-
-      Digestif.SHA256.(
-        hmac_bytes ~key:(Bytes.to_string state.secret) data
-        |> to_raw_string
-        |> Base64.encode_exn ~pad:false ) ;
+    state.next <- compute_nonce state.secret (Int64.succ now_counter) ;
     state.counter <- now_counter ) ;
   state.next
 
@@ -66,7 +74,6 @@ let compute_jwk_thumbprint jwk =
     digest_string tp |> to_raw_string |> Base64.encode_exn ~pad:false )
 
 let normalize_url url =
-  (* Remove query params and fragment, normalize to https://host/path *)
   let uri = Uri.of_string url in
   Uri.make ~scheme:"https"
     ~host:(Uri.host uri |> Option.get)
@@ -83,10 +90,13 @@ let verify_signature jwt jwk alg =
         Digestif.SHA256.(digest_string signing_input |> to_raw_string)
         |> Bytes.of_string
       in
-      let x = jwk |> member "x" |> to_string |> Base64.decode_exn in
-      let y = jwk |> member "y" |> to_string |> Base64.decode_exn in
+      let x = jwk |> member "x" |> to_string |> Base64.decode_exn ~pad:false in
+      let y = jwk |> member "y" |> to_string |> Base64.decode_exn ~pad:false in
       let pubkey =
-        ( Bytes.of_string (x ^ y)
+        Bytes.cat (Bytes.of_string "\x04") (Bytes.of_string (x ^ y))
+      in
+      let pubkey =
+        ( pubkey
         , match alg with
           | "ES256K" ->
               (module Kleidos.K256 : Kleidos.CURVE)
@@ -103,8 +113,7 @@ let verify_signature jwt jwk alg =
   | _ ->
       false
 
-let verify_dpop_proof {nonce_state; jti_cache} ~mthd ~url ~dpop_header
-    ?access_token () =
+let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
   match dpop_header with
   | None ->
       Lwt.return_error "missing dpop header"
@@ -142,11 +151,12 @@ let verify_dpop_proof {nonce_state; jti_cache} ~mthd ~url ~dpop_header
                   then Lwt.return_error "htu mismatch"
                   else
                     let now = int_of_float (Unix.gettimeofday ()) in
-                    if now - iat > 60 then Lwt.return_error "dpop proof too old"
+                    if now - iat > max_age_s then
+                      Lwt.return_error "dpop proof too old"
                     else if Hashtbl.mem jti_cache jti then
                       Lwt.return_error "dpop proof replay detected"
                     else (
-                      Hashtbl.add jti_cache jti (now + 3600) ;
+                      Hashtbl.add jti_cache jti (now + jti_ttl_s) ;
                       if not (verify_signature jwt jwk alg) then
                         Lwt.return_error "invalid dpop signature"
                       else
@@ -175,7 +185,3 @@ let verify_dpop_proof {nonce_state; jti_cache} ~mthd ~url ~dpop_header
                             else Lwt.return_ok {jti; jkt; htm; htu} ) )
       | _ ->
           Lwt.return_error "invalid dpop jwt" )
-
-let create_context ?rotation_interval_ms secret =
-  { nonce_state= create_nonce_state secret ?rotation_interval_ms
-  ; jti_cache= Hashtbl.create 1000 }

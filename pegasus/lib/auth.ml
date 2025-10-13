@@ -16,6 +16,8 @@ type credentials =
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
 
+let dpop_nonce_state = ref (Oauth.Dpop.create_nonce_state Env.dpop_nonce_secret)
+
 let verify_bearer_jwt t token expected_scope =
   match Jwt.verify_jwt token Env.jwt_key with
   | Error err ->
