@@ -55,8 +55,8 @@ let handler =
                     conn )
             in
             Dream.json ~status:`Created
-            ~headers:[("DPoP-Nonce", Oauth.Dpop.next_nonce ctx.dpop.nonce_state)]
+              ~headers:
+                [("DPoP-Nonce", Oauth.Dpop.next_nonce ctx.dpop.nonce_state)]
             @@ Yojson.Safe.to_string
             @@ `Assoc
-                 [ ("request_uri", `String request_uri)
-                 ; ("expires_in", `Int 300) ])
+                 [("request_uri", `String request_uri); ("expires_in", `Int 300)] )
