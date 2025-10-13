@@ -59,19 +59,18 @@ let next_nonce state =
   state.next
 
 let verify_nonce state nonce =
-  nonce = state.prev || nonce = state.curr || nonce = state.next
+  let valid = nonce = state.prev || nonce = state.curr || nonce = state.next in
+  next_nonce state |> ignore ;
+  valid
 
-let compute_jwk_thumbprint jwk =
-  let open Yojson.Safe.Util in
-  let crv = jwk |> member "crv" |> to_string in
-  let kty = jwk |> member "kty" |> to_string in
-  let x = jwk |> member "x" |> to_string in
-  let y = jwk |> member "y" |> to_string in
-  let tp =
-    Printf.sprintf {|{"crv":"%s","kty":"%s","x":"%s","y":"%s"}|} crv kty x y
-  in
-  Digestif.SHA256.(
-    digest_string tp |> to_raw_string |> Base64.encode_exn ~pad:false )
+let add_jti jti =
+  let expires_at = int_of_float (Unix.gettimeofday ()) + jti_ttl_s in
+  if Hashtbl.mem jti_cache jti then false (* replay *)
+  else (
+    Hashtbl.add jti_cache jti expires_at ;
+    (* clean up every once in a while *)
+    if Hashtbl.length jti_cache mod 100 = 0 then cleanup_jti_cache () ;
+    true )
 
 let normalize_url url =
   let uri = Uri.of_string url in
@@ -80,7 +79,23 @@ let normalize_url url =
     ?port:(Uri.port uri) ~path:(Uri.path uri) ()
   |> Uri.to_string
 
-let verify_signature jwt jwk alg =
+let b64url_decode s =
+  Base64.decode_exn ~alphabet:Base64.uri_safe_alphabet ~pad:false s
+
+let compute_jwk_thumbprint jwk =
+  let open Yojson.Safe.Util in
+  let crv = jwk |> member "crv" |> to_string in
+  let kty = jwk |> member "kty" |> to_string in
+  let x = jwk |> member "x" |> to_string in
+  let y = jwk |> member "y" |> to_string in
+  let tp =
+    (* keys must be in lexicographic order *)
+    Printf.sprintf {|{"crv":"%s","kty":"%s","x":"%s","y":"%s"}|} crv kty x y
+  in
+  Digestif.SHA256.(
+    digest_string tp |> to_raw_string |> Base64.encode_exn ~pad:false )
+
+let verify_signature jwt jwk =
   let open Yojson.Safe.Util in
   let parts = String.split_on_char '.' jwt in
   match parts with
@@ -90,25 +105,28 @@ let verify_signature jwt jwk alg =
         Digestif.SHA256.(digest_string signing_input |> to_raw_string)
         |> Bytes.of_string
       in
-      let x = jwk |> member "x" |> to_string |> Base64.decode_exn ~pad:false in
-      let y = jwk |> member "y" |> to_string |> Base64.decode_exn ~pad:false in
-      let pubkey =
-        Bytes.cat (Bytes.of_string "\x04") (Bytes.of_string (x ^ y))
+      let x =
+        jwk |> member "x" |> to_string |> b64url_decode |> Bytes.of_string
       in
+      let y =
+        jwk |> member "y" |> to_string |> b64url_decode |> Bytes.of_string
+      in
+      let crv = jwk |> member "crv" |> to_string in
+      let pubkey = Bytes.cat (Bytes.of_string "\x04") (Bytes.cat x y) in
       let pubkey =
         ( pubkey
-        , match alg with
-          | "ES256K" ->
+        , match crv with
+          | "secp256k1" ->
               (module Kleidos.K256 : Kleidos.CURVE)
-          | "ES256" ->
+          | "P-256" ->
               (module Kleidos.P256 : Kleidos.CURVE)
           | _ ->
               failwith "unsupported algorithm" )
       in
-      let sig_bytes = Base64.decode_exn sig_b64 in
-      let r = String.sub sig_bytes 0 32 in
-      let s = String.sub sig_bytes 32 32 in
-      let signature = Bytes.of_string (r ^ s) in
+      let sig_bytes = b64url_decode sig_b64 |> Bytes.of_string in
+      let r = Bytes.sub sig_bytes 0 32 in
+      let s = Bytes.sub sig_bytes 32 32 in
+      let signature = Bytes.cat r s in
       Kleidos.verify ~pubkey ~msg ~signature
   | _ ->
       false
@@ -121,10 +139,8 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
       let open Yojson.Safe.Util in
       match String.split_on_char '.' jwt with
       | [header_b64; payload_b64; _] -> (
-          let header = Yojson.Safe.from_string (Base64.decode_exn header_b64) in
-          let payload =
-            Yojson.Safe.from_string (Base64.decode_exn payload_b64)
-          in
+          let header = Yojson.Safe.from_string (b64url_decode header_b64) in
+          let payload = Yojson.Safe.from_string (b64url_decode payload_b64) in
           let typ = header |> member "typ" |> to_string in
           if typ <> "dpop+jwt" then Lwt.return_error "invalid typ in dpop proof"
           else
@@ -133,31 +149,47 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
               Lwt.return_error "only es256 and es256k supported for dpop"
             else
               let jwk = header |> member "jwk" in
-              let jti = payload |> member "jti" |> to_string in
-              let htm = payload |> member "htm" |> to_string in
-              let htu = payload |> member "htu" |> to_string in
-              let iat = payload |> member "iat" |> to_int in
-              let nonce_claim = payload |> member "nonce" |> to_string_option in
-              match nonce_claim with
-              (* error must be this string; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
-              | None ->
-                  Lwt.return_error "use_dpop_nonce"
-              | Some n when not (verify_nonce nonce_state n) ->
-                  Lwt.return_error "use_dpop_nonce"
-              | Some _ ->
-                  if htm <> mthd then Lwt.return_error "htm mismatch"
-                  else if
-                    not (String.equal (normalize_url htu) (normalize_url url))
-                  then Lwt.return_error "htu mismatch"
-                  else
-                    let now = int_of_float (Unix.gettimeofday ()) in
-                    if now - iat > max_age_s then
-                      Lwt.return_error "dpop proof too old"
-                    else if Hashtbl.mem jti_cache jti then
-                      Lwt.return_error "dpop proof replay detected"
-                    else (
-                      Hashtbl.add jti_cache jti (now + jti_ttl_s) ;
-                      if not (verify_signature jwt jwk alg) then
+              let crv = jwk |> member "crv" |> to_string in
+              if
+                not
+                  ( match (alg, crv) with
+                  | "ES256", "P-256" ->
+                      true
+                  | "ES256K", "secp256k1" ->
+                      true
+                  | _ ->
+                      false )
+              then
+                Lwt.return_error
+                  (Printf.sprintf "algorithm %s doesn't match curve %s" alg crv)
+              else
+                let jti = payload |> member "jti" |> to_string in
+                let htm = payload |> member "htm" |> to_string in
+                let htu = payload |> member "htu" |> to_string in
+                let iat = payload |> member "iat" |> to_int in
+                let nonce_claim =
+                  payload |> member "nonce" |> to_string_option
+                in
+                match nonce_claim with
+                (* error must be this string; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
+                | None ->
+                    Lwt.return_error "use_dpop_nonce"
+                | Some n when not (verify_nonce nonce_state n) ->
+                    Lwt.return_error "use_dpop_nonce"
+                | Some _ -> (
+                    if htm <> mthd then Lwt.return_error "htm mismatch"
+                    else if
+                      not (String.equal (normalize_url htu) (normalize_url url))
+                    then Lwt.return_error "htu mismatch"
+                    else
+                      let now = int_of_float (Unix.gettimeofday ()) in
+                      if now - iat > max_age_s then
+                        Lwt.return_error "dpop proof too old"
+                      else if iat - now > 5 then
+                        Lwt.return_error "dpop proof in future"
+                      else if not (add_jti jti) then
+                        Lwt.return_error "dpop proof replay detected"
+                      else if not (verify_signature jwt jwk) then
                         Lwt.return_error "invalid dpop signature"
                       else
                         let jkt = compute_jwk_thumbprint jwk in
