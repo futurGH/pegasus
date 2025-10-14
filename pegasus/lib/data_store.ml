@@ -157,7 +157,7 @@ module Queries = struct
           {sql| CREATE TRIGGER IF NOT EXISTS cleanup_expired_oauth_codes
                 AFTER INSERT ON oauth_codes
                 BEGIN
-                  DELETE FROM oauth_codes WHERE expires_at < unixepoch() * 1000;
+                  DELETE FROM oauth_codes WHERE expires_at < unixepoch() * 1000 OR used = 1;
                 END
           |sql}
           syntax_off]

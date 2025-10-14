@@ -40,19 +40,17 @@ let handler ~nonce_state =
             let request_uri =
               "urn:ietf:params:oauth:request_uri:" ^ request_id
             in
-            let expires_at = Util.now_ms () + (5 * 60 * 1000) in
+            let expires_at =
+              Util.now_ms () + Oauth.Constants.par_request_ttl_ms
+            in
             let%lwt () =
-              Util.use_pool ctx.db (fun conn ->
-                  [%rapper
-                    execute
-                      {sql| INSERT INTO oauth_requests (request_id, client_id, request_data, dpop_jkt, expires_at, created_at)
-                          VALUES (%string{request_id}, %string{client_id}, %string{request_data}, %string{dpop_jkt}, %int{expires_at}, %int{created_at})
-                    |sql}]
-                    ~request_id ~client_id:req.client_id
-                    ~request_data:
-                      (Yojson.Safe.to_string (request_to_yojson req))
-                    ~dpop_jkt:proof.jkt ~expires_at ~created_at:(Util.now_ms ())
-                    conn )
+              Oauth.Queries.insert_par_request ctx.db
+                { request_id
+                ; client_id= req.client_id
+                ; request_data= Yojson.Safe.to_string (request_to_yojson req)
+                ; dpop_jkt= Some proof.jkt
+                ; expires_at
+                ; created_at= Util.now_ms () }
             in
             Dream.json ~status:`Created
               ~headers:[("DPoP-Nonce", Oauth.Dpop.next_nonce nonce_state)]
