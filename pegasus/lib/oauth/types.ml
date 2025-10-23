@@ -42,7 +42,7 @@ type client_metadata =
 type dpop_proof = {jti: string; jkt: string; htm: string; htu: string}
 [@@deriving yojson {strict= false}]
 
-type oauth_request_record =
+type oauth_request =
   { request_id: string
   ; client_id: string
   ; request_data: string
@@ -51,7 +51,7 @@ type oauth_request_record =
   ; created_at: int }
 [@@deriving yojson {strict= false}]
 
-type oauth_code_record =
+type oauth_code =
   { code: string
   ; request_id: string
   ; authorized_by: string option
@@ -60,7 +60,7 @@ type oauth_code_record =
   ; used: bool }
 [@@deriving yojson {strict= false}]
 
-type oauth_token_record =
+type oauth_token =
   { id: int
   ; token_id: string
   ; refresh_token: string

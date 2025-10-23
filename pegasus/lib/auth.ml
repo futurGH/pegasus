@@ -86,7 +86,7 @@ let get_session_info identifier db =
 module Verifiers = struct
   open struct
     let parse_header req expected_type =
-      match Dream.header req "authorization" with
+      match Dream.header req "Authorization" with
       | Some header -> (
         match String.split_on_char ' ' header with
         | [typ; token]
@@ -114,6 +114,8 @@ module Verifiers = struct
           Error "invalid basic authorization header"
 
     let parse_bearer req = parse_header req "Bearer"
+
+    let parse_dpop req = parse_header req "DPoP"
   end
 
   type ctx = {req: Dream.request; db: Data_store.t}
@@ -124,7 +126,7 @@ module Verifiers = struct
    fun {req; _} ->
     match Dream.header req "authorization" with
     | Some _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
     | None ->
         Lwt.return_ok Unauthenticated
 
@@ -136,9 +138,9 @@ module Verifiers = struct
       | "admin", p when p = Env.admin_password ->
           Lwt.return_ok Admin
       | _ ->
-          Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
   let bearer : verifier =
    fun {req; db} ->
@@ -152,60 +154,61 @@ module Verifiers = struct
             | Some {deactivated_at= Some _; _} ->
                 Lwt.return_error
                 @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "Account is deactivated"
+                     "account is deactivated"
             | None ->
-                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+                Lwt.return_error @@ Errors.auth_required "invalid credentials" )
         | Error _ ->
-            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
   let oauth : verifier =
    fun {req; db} ->
-    match Dream.header req "Authorization" with
-    | None ->
+    match parse_dpop req with
+    | Error _ ->
         Lwt.return_error @@ Errors.auth_required "missing authorization header"
-    | Some auth ->
-        if String.starts_with ~prefix:"DPoP " auth then
-          let token = String.sub auth 5 (String.length auth - 5) in
-          let dpop_header = Dream.header req "DPoP" in
-          let full_url = "https://" ^ Env.hostname ^ Dream.target req in
-          let%lwt dpop_result =
-            Oauth.Dpop.verify_dpop_proof ~nonce_state:!dpop_nonce_state
-              ~mthd:(Dream.method_to_string @@ Dream.method_ req)
-              ~url:full_url ~dpop_header ~access_token:token ()
-          in
-          match dpop_result with
+    | Ok token -> (
+        let dpop_header = Dream.header req "DPoP" in
+        let full_url = "https://" ^ Env.hostname ^ Dream.target req in
+        let%lwt dpop_result =
+          Oauth.Dpop.verify_dpop_proof ~nonce_state:!dpop_nonce_state
+            ~mthd:(Dream.method_to_string @@ Dream.method_ req)
+            ~url:full_url ~dpop_header ~access_token:token ()
+        in
+        match dpop_result with
+        | Error e ->
+            Lwt.return_error @@ Errors.auth_required ("dpop: " ^ e)
+        | Ok proof -> (
+          match Jwt.verify_jwt token Env.jwt_key with
           | Error e ->
-              Lwt.return_error @@ Errors.auth_required ("dpop: " ^ e)
-          | Ok proof -> (
-            match Jwt.decode_jwt token with
-            | Error e ->
-                Lwt.return_error @@ Errors.auth_required e
-            | Ok (_header, claims) -> (
-                let open Yojson.Safe.Util in
-                try
-                  let did = claims |> member "sub" |> to_string in
-                  let exp = claims |> member "exp" |> to_int in
-                  let jkt_claim =
-                    claims |> member "cnf" |> member "jkt" |> to_string
-                  in
-                  if jkt_claim <> proof.jkt then
-                    Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
-                  else
-                    let now = int_of_float (Unix.gettimeofday ()) in
-                    if exp < now then
-                      Lwt.return_error @@ Errors.auth_required "token expired"
-                    else
-                      match Jwt.verify_jwt token Env.jwt_key with
-                      | Error e ->
-                          Lwt.return_error @@ Errors.auth_required e
-                      | Ok _ ->
-                          Lwt.return_ok (Access {did})
-                with _ ->
-                  Lwt.return_error
-                  @@ Errors.auth_required "malformed JWT claims" ) )
-        else bearer {req; db}
+              Lwt.return_error @@ Errors.auth_required e
+          | Ok (_header, claims) -> (
+              let open Yojson.Safe.Util in
+              try
+                let did = claims |> member "sub" |> to_string in
+                let exp = claims |> member "exp" |> to_int in
+                let jkt_claim =
+                  claims |> member "cnf" |> member "jkt" |> to_string
+                in
+                let now = int_of_float (Unix.gettimeofday ()) in
+                if jkt_claim <> proof.jkt then
+                  Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
+                else if exp < now then
+                  Lwt.return_error @@ Errors.auth_required "token expired"
+                else
+                  match%lwt Data_store.get_actor_by_identifier did db with
+                  | Some {deactivated_at= None; _} ->
+                      Lwt.return_ok (Access {did})
+                  | Some {deactivated_at= Some _; _} ->
+                      Lwt.return_error
+                      @@ Errors.auth_required ~name:"AccountDeactivated"
+                           "account is deactivated"
+                  | None ->
+                      Lwt.return_error
+                      @@ Errors.auth_required "invalid credentials"
+              with _ ->
+                Lwt.return_error @@ Errors.auth_required "malformed JWT claims"
+              ) ) )
 
   let refresh : verifier =
    fun {req; db} ->
