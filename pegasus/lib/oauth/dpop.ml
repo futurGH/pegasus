@@ -41,23 +41,28 @@ let create_nonce_state secret =
   ; next= compute_nonce secret (Int64.succ counter)
   ; rotation_interval_ms= Constants.dpop_rotation_interval_ms }
 
-let next_nonce state =
+let nonce_state = ref (create_nonce_state Env.dpop_nonce_secret)
+
+let next_nonce () =
   let now_counter =
     Int64.div
       (Int64.of_float (Unix.gettimeofday () *. 1000.))
-      state.rotation_interval_ms
+      !nonce_state.rotation_interval_ms
   in
-  if now_counter <> state.counter then (
-    state.prev <- state.curr ;
-    state.curr <- state.next ;
-    state.next <- compute_nonce state.secret (Int64.succ now_counter) ;
-    state.counter <- now_counter ) ;
-  state.next
+  if now_counter <> !nonce_state.counter then (
+    !nonce_state.prev <- !nonce_state.curr ;
+    !nonce_state.curr <- !nonce_state.next ;
+    !nonce_state.next <-
+      compute_nonce !nonce_state.secret (Int64.succ now_counter) ;
+    !nonce_state.counter <- now_counter ) ;
+  !nonce_state.next
 
-let verify_nonce state nonce =
-  let valid = nonce = state.prev || nonce = state.curr || nonce = state.next in
-  next_nonce state |> ignore ;
-  valid
+let verify_nonce nonce =
+  let valid =
+    nonce = !nonce_state.prev || nonce = !nonce_state.curr
+    || nonce = !nonce_state.next
+  in
+  ignore next_nonce ; valid
 
 let add_jti jti =
   let expires_at = int_of_float (Unix.gettimeofday ()) + Constants.jti_ttl_s in
@@ -111,10 +116,10 @@ let verify_signature jwt jwk =
   | _ ->
       false
 
-let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
+let verify_dpop_proof ~mthd ~url ~dpop_header ?access_token () =
   match dpop_header with
   | None ->
-      Lwt.return_error "missing dpop header"
+      Error "missing dpop header"
   | Some jwt -> (
       let open Yojson.Safe.Util in
       match String.split_on_char '.' jwt with
@@ -122,11 +127,11 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
           let header = Yojson.Safe.from_string (Jwt.b64_decode header_b64) in
           let payload = Yojson.Safe.from_string (Jwt.b64_decode payload_b64) in
           let typ = header |> member "typ" |> to_string in
-          if typ <> "dpop+jwt" then Lwt.return_error "invalid typ in dpop proof"
+          if typ <> "dpop+jwt" then Error "invalid typ in dpop proof"
           else
             let alg = header |> member "alg" |> to_string in
             if alg <> "ES256" && alg <> "ES256K" then
-              Lwt.return_error "only es256 and es256k supported for dpop"
+              Error "only es256 and es256k supported for dpop"
             else
               let jwk =
                 header |> member "jwk" |> ec_jwk_of_yojson |> Result.get_ok
@@ -141,7 +146,7 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
                   | _ ->
                       false )
               then
-                Lwt.return_error
+                Error
                   (Printf.sprintf "algorithm %s doesn't match curve %s" alg
                      jwk.crv )
               else
@@ -155,24 +160,23 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
                 match nonce_claim with
                 (* error must be this string; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
                 | None ->
-                    Lwt.return_error "use_dpop_nonce"
-                | Some n when not (verify_nonce nonce_state n) ->
-                    Lwt.return_error "use_dpop_nonce"
+                    Error "use_dpop_nonce"
+                | Some n when not (verify_nonce n) ->
+                    Error "use_dpop_nonce"
                 | Some _ -> (
-                    if htm <> mthd then Lwt.return_error "htm mismatch"
+                    if htm <> mthd then Error "htm mismatch"
                     else if
                       not (String.equal (normalize_url htu) (normalize_url url))
-                    then Lwt.return_error "htu mismatch"
+                    then Error "htu mismatch"
                     else
                       let now = int_of_float (Unix.gettimeofday ()) in
                       if now - iat > Constants.max_dpop_age_s then
-                        Lwt.return_error "dpop proof too old"
-                      else if iat - now > 5 then
-                        Lwt.return_error "dpop proof in future"
+                        Error "dpop proof too old"
+                      else if iat - now > 5 then Error "dpop proof in future"
                       else if not (add_jti jti) then
-                        Lwt.return_error "dpop proof replay detected"
+                        Error "dpop proof replay detected"
                       else if not (verify_signature jwt jwk) then
-                        Lwt.return_error "invalid dpop signature"
+                        Error "invalid dpop signature"
                       else
                         let jkt = compute_jwk_thumbprint jwk in
                         (* verify ath if access token is provided *)
@@ -187,15 +191,14 @@ let verify_dpop_proof ~nonce_state ~mthd ~url ~dpop_header ?access_token () =
                                 |> Jwt.b64_encode )
                             in
                             if Some expected_ath <> ath_claim then
-                              Lwt.return_error "ath mismatch"
-                            else Lwt.return_ok {jti; jkt; htm; htu}
+                              Error "ath mismatch"
+                            else Ok {jti; jkt; htm; htu}
                         | None ->
                             let ath_claim =
                               payload |> member "ath" |> to_string_option
                             in
                             if ath_claim <> None then
-                              Lwt.return_error
-                                "ath claim not allowed without access token"
-                            else Lwt.return_ok {jti; jkt; htm; htu} ) )
+                              Error "ath claim not allowed without access token"
+                            else Ok {jti; jkt; htm; htu} ) )
       | _ ->
-          Lwt.return_error "invalid dpop jwt" )
+          Error "invalid dpop jwt" )

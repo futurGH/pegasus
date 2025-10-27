@@ -125,6 +125,16 @@ let service_proxy_middleware db inner_handler req =
   | None ->
       inner_handler req
 
+let dpop_middleware inner_handler req =
+  let%lwt res = inner_handler req in
+  match Auth.Verifiers.parse_dpop req with
+  | Ok _ ->
+      Dream.add_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
+      Dream.add_header res "Access-Control-Expose-Headers" "DPoP-Nonce" ;
+      Lwt.return res
+  | Error _ ->
+      Lwt.return res
+
 let resolve_repo_did ctx repo =
   if String.starts_with ~prefix:"did:" repo then Lwt.return repo
   else

@@ -9,10 +9,10 @@ type request =
   ; login_hint: string option }
 [@@deriving yojson]
 
-let handler ~nonce_state =
+let handler =
   Xrpc.handler (fun ctx ->
-      let%lwt proof =
-        Oauth.Dpop.verify_dpop_proof ~nonce_state
+      let proof =
+        Oauth.Dpop.verify_dpop_proof
           ~mthd:(Dream.method_to_string @@ Dream.method_ ctx.req)
           ~url:(Dream.target ctx.req)
           ~dpop_header:(Dream.header ctx.req "DPoP")
@@ -20,8 +20,7 @@ let handler ~nonce_state =
       in
       match proof with
       | Error "use_dpop_nonce" ->
-          let nonce = Oauth.Dpop.next_nonce nonce_state in
-          Dream.json ~status:`Bad_Request ~headers:[("DPoP-Nonce", nonce)]
+          Dream.json ~status:`Bad_Request
           @@ Yojson.Safe.to_string
           @@ `Assoc [("error", `String "use_dpop_nonce")]
       | Error e ->
@@ -60,7 +59,6 @@ let handler ~nonce_state =
                 ; created_at= Util.now_ms () }
             in
             Dream.json ~status:`Created
-              ~headers:[("DPoP-Nonce", Oauth.Dpop.next_nonce nonce_state)]
             @@ Yojson.Safe.to_string
             @@ `Assoc
                  [("request_uri", `String request_uri); ("expires_in", `Int 300)] )

@@ -16,8 +16,6 @@ type credentials =
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
 
-let dpop_nonce_state = ref (Oauth.Dpop.create_nonce_state Env.dpop_nonce_secret)
-
 let verify_bearer_jwt t token expected_scope =
   match Jwt.verify_jwt token Env.jwt_key with
   | Error err ->
@@ -97,26 +95,26 @@ module Verifiers = struct
             Error "invalid authorization header" )
       | None ->
           Error "missing authorization header"
+  end
 
-    let parse_basic req =
-      match parse_header req "Basic" with
-      | Ok token -> (
-        match Base64.decode token with
-        | Ok decoded -> (
-          match Str.bounded_split (Str.regexp_string ":") decoded 2 with
-          | [username; password] ->
-              Ok (username, password)
-          | _ ->
-              Error "invalid basic authorization header" )
-        | Error _ ->
+  let parse_basic req =
+    match parse_header req "Basic" with
+    | Ok token -> (
+      match Base64.decode token with
+      | Ok decoded -> (
+        match Str.bounded_split (Str.regexp_string ":") decoded 2 with
+        | [username; password] ->
+            Ok (username, password)
+        | _ ->
             Error "invalid basic authorization header" )
       | Error _ ->
-          Error "invalid basic authorization header"
+          Error "invalid basic authorization header" )
+    | Error _ ->
+        Error "invalid basic authorization header"
 
-    let parse_bearer req = parse_header req "Bearer"
+  let parse_bearer req = parse_header req "Bearer"
 
-    let parse_dpop req = parse_header req "DPoP"
-  end
+  let parse_dpop req = parse_header req "DPoP"
 
   type ctx = {req: Dream.request; db: Data_store.t}
 
@@ -169,12 +167,11 @@ module Verifiers = struct
         Lwt.return_error @@ Errors.auth_required "missing authorization header"
     | Ok token -> (
         let dpop_header = Dream.header req "DPoP" in
-        let%lwt dpop_result =
-          Oauth.Dpop.verify_dpop_proof ~nonce_state:!dpop_nonce_state
+        match
+          Oauth.Dpop.verify_dpop_proof
             ~mthd:(Dream.method_to_string @@ Dream.method_ req)
             ~url:(Dream.target req) ~dpop_header ~access_token:token ()
-        in
-        match dpop_result with
+        with
         | Error e ->
             Lwt.return_error @@ Errors.auth_required ("dpop: " ^ e)
         | Ok proof -> (

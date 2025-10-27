@@ -13,6 +13,8 @@ let handlers =
   ; ( get
     , "/.well-known/oauth-authorization-server"
     , Api.Well_known.oauth_authorization_server )
+  ; (* oauth *)
+    (get, "/oauth/par", Api.Oauth_.Par.handler)
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"
@@ -77,7 +79,7 @@ let main =
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.logger
   @@ Xrpc.service_proxy_middleware db
-  @@ Dream.router
+  @@ Xrpc.dpop_middleware @@ Dream.router
   @@ List.map
        (fun (fn, path, handler) ->
          fn path (fun req -> handler ({req; db} : Xrpc.init)) )
