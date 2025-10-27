@@ -12,7 +12,9 @@ type request =
 let handler ~nonce_state =
   Xrpc.handler (fun ctx ->
       let%lwt proof =
-        Oauth.Dpop.verify_dpop_proof ~nonce_state ~mthd:"POST" ~url:"/oauth/par"
+        Oauth.Dpop.verify_dpop_proof ~nonce_state
+          ~mthd:(Dream.method_to_string @@ Dream.method_ ctx.req)
+          ~url:(Dream.target ctx.req)
           ~dpop_header:(Dream.header ctx.req "DPoP")
           ()
       in
@@ -26,11 +28,16 @@ let handler ~nonce_state =
           Errors.invalid_request e
       | Ok proof ->
           let%lwt req = Xrpc.parse_body ctx.req request_of_yojson in
-          let%lwt client = Oauth.Client.fetch_client_metadata req.client_id in
+          let%lwt client =
+            try%lwt Oauth.Client.fetch_client_metadata req.client_id
+            with e ->
+              Errors.log_exn ~req:ctx.req e ;
+              Errors.invalid_request "failed to fetch client metadata"
+          in
           if req.response_type <> "code" then
             Errors.invalid_request "only response_type=code supported"
           else if req.code_challenge_method <> "S256" then
-            Errors.invalid_request "only S256 code_challenge_method supported"
+            Errors.invalid_request "only code_challenge_method=S256 supported"
           else if not (List.mem req.redirect_uri client.redirect_uris) then
             Errors.invalid_request "invalid redirect_uri"
           else

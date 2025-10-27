@@ -18,6 +18,7 @@
   safepass
   str
   timedesc
+  uri
   uuidm
   yojson
   lwt_ppx

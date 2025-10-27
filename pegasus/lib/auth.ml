@@ -169,11 +169,10 @@ module Verifiers = struct
         Lwt.return_error @@ Errors.auth_required "missing authorization header"
     | Ok token -> (
         let dpop_header = Dream.header req "DPoP" in
-        let full_url = "https://" ^ Env.hostname ^ Dream.target req in
         let%lwt dpop_result =
           Oauth.Dpop.verify_dpop_proof ~nonce_state:!dpop_nonce_state
             ~mthd:(Dream.method_to_string @@ Dream.method_ req)
-            ~url:full_url ~dpop_header ~access_token:token ()
+            ~url:(Dream.target req) ~dpop_header ~access_token:token ()
         in
         match dpop_result with
         | Error e ->

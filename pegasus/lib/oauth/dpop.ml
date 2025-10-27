@@ -71,8 +71,8 @@ let add_jti jti =
 let normalize_url url =
   let uri = Uri.of_string url in
   Uri.make ~scheme:"https"
-    ~host:(Uri.host uri |> Option.get)
-    ?port:(Uri.port uri) ~path:(Uri.path uri) ()
+    ~host:(Uri.host uri |> Option.value ~default:Env.hostname)
+    ~path:(Uri.path uri) ()
   |> Uri.to_string
 
 let compute_jwk_thumbprint jwk =

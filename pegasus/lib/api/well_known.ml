@@ -49,8 +49,7 @@ let oauth_authorization_server =
              , `List [`String "query"; `String "fragment"] )
            ; ( "grant_types_supported"
              , `List [`String "authorization_code"; `String "refresh_token"] )
-           ; ( "code_challenge_methods_supported"
-             , `List [`String "S256"; `String "plain"] )
+           ; ("code_challenge_methods_supported", `List [`String "S256"])
            ; ("ui_locales_supported", `List [`String "en-US"])
            ; ( "display_values_supported"
              , `List [`String "page"; `String "popup"; `String "touch"] )
