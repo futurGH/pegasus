@@ -15,6 +15,7 @@ type credentials =
   | Admin
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
+  | OAuth of {did: string; proof: Oauth.Dpop.proof}
 
 let verify_bearer_jwt t token expected_scope =
   match Jwt.verify_jwt token Env.jwt_key with
@@ -42,7 +43,7 @@ let verify_auth ?(refresh = false) credentials did =
   match credentials with
   | Admin ->
       true
-  | Access {did= creds} when creds = did ->
+  | (Access {did= creds} | OAuth {did= creds; _}) when creds = did ->
       true
   | Refresh {did= creds; _} when creds = did && refresh ->
       true
@@ -50,12 +51,18 @@ let verify_auth ?(refresh = false) credentials did =
       false
 
 let get_authed_did_exn = function
-  | Access {did} ->
+  | Access {did} | OAuth {did; _} ->
       did
   | Refresh {did; _} ->
       did
   | _ ->
-      Errors.auth_required "Invalid authorization header"
+      Errors.auth_required "invalid authorization header"
+
+let get_dpop_proof_exn = function
+  | OAuth {proof; _} ->
+      proof
+  | _ ->
+      Errors.invalid_request "invalid DPoP header"
 
 let get_session_info identifier db =
   let%lwt actor =
@@ -160,11 +167,11 @@ module Verifiers = struct
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
-  let oauth : verifier =
+  let dpop : verifier =
    fun {req; db} ->
     match parse_dpop req with
-    | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "missing authorization header"
+    | Error e ->
+        Errors.invalid_request ("dpop error: " ^ e)
     | Ok token -> (
         let dpop_header = Dream.header req "DPoP" in
         match
@@ -172,8 +179,12 @@ module Verifiers = struct
             ~mthd:(Dream.method_to_string @@ Dream.method_ req)
             ~url:(Dream.target req) ~dpop_header ~access_token:token ()
         with
+        | Error "use_dpop_nonce" ->
+            Lwt.return_error
+            (* error must be this object; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
+            @@ Errors.invalid_request {|{ "error": "use_dpop_nonce" }|}
         | Error e ->
-            Lwt.return_error @@ Errors.auth_required ("dpop: " ^ e)
+            Errors.invalid_request ("dpop error: " ^ e)
         | Ok proof -> (
           match Jwt.verify_jwt token Env.jwt_key with
           | Error e ->
@@ -192,16 +203,15 @@ module Verifiers = struct
                 else if exp < now then
                   Lwt.return_error @@ Errors.auth_required "token expired"
                 else
-                  match%lwt Data_store.get_actor_by_identifier did db with
-                  | Some {deactivated_at= None; _} ->
-                      Lwt.return_ok (Access {did})
-                  | Some {deactivated_at= Some _; _} ->
-                      Lwt.return_error
-                      @@ Errors.auth_required ~name:"AccountDeactivated"
-                           "account is deactivated"
-                  | None ->
-                      Lwt.return_error
-                      @@ Errors.auth_required "invalid credentials"
+                  let%lwt {active; _} =
+                    try%lwt get_session_info did db
+                    with _ -> Errors.auth_required "invalid credentials"
+                  in
+                  if active <> Some true then
+                    Lwt.return_error
+                    @@ Errors.auth_required ~name:"AccountDeactivated"
+                         "account is deactivated"
+                  else Lwt.return_ok (Access {did})
               with _ ->
                 Lwt.return_error @@ Errors.auth_required "malformed JWT claims"
               ) ) )
@@ -218,13 +228,13 @@ module Verifiers = struct
             | Some {deactivated_at= Some _; _} ->
                 Lwt.return_error
                 @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "Account is deactivated"
+                     "account is deactivated"
             | None ->
-                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+                Lwt.return_error @@ Errors.auth_required "invalid credentials" )
         | Error "" | Error _ ->
-            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
   let authorization : verifier =
    fun ctx ->
@@ -237,11 +247,11 @@ module Verifiers = struct
     | Some ("Bearer" :: _) ->
         bearer ctx
     | Some ("DPoP" :: _) ->
-        oauth ctx
+        dpop ctx
     | _ ->
         Lwt.return_error
         @@ Errors.auth_required ~name:"InvalidToken"
-             "Unexpected authorization type"
+             "unexpected authorization type"
 
   let any : verifier =
    fun ctx -> try authorization ctx with _ -> unauthenticated ctx
@@ -250,7 +260,7 @@ module Verifiers = struct
     | Unauthenticated
     | Admin
     | Bearer
-    | Oauth
+    | DPoP
     | Refresh
     | Authorization
     | Any
@@ -262,8 +272,8 @@ module Verifiers = struct
         admin
     | Bearer ->
         bearer
-    | Oauth ->
-        oauth
+    | DPoP ->
+        dpop
     | Refresh ->
         refresh
     | Authorization ->
