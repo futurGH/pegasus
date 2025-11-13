@@ -38,6 +38,32 @@ let insert_auth_code conn code =
          record_in]
        code
 
+let get_auth_code conn code =
+  Util.use_pool conn
+  @@ [%rapper
+       get_opt
+         {sql|
+        SELECT @string{code}, @string{request_id}, @string?{authorized_by},
+               @int?{authorized_at}, @int{expires_at}, @bool{used}
+        FROM oauth_codes
+        WHERE code = %string{code}
+      |sql}
+         record_out]
+       ~code
+
+let activate_auth_code conn code did =
+  let authorized_at = Util.now_ms () in
+  Util.use_pool conn
+  @@ [%rapper
+       execute
+         {sql|
+        UPDATE oauth_codes
+        SET authorized_by = %string{did},
+            authorized_at = %int{authorized_at}
+        WHERE code = %string{code} AND authorized_by = NULL
+      |sql}]
+       ~did ~authorized_at ~code
+
 let consume_auth_code conn code =
   Util.use_pool conn
   @@ [%rapper
