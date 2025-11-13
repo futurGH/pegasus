@@ -1,3 +1,5 @@
+open Oauth
+
 type request =
   { client_id: string
   ; response_type: string
@@ -12,7 +14,7 @@ type request =
 let handler =
   Xrpc.handler (fun ctx ->
       let proof =
-        Oauth.Dpop.verify_dpop_proof
+        Dpop.verify_dpop_proof
           ~mthd:(Dream.method_to_string @@ Dream.method_ ctx.req)
           ~url:(Dream.target ctx.req)
           ~dpop_header:(Dream.header ctx.req "DPoP")
@@ -28,7 +30,7 @@ let handler =
       | Ok proof ->
           let%lwt req = Xrpc.parse_body ctx.req request_of_yojson in
           let%lwt client =
-            try%lwt Oauth.Client.fetch_client_metadata req.client_id
+            try%lwt Client.fetch_client_metadata req.client_id
             with e ->
               Errors.log_exn ~req:ctx.req e ;
               Errors.invalid_request "failed to fetch client metadata"
@@ -43,12 +45,10 @@ let handler =
             let request_id =
               "req-" ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
             in
-            let request_uri = Oauth.Constants.request_uri_prefix ^ request_id in
-            let expires_at =
-              Util.now_ms () + Oauth.Constants.par_request_ttl_ms
-            in
+            let request_uri = Constants.request_uri_prefix ^ request_id in
+            let expires_at = Util.now_ms () + Constants.par_request_ttl_ms in
             let%lwt () =
-              Oauth.Queries.insert_par_request ctx.db
+              Queries.insert_par_request ctx.db
                 { request_id
                 ; client_id= req.client_id
                 ; request_data= Yojson.Safe.to_string (request_to_yojson req)

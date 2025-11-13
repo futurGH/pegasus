@@ -1,3 +1,4 @@
+open Oauth
 open Oauth.Types
 
 let get_session_user (ctx : Xrpc.context) =
@@ -17,7 +18,7 @@ let get_handler =
           (* TODO: actually implement the page for this redirect *)
           Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
       | Some client_id, Some request_uri -> (
-          let prefix = Oauth.Constants.request_uri_prefix in
+          let prefix = Constants.request_uri_prefix in
           if not (String.starts_with ~prefix request_uri) then
             Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
           else
@@ -25,7 +26,7 @@ let get_handler =
               String.sub request_uri (String.length prefix)
                 (String.length request_uri - String.length prefix)
             in
-            match%lwt Oauth.Queries.get_par_request ctx.db request_id with
+            match%lwt Queries.get_par_request ctx.db request_id with
             | None ->
                 Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
             | Some req_record -> (
@@ -41,7 +42,7 @@ let get_handler =
                     |> Result.get_ok
                   in
                   let%lwt _client =
-                    try%lwt Oauth.Client.fetch_client_metadata client_id
+                    try%lwt Client.fetch_client_metadata client_id
                     with _ ->
                       Errors.internal_error
                         ~msg:"failed to fetch client metadata" ()
@@ -50,11 +51,9 @@ let get_handler =
                     "cod-"
                     ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
                   in
-                  let expires_at =
-                    Util.now_ms () + Oauth.Constants.code_expiry_ms
-                  in
+                  let expires_at = Util.now_ms () + Constants.code_expiry_ms in
                   let%lwt () =
-                    Oauth.Queries.insert_auth_code ctx.db
+                    Queries.insert_auth_code ctx.db
                       { code
                       ; request_id
                       ; authorized_by= None
@@ -111,13 +110,13 @@ let post_handler =
               let request_uri = List.assoc_opt "request_uri" fields in
               match (action, code, request_uri) with
               | Some "deny", _, Some request_uri -> (
-                  let prefix = Oauth.Constants.request_uri_prefix in
+                  let prefix = Constants.request_uri_prefix in
                   let request_id =
                     String.sub request_uri (String.length prefix)
                       (String.length request_uri - String.length prefix)
                   in
                   let%lwt req_record =
-                    Oauth.Queries.get_par_request ctx.db request_id
+                    Queries.get_par_request ctx.db request_id
                   in
                   match req_record with
                   | Some rec_ ->
@@ -141,9 +140,7 @@ let post_handler =
                   | None ->
                       Errors.invalid_request "request expired" )
               | Some "allow", Some code, Some _request_uri -> (
-                  let%lwt code_record =
-                    Oauth.Queries.get_auth_code ctx.db code
-                  in
+                  let%lwt code_record = Queries.get_auth_code ctx.db code in
                   match code_record with
                   | None ->
                       Errors.invalid_request "invalid code"
@@ -156,11 +153,10 @@ let post_handler =
                         Errors.invalid_request "code expired"
                       else
                         let%lwt () =
-                          Oauth.Queries.activate_auth_code ctx.db code user_did
+                          Queries.activate_auth_code ctx.db code user_did
                         in
                         let%lwt req_record =
-                          Oauth.Queries.get_par_request ctx.db
-                            code_rec.request_id
+                          Queries.get_par_request ctx.db code_rec.request_id
                         in
                         match req_record with
                         | None ->
