@@ -62,14 +62,10 @@ type oauth_code =
 [@@deriving yojson {strict= false}]
 
 type oauth_token =
-  { id: int
-  ; token_id: string
-  ; refresh_token: string
+  { refresh_token: string
   ; client_id: string
   ; did: string
   ; dpop_jkt: string
   ; scope: string
-  ; created_at: int
-  ; expires_at: int
-  ; last_refreshed_at: int }
+  ; expires_at: int }
 [@@deriving yojson {strict= false}]

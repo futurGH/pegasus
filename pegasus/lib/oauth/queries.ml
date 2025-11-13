@@ -83,8 +83,8 @@ let insert_oauth_token conn token =
   @@ [%rapper
        execute
          {sql|
-        INSERT INTO oauth_tokens (token_id, refresh_token, client_id, did, dpop_jkt, scope, created_at, expires_at, last_refreshed_at)
-        VALUES (%string{token_id}, %string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{created_at}, %int{expires_at}, %int{last_refreshed_at})
+        INSERT INTO oauth_tokens (refresh_token, client_id, did, dpop_jkt, scope, expires_at)
+        VALUES (%string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{expires_at})
       |sql}
          record_in]
        token
@@ -94,9 +94,8 @@ let get_oauth_token_by_refresh conn refresh_token =
   @@ [%rapper
        get_opt
          {sql|
-        SELECT @int{id}, @string{token_id}, @string{refresh_token}, @string{client_id},
-               @string{did}, @string{dpop_jkt}, @string{scope}, @int{created_at},
-               @int{expires_at}, @int{last_refreshed_at}
+        SELECT @string{refresh_token}, @string{client_id}, @string{did},
+               @string{dpop_jkt}, @string{scope}, @int{expires_at}
         FROM oauth_tokens
         WHERE refresh_token = %string{refresh_token}
       |sql}
@@ -105,7 +104,6 @@ let get_oauth_token_by_refresh conn refresh_token =
 
 let update_oauth_token conn ~old_refresh_token ~new_token_id ~new_refresh_token
     ~expires_at =
-  let last_refreshed_at = Util.now_ms () in
   Util.use_pool conn
   @@ [%rapper
        execute
@@ -113,12 +111,10 @@ let update_oauth_token conn ~old_refresh_token ~new_token_id ~new_refresh_token
         UPDATE oauth_tokens
         SET token_id = %string{new_token_id},
             refresh_token = %string{new_refresh_token},
-            expires_at = %int{expires_at},
-            last_refreshed_at = %int{last_refreshed_at}
+            expires_at = %int{expires_at}
         WHERE refresh_token = %string{old_refresh_token}
       |sql}]
-       ~new_token_id ~new_refresh_token ~expires_at ~last_refreshed_at
-       ~old_refresh_token
+       ~new_token_id ~new_refresh_token ~expires_at ~old_refresh_token
 
 let delete_oauth_token_by_refresh conn refresh_token =
   Util.use_pool conn
@@ -134,12 +130,11 @@ let get_oauth_tokens_by_did conn did =
   @@ [%rapper
        get_many
          {sql|
-        SELECT @int{id}, @string{token_id}, @string{refresh_token}, @string{client_id},
-               @string{did}, @string{dpop_jkt}, @string{scope}, @int{created_at},
-               @int{expires_at}, @int{last_refreshed_at}
+        SELECT @string{refresh_token}, @string{client_id}, @string{did},
+                @string{dpop_jkt}, @string{scope}, @int{expires_at}
         FROM oauth_tokens
         WHERE did = %string{did}
-        ORDER BY created_at DESC
+        ORDER BY expires_at ASC
       |sql}
          record_out]
        ~did

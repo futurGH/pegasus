@@ -116,16 +116,12 @@ module Queries = struct
       [%rapper
         execute
           {sql| CREATE TABLE IF NOT EXISTS oauth_tokens (
-            	id INTEGER PRIMARY KEY,
-            	token_id TEXT UNIQUE NOT NULL,
             	refresh_token TEXT UNIQUE NOT NULL,
             	client_id TEXT NOT NULL,
             	did TEXT NOT NULL,
             	dpop_jkt TEXT,
             	scope TEXT NOT NULL,
-            	created_at INTEGER NOT NULL,
-            	expires_at INTEGER NOT NULL,
-            	last_refreshed_at INTEGER NOT NULL
+            	expires_at INTEGER NOT NULL
               )
           |sql}]
         () conn

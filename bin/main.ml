@@ -15,6 +15,9 @@ let handlers =
     , Api.Well_known.oauth_authorization_server )
   ; (* oauth *)
     (get, "/oauth/par", Api.Oauth_.Par.handler)
+  ; (get, "/oauth/authorize", Api.Oauth_.Authorize.get_handler)
+  ; (post, "/oauth/authorize", Api.Oauth_.Authorize.post_handler)
+  ; (post, "/oauth/token", Api.Oauth_.Token.handler)
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"

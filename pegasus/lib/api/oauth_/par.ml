@@ -41,7 +41,7 @@ let handler =
             Errors.invalid_request "invalid redirect_uri"
           else
             let request_id =
-              "req-" ^ (Uuidm.v4_gen (Random.get_state ()) () |> Uuidm.to_string)
+              "req-" ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
             in
             let request_uri = Oauth.Constants.request_uri_prefix ^ request_id in
             let expires_at =

@@ -98,7 +98,7 @@ let get_handler =
                         *)
                         Dream.html "" ) ) ) )
 
-let post_handler pool =
+let post_handler =
   Xrpc.handler (fun ctx ->
       match%lwt get_session_user ctx with
       | None ->
@@ -117,7 +117,7 @@ let post_handler pool =
                       (String.length request_uri - String.length prefix)
                   in
                   let%lwt req_record =
-                    Oauth.Queries.get_par_request pool request_id
+                    Oauth.Queries.get_par_request ctx.db request_id
                   in
                   match req_record with
                   | Some rec_ ->
@@ -141,7 +141,9 @@ let post_handler pool =
                   | None ->
                       Errors.invalid_request "request expired" )
               | Some "allow", Some code, Some _request_uri -> (
-                  let%lwt code_record = Oauth.Queries.get_auth_code pool code in
+                  let%lwt code_record =
+                    Oauth.Queries.get_auth_code ctx.db code
+                  in
                   match code_record with
                   | None ->
                       Errors.invalid_request "invalid code"
@@ -154,10 +156,11 @@ let post_handler pool =
                         Errors.invalid_request "code expired"
                       else
                         let%lwt () =
-                          Oauth.Queries.activate_auth_code pool code user_did
+                          Oauth.Queries.activate_auth_code ctx.db code user_did
                         in
                         let%lwt req_record =
-                          Oauth.Queries.get_par_request pool code_rec.request_id
+                          Oauth.Queries.get_par_request ctx.db
+                            code_rec.request_id
                         in
                         match req_record with
                         | None ->
