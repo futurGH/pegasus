@@ -22,9 +22,10 @@ let get_par_request conn request_id =
                @string?{dpop_jkt}, @int{expires_at}, @int{created_at}
         FROM oauth_requests
         WHERE request_id = %string{request_id}
+        AND expires_at > %int{now}
       |sql}
          record_out]
-       ~request_id
+       ~request_id ~now:(Util.now_ms ())
 
 let insert_auth_code conn code =
   Util.use_pool conn

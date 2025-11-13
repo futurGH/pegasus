@@ -1,6 +1,7 @@
 type par_request =
   { client_id: string
   ; response_type: string
+  ; response_mode: string option
   ; redirect_uri: string
   ; scope: string
   ; state: string

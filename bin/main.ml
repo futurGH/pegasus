@@ -78,6 +78,8 @@ let main =
   let%lwt () = Data_store.init db in
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.logger
+  @@ Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
+  @@ Dream.cookie_sessions
   @@ Xrpc.service_proxy_middleware db
   @@ Xrpc.dpop_middleware @@ Dream.router
   @@ List.map

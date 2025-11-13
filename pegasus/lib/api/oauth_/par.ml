@@ -43,9 +43,7 @@ let handler =
             let request_id =
               "req-" ^ (Uuidm.v4_gen (Random.get_state ()) () |> Uuidm.to_string)
             in
-            let request_uri =
-              "urn:ietf:params:oauth:request_uri:" ^ request_id
-            in
+            let request_uri = Oauth.Constants.request_uri_prefix ^ request_id in
             let expires_at =
               Util.now_ms () + Oauth.Constants.par_request_ttl_ms
             in
