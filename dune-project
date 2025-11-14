@@ -30,6 +30,7 @@
  (url "git+https://github.com/roddyyaga/ppx_rapper.git")
  (package (name ppx_rapper_lwt)))
 
+
 (package
  (name pegasus)
  (synopsis "An atproto Personal Data Server implementation")
@@ -46,6 +47,8 @@
   (cohttp-lwt-unix (>= 6.1.1))
   (dns-client (>= 10.2.0))
   dream
+  html_of_jsx
+  mlx
   (re (>= 1.13.2))
   (safepass (>= 3.1))
   (timedesc (>= 3.1.0))
@@ -56,7 +59,9 @@
   (ppx_deriving_yojson (>= 3.9.1))
   ppx_rapper
   ppx_rapper_lwt
-  (alcotest :with-test)))
+  (alcotest :with-test)
+  (ocamlformat-mlx :with-dev-setup)
+  (ocamlmerlin-mlx :with-dev-setup)))
 
 (package
  (name mist)
@@ -98,3 +103,14 @@
   (hacl-star (>= 0.7.2))
   (mirage-crypto-ec (>= 2.0.1))
   (multibase (>= 0.1.0))))
+
+(package
+    (name tailwindcss) (allow_empty))
+
+(dialect
+ (name mlx)
+ (implementation
+  (extension mlx)
+  (merlin_reader mlx)
+  (preprocess
+   (run mlx-pp %{input-file}))))

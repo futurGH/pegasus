@@ -80,6 +80,9 @@ let handlers =
     , "/xrpc/com.atproto.actor.putPreferences"
     , Api.Actor.PutPreferences.handler ) ]
 
+let static_routes =
+  [Dream.get "/public/**" (Dream.static "_build/default/public")]
+
 let main =
   let%lwt db = Data_store.connect ~create:true () in
   let%lwt () = Data_store.init db in
@@ -93,5 +96,6 @@ let main =
        (fun (fn, path, handler) ->
          fn path (fun req -> handler ({req; db} : Xrpc.init)) )
        handlers
+  @ static_routes
 
 let () = Lwt_main.run main

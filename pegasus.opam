@@ -18,6 +18,8 @@ depends: [
   "cohttp-lwt-unix" {>= "6.1.1"}
   "dns-client" {>= "10.2.0"}
   "dream"
+  "html_of_jsx"
+  "mlx"
   "re" {>= "1.13.2"}
   "safepass" {>= "3.1"}
   "timedesc" {>= "3.1.0"}
@@ -29,6 +31,8 @@ depends: [
   "ppx_rapper"
   "ppx_rapper_lwt"
   "alcotest" {with-test}
+  "ocamlformat-mlx" {with-dev-setup}
+  "ocamlmerlin-mlx" {with-dev-setup}
   "odoc" {with-doc}
 ]
 build: [
