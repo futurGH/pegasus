@@ -151,19 +151,19 @@ module Verifiers = struct
    fun {req; db} ->
     match parse_bearer req with
     | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
-        | Ok {sub= did; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Access {did})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "account is deactivated"
-            | None ->
-                Lwt.return_error @@ Errors.auth_required "invalid credentials" )
-        | Error _ ->
+      match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
+      | Ok {sub= did; _} -> (
+        match%lwt Data_store.get_actor_by_identifier did db with
+        | Some {deactivated_at= None; _} ->
+            Lwt.return_ok (Access {did})
+        | Some {deactivated_at= Some _; _} ->
+            Lwt.return_error
+            @@ Errors.auth_required ~name:"AccountDeactivated"
+                 "account is deactivated"
+        | None ->
             Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+      | Error _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
@@ -220,19 +220,19 @@ module Verifiers = struct
    fun {req; db} ->
     match parse_bearer req with
     | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
-        | Ok {sub= did; jti; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Refresh {did; jti})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "account is deactivated"
-            | None ->
-                Lwt.return_error @@ Errors.auth_required "invalid credentials" )
-        | Error "" | Error _ ->
+      match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
+      | Ok {sub= did; jti; _} -> (
+        match%lwt Data_store.get_actor_by_identifier did db with
+        | Some {deactivated_at= None; _} ->
+            Lwt.return_ok (Refresh {did; jti})
+        | Some {deactivated_at= Some _; _} ->
+            Lwt.return_error
+            @@ Errors.auth_required ~name:"AccountDeactivated"
+                 "account is deactivated"
+        | None ->
             Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+      | Error "" | Error _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 

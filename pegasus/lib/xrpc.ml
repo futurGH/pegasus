@@ -12,14 +12,14 @@ let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
   let auth = Auth.Verifiers.of_t auth in
   match%lwt auth init with
   | Ok creds -> (
-      try%lwt hdlr {req= init.req; db= init.db; auth= creds}
-      with e ->
-        ( match is_xrpc_error e with
-        | true ->
-            ()
-        | false ->
-            log_exn ~req:init.req e ) ;
-        exn_to_response e )
+    try%lwt hdlr {req= init.req; db= init.db; auth= creds}
+    with e ->
+      ( match is_xrpc_error e with
+      | true ->
+          ()
+      | false ->
+          log_exn ~req:init.req e ) ;
+      exn_to_response e )
   | Error e ->
       exn_to_response e
 

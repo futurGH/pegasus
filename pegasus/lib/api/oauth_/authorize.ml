@@ -37,8 +37,8 @@ let get_handler =
                     Yojson.Safe.from_string req_record.request_data
                     |> par_request_of_yojson
                     |> Result.map_error (fun _ ->
-                           Errors.internal_error
-                             ~msg:"failed to parse par request" () )
+                        Errors.internal_error ~msg:"failed to parse par request"
+                          () )
                     |> Result.get_ok
                   in
                   let%lwt _client =
@@ -103,90 +103,90 @@ let post_handler =
       | None ->
           Errors.auth_required "missing authentication"
       | Some user_did -> (
-          match%lwt Dream.form ctx.req with
-          | `Ok fields -> (
-              let action = List.assoc_opt "action" fields in
-              let code = List.assoc_opt "code" fields in
-              let request_uri = List.assoc_opt "request_uri" fields in
-              match (action, code, request_uri) with
-              | Some "deny", _, Some request_uri -> (
-                  let prefix = Constants.request_uri_prefix in
-                  let request_id =
-                    String.sub request_uri (String.length prefix)
-                      (String.length request_uri - String.length prefix)
-                  in
-                  let%lwt req_record =
-                    Queries.get_par_request ctx.db request_id
-                  in
-                  match req_record with
-                  | Some rec_ ->
-                      let req =
-                        Yojson.Safe.from_string rec_.request_data
-                        |> par_request_of_yojson |> Result.get_ok
+        match%lwt Dream.form ctx.req with
+        | `Ok fields -> (
+            let action = List.assoc_opt "action" fields in
+            let code = List.assoc_opt "code" fields in
+            let request_uri = List.assoc_opt "request_uri" fields in
+            match (action, code, request_uri) with
+            | Some "deny", _, Some request_uri -> (
+                let prefix = Constants.request_uri_prefix in
+                let request_id =
+                  String.sub request_uri (String.length prefix)
+                    (String.length request_uri - String.length prefix)
+                in
+                let%lwt req_record =
+                  Queries.get_par_request ctx.db request_id
+                in
+                match req_record with
+                | Some rec_ ->
+                    let req =
+                      Yojson.Safe.from_string rec_.request_data
+                      |> par_request_of_yojson |> Result.get_ok
+                    in
+                    let params =
+                      [ ("error", "access_denied")
+                      ; ("error_description", "Unable to authorize user.")
+                      ; ("state", req.state)
+                      ; ("iss", "https://" ^ Env.hostname) ]
+                    in
+                    let query =
+                      String.concat "&"
+                        (List.map
+                           (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
+                           params )
+                    in
+                    Dream.redirect ctx.req (req.redirect_uri ^ "?" ^ query)
+                | None ->
+                    Errors.invalid_request "request expired" )
+            | Some "allow", Some code, Some _request_uri -> (
+                let%lwt code_record = Queries.get_auth_code ctx.db code in
+                match code_record with
+                | None ->
+                    Errors.invalid_request "invalid code"
+                | Some code_rec -> (
+                    if code_rec.authorized_by <> None then
+                      Errors.invalid_request "code already authorized"
+                    else if code_rec.used then
+                      Errors.invalid_request "code already used"
+                    else if Util.now_ms () > code_rec.expires_at then
+                      Errors.invalid_request "code expired"
+                    else
+                      let%lwt () =
+                        Queries.activate_auth_code ctx.db code user_did
                       in
-                      let params =
-                        [ ("error", "access_denied")
-                        ; ("error_description", "Unable to authorize user.")
-                        ; ("state", req.state)
-                        ; ("iss", "https://" ^ Env.hostname) ]
+                      let%lwt req_record =
+                        Queries.get_par_request ctx.db code_rec.request_id
                       in
-                      let query =
-                        String.concat "&"
-                          (List.map
-                             (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                             params )
-                      in
-                      Dream.redirect ctx.req (req.redirect_uri ^ "?" ^ query)
-                  | None ->
-                      Errors.invalid_request "request expired" )
-              | Some "allow", Some code, Some _request_uri -> (
-                  let%lwt code_record = Queries.get_auth_code ctx.db code in
-                  match code_record with
-                  | None ->
-                      Errors.invalid_request "invalid code"
-                  | Some code_rec -> (
-                      if code_rec.authorized_by <> None then
-                        Errors.invalid_request "code already authorized"
-                      else if code_rec.used then
-                        Errors.invalid_request "code already used"
-                      else if Util.now_ms () > code_rec.expires_at then
-                        Errors.invalid_request "code expired"
-                      else
-                        let%lwt () =
-                          Queries.activate_auth_code ctx.db code user_did
-                        in
-                        let%lwt req_record =
-                          Queries.get_par_request ctx.db code_rec.request_id
-                        in
-                        match req_record with
-                        | None ->
-                            Errors.internal_error ~msg:"request not found" ()
-                        | Some rec_ ->
-                            let req =
-                              Yojson.Safe.from_string rec_.request_data
-                              |> par_request_of_yojson |> Result.get_ok
-                            in
-                            let params =
-                              [ ("code", code)
-                              ; ("state", req.state)
-                              ; ("iss", "https://" ^ Env.hostname) ]
-                            in
-                            let query =
-                              String.concat "&"
-                                (List.map
-                                   (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                                   params )
-                            in
-                            let separator =
-                              match req.response_mode with
-                              | Some "fragment" ->
-                                  "#"
-                              | _ ->
-                                  "?"
-                            in
-                            Dream.redirect ctx.req
-                              (req.redirect_uri ^ separator ^ query) ) )
-              | _ ->
-                  Errors.invalid_request "invalid request" )
-          | _ ->
-              Errors.invalid_request "invalid request" ) )
+                      match req_record with
+                      | None ->
+                          Errors.internal_error ~msg:"request not found" ()
+                      | Some rec_ ->
+                          let req =
+                            Yojson.Safe.from_string rec_.request_data
+                            |> par_request_of_yojson |> Result.get_ok
+                          in
+                          let params =
+                            [ ("code", code)
+                            ; ("state", req.state)
+                            ; ("iss", "https://" ^ Env.hostname) ]
+                          in
+                          let query =
+                            String.concat "&"
+                              (List.map
+                                 (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
+                                 params )
+                          in
+                          let separator =
+                            match req.response_mode with
+                            | Some "fragment" ->
+                                "#"
+                            | _ ->
+                                "?"
+                          in
+                          Dream.redirect ctx.req
+                            (req.redirect_uri ^ separator ^ query) ) )
+            | _ ->
+                Errors.invalid_request "invalid request" )
+        | _ ->
+            Errors.invalid_request "invalid request" ) )

@@ -239,12 +239,12 @@ struct
     | None, [] ->
         Lwt.return 0
     | Some left, [] -> (
-        match%lwt retrieve_node_raw t left with
-        | Some node ->
-            let%lwt height = get_node_height t node in
-            Lwt.return (height + 1)
-        | None ->
-            failwith ("couldn't find node " ^ Cid.to_string left) )
+      match%lwt retrieve_node_raw t left with
+      | Some node ->
+          let%lwt height = get_node_height t node in
+          Lwt.return (height + 1)
+      | None ->
+          failwith ("couldn't find node " ^ Cid.to_string left) )
     | _, leaf :: _ -> (
       match leaf.p with
       | 0 ->
@@ -497,12 +497,14 @@ struct
         let%lwt blocks =
           match Util.at_index index seq with
           | Some (Leaf (k, v, _)) when k = key -> (
-              (* include the found leaf block to prove existence *)
-              match%lwt Store.get_bytes t.blockstore v with
-              | Some leaf_bytes ->
-                  Lwt.return (Block_map.set v leaf_bytes Block_map.empty)
-              | None ->
-                  Lwt.return Block_map.empty )
+            (* include the found leaf block to prove existence *)
+            match%lwt
+              Store.get_bytes t.blockstore v
+            with
+            | Some leaf_bytes ->
+                Lwt.return (Block_map.set v leaf_bytes Block_map.empty)
+            | None ->
+                Lwt.return Block_map.empty )
           | _ -> (
               let prev =
                 if index - 1 >= 0 then Util.at_index (index - 1) seq else None
@@ -529,23 +531,22 @@ struct
                   let%lwt bm =
                     match left_leaf with
                     | Some cid_left -> (
-                        match%lwt Store.get_bytes t.blockstore cid_left with
-                        | Some b ->
-                            Lwt.return
-                              (Block_map.set cid_left b Block_map.empty)
-                        | None ->
-                            Lwt.return Block_map.empty )
+                      match%lwt Store.get_bytes t.blockstore cid_left with
+                      | Some b ->
+                          Lwt.return (Block_map.set cid_left b Block_map.empty)
+                      | None ->
+                          Lwt.return Block_map.empty )
                     | None ->
                         Lwt.return Block_map.empty
                   in
                   let%lwt bm =
                     match right_leaf with
                     | Some cid_right -> (
-                        match%lwt Store.get_bytes t.blockstore cid_right with
-                        | Some b ->
-                            Lwt.return (Block_map.set cid_right b bm)
-                        | None ->
-                            Lwt.return bm )
+                      match%lwt Store.get_bytes t.blockstore cid_right with
+                      | Some b ->
+                          Lwt.return (Block_map.set cid_right b bm)
+                      | None ->
+                          Lwt.return bm )
                     | None ->
                         Lwt.return bm
                   in
@@ -571,11 +572,11 @@ struct
           | Some (Tree c) ->
               proof_for_left_sibling t c key
           | Some (Leaf (_, v_left, _)) -> (
-              match%lwt Store.get_bytes t.blockstore v_left with
-              | Some b ->
-                  Lwt.return (Block_map.set v_left b Block_map.empty)
-              | None ->
-                  Lwt.return Block_map.empty )
+            match%lwt Store.get_bytes t.blockstore v_left with
+            | Some b ->
+                Lwt.return (Block_map.set v_left b Block_map.empty)
+            | None ->
+                Lwt.return Block_map.empty )
           | _ ->
               Lwt.return Block_map.empty
         in
@@ -612,11 +613,11 @@ struct
               | Some (Tree c) ->
                   proof_for_right_sibling t c key
               | Some (Leaf (_, v_right, _)) -> (
-                  match%lwt Store.get_bytes t.blockstore v_right with
-                  | Some b ->
-                      Lwt.return (Block_map.set v_right b Block_map.empty)
-                  | None ->
-                      Lwt.return Block_map.empty )
+                match%lwt Store.get_bytes t.blockstore v_right with
+                | Some b ->
+                    Lwt.return (Block_map.set v_right b Block_map.empty)
+                | None ->
+                    Lwt.return Block_map.empty )
               | _ ->
                   Lwt.return Block_map.empty )
           | None ->

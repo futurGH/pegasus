@@ -14,9 +14,9 @@ let handler =
           Dream.json @@ Yojson.Safe.to_string
           @@ response_to_yojson {did= actor.did}
       | None -> (
-          match%lwt Id_resolver.Handle.resolve handle with
-          | Ok did ->
-              Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {did}
-          | Error e ->
-              Errors.log_exn (Failure e) ;
-              Errors.internal_error ~msg:"could not resolve handle" () ) )
+        match%lwt Id_resolver.Handle.resolve handle with
+        | Ok did ->
+            Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {did}
+        | Error e ->
+            Errors.log_exn (Failure e) ;
+            Errors.internal_error ~msg:"could not resolve handle" () ) )
