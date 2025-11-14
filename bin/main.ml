@@ -18,6 +18,10 @@ let handlers =
   ; (get, "/oauth/authorize", Api.Oauth_.Authorize.get_handler)
   ; (post, "/oauth/authorize", Api.Oauth_.Authorize.post_handler)
   ; (post, "/oauth/token", Api.Oauth_.Token.handler)
+  ; (* account *)
+    (get, "/account/login", Api.Account_.Login.get_handler)
+  ; (post, "/account/login", Api.Account_.Login.post_handler)
+  ; (get, "/account/logout", Api.Account_.Logout.handler)
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"
@@ -26,7 +30,7 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.identity.resolveHandle"
     , Api.Identity.ResolveHandle.handler )
-  ; (* account *)
+  ; (* account management *)
     ( post
     , "/xrpc/com.atproto.server.createInviteCode"
     , Api.Server.CreateInviteCode.handler )
