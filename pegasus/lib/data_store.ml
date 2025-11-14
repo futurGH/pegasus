@@ -129,9 +129,9 @@ module Queries = struct
     let$! () =
       [%rapper
         execute
-          {sql| CREATE INDEX oauth_requests_expires_idx ON oauth_requests(expires_at);
-                CREATE INDEX oauth_codes_expires_idx ON oauth_codes(expires_at);
-                CREATE INDEX oauth_tokens_refresh_idx ON oauth_tokens(refresh_token);
+          {sql| CREATE INDEX IF NOT EXISTS oauth_requests_expires_idx ON oauth_requests(expires_at);
+                CREATE INDEX IF NOT EXISTS oauth_codes_expires_idx ON oauth_codes(expires_at);
+                CREATE INDEX IF NOT EXISTS oauth_tokens_refresh_idx ON oauth_tokens(refresh_token);
           |sql}]
         () conn
     in
