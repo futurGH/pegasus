@@ -1,0 +1,12 @@
+let make ?id ?(type_ = "button") ?(class_ = "") ~children () =
+  <button
+    ?id
+    type_
+    class_=( "bg-white font-serif text-mana-200 text-lg py-1 px-4 rounded-lg \
+              w-full flex items-center justify-center transition delay-50 \
+              duration-300 shadow-whisper hover:shadow-shimmer \
+              hover:bg-mist-20 focus:shadow-shimmer focus:bg-mist-20 \
+              focus:outline-none active:shadow-glow disabled:bg-mana-40 \
+              disabled:text-mist-100 " ^ class_ )>
+    children
+  </button>

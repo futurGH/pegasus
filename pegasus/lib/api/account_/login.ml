@@ -1,18 +1,14 @@
 let get_handler =
   Xrpc.handler (fun ctx ->
-      let _redirect_url =
+      let redirect_url =
         Dream.query ctx.req "redirect_url" |> Option.value ~default:"/"
       in
-      (* render login page with
-          [ ("redirect_url", `String redirect_url)
-          ; ("error", `Null) ]
-          *)
-      Dream.html "" )
+      let html = JSX.render (Templates.Login.make ~redirect_url ()) in
+      Dream.html html )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
-      let%lwt form = Dream.form ctx.req in
-      match form with
+      match%lwt Dream.form ctx.req with
       | `Ok fields -> (
           let identifier = List.assoc "identifier" fields in
           let password = List.assoc "password" fields in
@@ -24,14 +20,20 @@ let post_handler =
           in
           match actor with
           | None ->
-              (* render login page with
-                  [ ("error", `String "Invalid credentials")
-                  ; ("redirect_url", `String redirect_url) ]
-                  *)
-              Dream.html ~status:`Unauthorized ""
+              let html =
+                JSX.render
+                  (Templates.Login.make ~redirect_url
+                     ~error:"Invalid username or password. Please try again." () )
+              in
+              Dream.html ~status:`Unauthorized html
           | Some {did; _} ->
               let%lwt () = Dream.invalidate_session ctx.req in
               let%lwt () = Dream.set_session_field ctx.req "did" did in
               Dream.redirect ctx.req redirect_url )
       | _ ->
-          Errors.invalid_request "invalid request body" )
+          let html =
+            JSX.render
+              (Templates.Login.make ~redirect_url:"/"
+                 ~error:"Invalid credentials provided. Please try again." () )
+          in
+          Dream.html ~status:`Unauthorized html )

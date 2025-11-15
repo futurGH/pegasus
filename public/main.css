@@ -1,1 +1,46 @@
 @import "tailwindcss" source("../pegasus/lib/templates");
+
+@font-face {
+	font-family: "Fragment";
+	src:
+		url("fonts/Fragment.woff2") format("woff2"),
+		url("fonts/Fragment.woff") format("woff");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Geist";
+	src: url("https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2")
+		format("woff2");
+	font-weight: 300 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@theme {
+	--font-serif: Fragment, Georgia, "Times New Roman", Times, serif;
+	--font-sans: Geist, Helvetica, -apple-system, system-ui, sans-serif;
+	--font-weight-normal: 300;
+	--font-weight-medium: 400;
+
+	--tracking-normal: 0.01em;
+
+	--color-*: initial;
+	--color-white: #fff;
+	--color-feather-100: #c8cfd2;
+	--color-phoenix-100: #db4c64;
+	--color-mana-40: #9b9eaa;
+	--color-mana-100: #6558a1;
+	--color-mana-200: #312b4d;
+	--color-mist-20: #ecedf8;
+	--color-mist-40: #dee1e3;
+	--color-mist-60: #a4a9ac;
+	--color-mist-80: #737579;
+	--color-mist-100: #4f4f53;
+
+	--shadow-whisper: inset 0 0 1em #97baff8c;
+	--shadow-shimmer: inset 0 0 1em #79a7ed99;
+	--shadow-glow: inset 0 0 2em #2d37ba73;
+}
