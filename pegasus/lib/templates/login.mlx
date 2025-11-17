@@ -1,0 +1,35 @@
+open JSX
+open Components
+
+let make ~redirect_url ?error ~csrf_token () =
+  <Layout title="Login">
+    <main class_="w-full h-auto max-w-xs px-4 sm:px-0">
+      <h1 class_="text-2xl font-serif text-mana-200 mb-2">"sign in"</h1>
+      <span class_="w-full text-balance text-mist-100">
+        "Enter your handle, email address, or DID, and your password."
+      </span>
+      <form method_="post" class_="w-full flex flex-col mt-4 mb-2 gap-y-2">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <Input sr_only=true name="identifier" type_="text" label="identifier" />
+        <Input sr_only=true name="password" type_="password" label="password" />
+        <input type_="hidden" name="redirect_url" value=redirect_url />
+        ( match error with
+        | Some error ->
+            <span class_="inline-flex items-center text-phoenix-100 text-sm">
+              <Icons.Circle_alert class_="w-4 h-4 mr-2" /> (string error)
+            </span>
+        | None ->
+            null )
+        <Button type_="submit" class_="mt-2">"sign in"</Button>
+      </form>
+      <span class_="text-sm text-mist-100">
+        "Or "
+        <a
+          href="/account/signup"
+          class_="text-mana-100 underline hover:text-mana-200">
+          "create an account"
+        </a>
+        "."
+      </span>
+    </main>
+  </Layout>

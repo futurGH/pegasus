@@ -15,6 +15,8 @@ type credentials =
   | Admin
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
+  | OAuth of {did: string; proof: Oauth.Dpop.proof}
+  | DPoP of {proof: Oauth.Dpop.proof}
 
 let verify_bearer_jwt t token expected_scope =
   match Jwt.verify_jwt token Env.jwt_key with
@@ -42,7 +44,7 @@ let verify_auth ?(refresh = false) credentials did =
   match credentials with
   | Admin ->
       true
-  | Access {did= creds} when creds = did ->
+  | (Access {did= creds} | OAuth {did= creds; _}) when creds = did ->
       true
   | Refresh {did= creds; _} when creds = did && refresh ->
       true
@@ -50,12 +52,18 @@ let verify_auth ?(refresh = false) credentials did =
       false
 
 let get_authed_did_exn = function
-  | Access {did} ->
+  | Access {did} | OAuth {did; _} ->
       did
   | Refresh {did; _} ->
       did
   | _ ->
-      Errors.auth_required "Invalid authorization header"
+      Errors.auth_required "invalid authorization header"
+
+let get_dpop_proof_exn = function
+  | OAuth {proof; _} | DPoP {proof} ->
+      proof
+  | _ ->
+      Errors.invalid_request "invalid DPoP header"
 
 let get_session_info identifier db =
   let%lwt actor =
@@ -84,7 +92,7 @@ let get_session_info identifier db =
 module Verifiers = struct
   open struct
     let parse_header req expected_type =
-      match Dream.header req "authorization" with
+      match Dream.header req "Authorization" with
       | Some header -> (
         match String.split_on_char ' ' header with
         | [typ; token]
@@ -95,24 +103,26 @@ module Verifiers = struct
             Error "invalid authorization header" )
       | None ->
           Error "missing authorization header"
+  end
 
-    let parse_basic req =
-      match parse_header req "Basic" with
-      | Ok token -> (
-        match Base64.decode token with
-        | Ok decoded -> (
-          match Str.bounded_split (Str.regexp_string ":") decoded 2 with
-          | [username; password] ->
-              Ok (username, password)
-          | _ ->
-              Error "invalid basic authorization header" )
-        | Error _ ->
+  let parse_basic req =
+    match parse_header req "Basic" with
+    | Ok token -> (
+      match Base64.decode token with
+      | Ok decoded -> (
+        match Str.bounded_split (Str.regexp_string ":") decoded 2 with
+        | [username; password] ->
+            Ok (username, password)
+        | _ ->
             Error "invalid basic authorization header" )
       | Error _ ->
-          Error "invalid basic authorization header"
+          Error "invalid basic authorization header" )
+    | Error _ ->
+        Error "invalid basic authorization header"
 
-    let parse_bearer req = parse_header req "Bearer"
-  end
+  let parse_bearer req = parse_header req "Bearer"
+
+  let parse_dpop req = parse_header req "DPoP"
 
   type ctx = {req: Dream.request; db: Data_store.t}
 
@@ -122,7 +132,7 @@ module Verifiers = struct
    fun {req; _} ->
     match Dream.header req "authorization" with
     | Some _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
     | None ->
         Lwt.return_ok Unauthenticated
 
@@ -134,49 +144,115 @@ module Verifiers = struct
       | "admin", p when p = Env.admin_password ->
           Lwt.return_ok Admin
       | _ ->
-          Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
-  let access : verifier =
+  let bearer : verifier =
    fun {req; db} ->
     match parse_bearer req with
     | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
-        | Ok {sub= did; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Access {did})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "Account is deactivated"
-            | None ->
-                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
-        | Error _ ->
-            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+      match%lwt verify_bearer_jwt db jwt "com.atproto.access" with
+      | Ok {sub= did; _} -> (
+        match%lwt Data_store.get_actor_by_identifier did db with
+        | Some {deactivated_at= None; _} ->
+            Lwt.return_ok (Access {did})
+        | Some {deactivated_at= Some _; _} ->
+            Lwt.return_error
+            @@ Errors.auth_required ~name:"AccountDeactivated"
+                 "account is deactivated"
+        | None ->
+            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+      | Error _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
+
+  let dpop : verifier =
+   fun {req; _} ->
+    let dpop_header = Dream.header req "DPoP" in
+    match
+      Oauth.Dpop.verify_dpop_proof
+        ~mthd:(Dream.method_to_string @@ Dream.method_ req)
+        ~url:(Dream.target req) ~dpop_header ()
+    with
+    | Error "use_dpop_nonce" ->
+        Lwt.return_error @@ Errors.use_dpop_nonce ()
+    | Error e ->
+        Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
+    | Ok proof ->
+        Lwt.return_ok (DPoP {proof})
+
+  let oauth : verifier =
+   fun {req; db} ->
+    match parse_dpop req with
+    | Error e ->
+        Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
+    | Ok token -> (
+      match%lwt dpop {req; db} with
+      | Error e ->
+          Lwt.return_error e
+      | Ok (DPoP {proof}) -> (
+        match Jwt.verify_jwt token Env.jwt_key with
+        | Error e ->
+            Lwt.return_error @@ Errors.auth_required e
+        | Ok (_header, claims) -> (
+            let open Yojson.Safe.Util in
+            try
+              let did = claims |> member "sub" |> to_string in
+              let exp = claims |> member "exp" |> to_int in
+              let jkt_claim =
+                claims |> member "cnf" |> member "jkt" |> to_string
+              in
+              let now = int_of_float (Unix.gettimeofday ()) in
+              if jkt_claim <> proof.jkt then
+                Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
+              else if exp < now then
+                Lwt.return_error @@ Errors.auth_required "token expired"
+              else
+                let%lwt session =
+                  try%lwt
+                    let%lwt sess = get_session_info did db in
+                    Lwt.return_ok sess
+                  with _ ->
+                    Lwt.return_error
+                    @@ Errors.auth_required "invalid credentials"
+                in
+                match session with
+                | Ok {active= Some true; _} ->
+                    Lwt.return_ok (OAuth {did; proof})
+                | Ok _ ->
+                    Lwt.return_error
+                    @@ Errors.auth_required ~name:"AccountDeactivated"
+                         "account is deactivated"
+                | Error _ ->
+                    Lwt.return_error
+                    @@ Errors.auth_required "invalid credentials"
+            with _ ->
+              Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
+        )
+      | Ok _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
 
   let refresh : verifier =
    fun {req; db} ->
     match parse_bearer req with
     | Ok jwt -> (
-        match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
-        | Ok {sub= did; jti; _} -> (
-            match%lwt Data_store.get_actor_by_identifier did db with
-            | Some {deactivated_at= None; _} ->
-                Lwt.return_ok (Refresh {did; jti})
-            | Some {deactivated_at= Some _; _} ->
-                Lwt.return_error
-                @@ Errors.auth_required ~name:"AccountDeactivated"
-                     "Account is deactivated"
-            | None ->
-                Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
-        | Error "" | Error _ ->
-            Lwt.return_error @@ Errors.auth_required "Invalid credentials" )
+      match%lwt verify_bearer_jwt db jwt "com.atproto.refresh" with
+      | Ok {sub= did; jti; _} -> (
+        match%lwt Data_store.get_actor_by_identifier did db with
+        | Some {deactivated_at= None; _} ->
+            Lwt.return_ok (Refresh {did; jti})
+        | Some {deactivated_at= Some _; _} ->
+            Lwt.return_error
+            @@ Errors.auth_required ~name:"AccountDeactivated"
+                 "account is deactivated"
+        | None ->
+            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+      | Error "" | Error _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
     | Error _ ->
-        Lwt.return_error @@ Errors.auth_required "Invalid authorization header"
+        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
   let authorization : verifier =
    fun ctx ->
@@ -187,24 +263,38 @@ module Verifiers = struct
     | Some ("Basic" :: _) ->
         admin ctx
     | Some ("Bearer" :: _) ->
-        access ctx
+        bearer ctx
+    | Some ("DPoP" :: _) ->
+        oauth ctx
     | _ ->
         Lwt.return_error
         @@ Errors.auth_required ~name:"InvalidToken"
-             "Unexpected authorization type"
+             "unexpected authorization type"
 
   let any : verifier =
    fun ctx -> try authorization ctx with _ -> unauthenticated ctx
 
-  type t = Unauthenticated | Admin | Access | Refresh | Authorization | Any
+  type t =
+    | Unauthenticated
+    | Admin
+    | Bearer
+    | DPoP
+    | OAuth
+    | Refresh
+    | Authorization
+    | Any
 
   let of_t = function
     | Unauthenticated ->
         unauthenticated
     | Admin ->
         admin
-    | Access ->
-        access
+    | Bearer ->
+        bearer
+    | DPoP ->
+        dpop
+    | OAuth ->
+        oauth
     | Refresh ->
         refresh
     | Authorization ->

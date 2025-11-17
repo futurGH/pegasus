@@ -1,0 +1,21 @@
+(subdir
+ public/
+ (rule
+  (target index.css)
+  (deps
+   %{workspace_root}/tools/tailwindcss/tailwindcss
+   (:input %{workspace_root}/public/main.css)
+   (source_tree %{workspace_root}/public)
+   (source_tree %{workspace_root}/pegasus/lib/templates))
+  (action
+   (chdir
+    %{workspace_root}
+    (run
+     %{workspace_root}/tools/tailwindcss/tailwindcss
+     -m
+     -i
+     %{input}
+     -o
+     %{target})))))
+
+(copy_files public/*)

@@ -220,3 +220,7 @@ let verify ~pubkey ~msg ~signature : bool =
 let pubkey_to_did_key pubkey : string =
   let pubkey, (module Curve : CURVE) = pubkey in
   Curve.pubkey_to_did_key pubkey
+
+let privkey_to_multikey privkey : string =
+  let privkey, (module Curve : CURVE) = privkey in
+  Curve.privkey_to_multikey privkey

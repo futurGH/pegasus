@@ -8,10 +8,10 @@ let test_leading_zeros () =
   Hashtbl.add cases "app.bsky.feed.post/9adeb165882c" 8 ;
   cases
   |> Hashtbl.iter (fun key value ->
-         Alcotest.(check int)
-           ("leading zeros on hash " ^ key)
-           value
-           (leading_zeros_on_hash key) )
+      Alcotest.(check int)
+        ("leading zeros on hash " ^ key)
+        value
+        (leading_zeros_on_hash key) )
 
 let test_shared_prefix_length () =
   let cases = Hashtbl.create 5 in
@@ -22,9 +22,9 @@ let test_shared_prefix_length () =
   Hashtbl.add cases ("2653ae71", "0653ae71") 0 ;
   cases
   |> Hashtbl.iter (fun (a, b) value ->
-         Alcotest.(check int)
-           ("prefix length between " ^ a ^ " and " ^ b)
-           value (shared_prefix_length a b) )
+      Alcotest.(check int)
+        ("prefix length between " ^ a ^ " and " ^ b)
+        value (shared_prefix_length a b) )
 
 let () =
   Alcotest.run "util"

@@ -287,26 +287,21 @@ let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
 let is_none = function None -> true | _ -> false
 
 let validate_handle handle =
-  if not @@ String.ends_with ~suffix:("." ^ Env.hostname) handle then
-    Error (Errors.InvalidRequestError ("InvalidHandle", "invalid handle suffix"))
+  let front =
+    String.sub handle 0 (String.length handle - (String.length Env.hostname + 1))
+  in
+  if String.contains front '.' then
+    Error
+      (Errors.InvalidRequestError
+         ("InvalidHandle", "invalid characters in handle") )
   else
-    let front =
-      String.sub handle 0
-        (String.length handle - (String.length Env.hostname + 1))
-    in
-    if String.contains front '.' then
-      Error
-        (Errors.InvalidRequestError
-           ("InvalidHandle", "invalid characters in handle") )
-    else
-      match String.length front with
-      | l when l < 3 ->
-          Error
-            (Errors.InvalidRequestError ("InvalidHandle", "handle too short"))
-      | l when l > 18 ->
-          Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
-      | _ ->
-          Ok ()
+    match String.length front with
+    | l when l < 3 ->
+        Error (Errors.InvalidRequestError ("InvalidHandle", "handle too short"))
+    | l when l > 18 ->
+        Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
+    | _ ->
+        Ok ()
 
 let mkfile_p path ~perm =
   Core_unix.mkdir_p (Filename.dirname path) ~perm:0o755 ;
@@ -324,3 +319,48 @@ let sig_matches_some_did_key ~did_keys ~signature ~msg =
       valid )
     did_keys
   <> None
+
+let rec http_get ?(max_redirects = 5) ?headers uri =
+  let%lwt ans = Cohttp_lwt_unix.Client.get ?headers uri in
+  follow_redirect ~max_redirects uri ans
+
+and follow_redirect ~max_redirects request_uri (response, body) =
+  let status = Http.Response.status response in
+  (* the unconsumed body would otherwise leak memory *)
+  let%lwt () =
+    if status <> `OK then Cohttp_lwt.Body.drain_body body else Lwt.return_unit
+  in
+  match status with
+  | `OK ->
+      Lwt.return (response, body)
+  | `Permanent_redirect | `Moved_permanently ->
+      handle_redirect ~permanent:true ~max_redirects request_uri response
+  | `Found | `Temporary_redirect ->
+      handle_redirect ~permanent:false ~max_redirects request_uri response
+  | `Not_found | `Gone ->
+      failwith "not found"
+  | status ->
+      Printf.ksprintf failwith "unhandled status: %s"
+        (Cohttp.Code.string_of_status status)
+
+and handle_redirect ~permanent ~max_redirects request_uri response =
+  if max_redirects <= 0 then failwith "too many redirects"
+  else
+    let headers = Http.Response.headers response in
+    let location = Http.Header.get headers "location" in
+    match location with
+    | None ->
+        failwith "redirection without Location header"
+    | Some url ->
+        let uri = Uri.of_string url in
+        let%lwt () =
+          if permanent then
+            Logs_lwt.warn (fun m ->
+                m "Permanent redirection from %s to %s"
+                  (Uri.to_string request_uri)
+                  url )
+          else Lwt.return_unit
+        in
+        http_get uri ~max_redirects:(max_redirects - 1)
+
+let copy_query req = Dream.all_queries req |> List.map (fun (k, v) -> (k, [v]))

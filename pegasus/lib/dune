@@ -9,6 +9,7 @@
   cohttp-lwt-unix
   dns-client.unix
   dream
+  html_of_jsx
   ipld
   kleidos
   lwt
@@ -18,12 +19,13 @@
   safepass
   str
   timedesc
+  uri
   uuidm
   yojson
   lwt_ppx
   ppx_deriving_yojson.runtime
   ppx_rapper_lwt)
  (preprocess
-  (pps lwt_ppx ppx_deriving_yojson ppx_rapper)))
+  (pps html_of_jsx.ppx lwt_ppx ppx_deriving_yojson ppx_rapper)))
 
 (include_subdirs qualified)

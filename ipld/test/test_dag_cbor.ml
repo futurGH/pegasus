@@ -3,7 +3,7 @@ module String_map = Dag_cbor.String_map
 let rec stringify_map m =
   String_map.bindings m
   |> List.map (fun (k, v) ->
-         Format.sprintf "\"%s\": %s" k (stringify_ipld_value v) )
+      Format.sprintf "\"%s\": %s" k (stringify_ipld_value v) )
   |> String.concat ", " |> Format.sprintf "{%s}"
 
 and stringify_ipld_value (value : Dag_cbor.value) =
@@ -109,9 +109,9 @@ let test_encode_primitives () =
   Hashtbl.add cases (to_base_16 (Dag_cbor.encode `Null)) (Bytes.of_string "f6") ;
   cases
   |> Hashtbl.iter (fun key value ->
-         Alcotest.(check bytes)
-           ("encoded bytes for " ^ key)
-           value (Bytes.of_string key) )
+      Alcotest.(check bytes)
+        ("encoded bytes for " ^ key)
+        value (Bytes.of_string key) )
 
 let test_round_trip () =
   let test_cid =

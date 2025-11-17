@@ -36,7 +36,7 @@ module Queries = struct
                 created_at INTEGER NOT NULL,
                 deactivated_at INTEGER
               )
-        |sql}]
+          |sql}]
         () conn
     in
     let$! () =
@@ -52,36 +52,126 @@ module Queries = struct
       [%rapper
         execute
           {sql| CREATE TABLE IF NOT EXISTS invite_codes (
-              code TEXT PRIMARY KEY,
-              did TEXT NOT NULL,
-              remaining INTEGER NOT NULL
-            )
-        |sql}]
+                code TEXT PRIMARY KEY,
+                did TEXT NOT NULL,
+                remaining INTEGER NOT NULL
+              )
+          |sql}]
         () conn
     in
     let$! () =
       [%rapper
         execute
           {sql| CREATE TABLE IF NOT EXISTS firehose (
-              seq INTEGER PRIMARY KEY,
-              time INTEGER NOT NULL,
-              t TEXT NOT NULL,
-              data BLOB NOT NULL
-            )
-        |sql}]
+              	seq INTEGER PRIMARY KEY,
+              	time INTEGER NOT NULL,
+              	t TEXT NOT NULL,
+              	data BLOB NOT NULL
+              )
+          |sql}]
         () conn
     in
-    [%rapper
-      execute
-        (* no need to store issued tokens, just revoked ones; stolen from millipds https://github.com/DavidBuchanan314/millipds/blob/8f89a01e7d367a2a46f379960e9ca50347dcce71/src/millipds/database.py#L253 *)
-        {sql| CREATE TABLE IF NOT EXISTS revoked_tokens (
-            did TEXT NOT NULL,
-            jti TEXT NOT NULL,
-            revoked_at INTEGER NOT NULL,
-            PRIMARY KEY (did, jti)
-          )
-       |sql}]
-      () conn
+    let$! () =
+      [%rapper
+        execute
+          (* no need to store issued tokens, just revoked ones; stolen from millipds https://github.com/DavidBuchanan314/millipds/blob/8f89a01e7d367a2a46f379960e9ca50347dcce71/src/millipds/database.py#L253 *)
+          {sql| CREATE TABLE IF NOT EXISTS revoked_tokens (
+            	did TEXT NOT NULL,
+            	jti TEXT NOT NULL,
+            	revoked_at INTEGER NOT NULL,
+            	PRIMARY KEY (did, jti)
+              )
+          |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS oauth_requests (
+		        request_id TEXT PRIMARY KEY,
+		        client_id TEXT NOT NULL,
+		        request_data TEXT NOT NULL,
+		        dpop_jkt TEXT,
+		        expires_at INTEGER NOT NULL,
+		        created_at INTEGER NOT NULL
+		      )
+		  |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS oauth_codes (
+                code TEXT PRIMARY KEY,
+                request_id TEXT NOT NULL REFERENCES oauth_requests(request_id) ON DELETE CASCADE,
+                authorized_by TEXT,
+                authorized_at INTEGER,
+                expires_at INTEGER NOT NULL,
+                used BOOLEAN DEFAULT FALSE
+              )
+          |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TABLE IF NOT EXISTS oauth_tokens (
+            	refresh_token TEXT UNIQUE NOT NULL,
+            	client_id TEXT NOT NULL,
+            	did TEXT NOT NULL,
+            	dpop_jkt TEXT,
+            	scope TEXT NOT NULL,
+            	expires_at INTEGER NOT NULL
+              )
+          |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE INDEX IF NOT EXISTS oauth_requests_expires_idx ON oauth_requests(expires_at);
+                CREATE INDEX IF NOT EXISTS oauth_codes_expires_idx ON oauth_codes(expires_at);
+                CREATE INDEX IF NOT EXISTS oauth_tokens_refresh_idx ON oauth_tokens(refresh_token);
+          |sql}]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TRIGGER IF NOT EXISTS cleanup_expired_oauth_requests
+                AFTER INSERT ON oauth_requests
+                BEGIN
+                  DELETE FROM oauth_requests WHERE expires_at < unixepoch() * 1000;
+                END
+          |sql}
+          syntax_off]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TRIGGER IF NOT EXISTS cleanup_expired_oauth_codes
+                AFTER INSERT ON oauth_codes
+                BEGIN
+                  DELETE FROM oauth_codes WHERE expires_at < unixepoch() * 1000 OR used = 1;
+                END
+          |sql}
+          syntax_off]
+        () conn
+    in
+    let$! () =
+      [%rapper
+        execute
+          {sql| CREATE TRIGGER IF NOT EXISTS cleanup_expired_oauth_tokens
+                AFTER INSERT ON oauth_tokens
+                BEGIN
+                  DELETE FROM oauth_tokens WHERE expires_at < unixepoch() * 1000;
+                END
+          |sql}
+          syntax_off]
+        () conn
+    in
+    Lwt.return_ok ()
 
   let create_actor =
     [%rapper
@@ -221,6 +311,8 @@ end
 type t = Util.caqti_pool
 
 let connect ?create ?write () : t Lwt.t =
+  if create = Some true then
+    Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
   Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
 
 let init conn : unit Lwt.t = Util.use_pool conn Queries.create_tables

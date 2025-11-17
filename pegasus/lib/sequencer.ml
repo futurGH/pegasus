@@ -330,7 +330,7 @@ module Parse = struct
       let blobs =
         j |> member "blobs" |> to_list
         |> List.filter_map (fun x ->
-               match Cid.of_yojson x with Ok c -> Some c | _ -> None )
+            match Cid.of_yojson x with Ok c -> Some c | _ -> None )
       in
       let prev_data =
         match j |> member "prevData" with
@@ -342,33 +342,33 @@ module Parse = struct
       let ops =
         j |> member "ops" |> to_list
         |> List.map (fun opj ->
-               let action =
-                 match opj |> member "action" |> to_string with
-                 | "create" ->
-                     `Create
-                 | "update" ->
-                     `Update
-                 | "delete" ->
-                     `Delete
-                 | _ ->
-                     `Create
-               in
-               let path = opj |> member "path" |> to_string in
-               let cid =
-                 match opj |> member "cid" with
-                 | `Null ->
-                     None
-                 | v -> (
-                   match Cid.of_yojson v with Ok c -> Some c | _ -> None )
-               in
-               let prev =
-                 match opj |> member "prev" with
-                 | `Null ->
-                     None
-                 | v -> (
-                   match Cid.of_yojson v with Ok c -> Some c | _ -> None )
-               in
-               {action; path; cid; prev} )
+            let action =
+              match opj |> member "action" |> to_string with
+              | "create" ->
+                  `Create
+              | "update" ->
+                  `Update
+              | "delete" ->
+                  `Delete
+              | _ ->
+                  `Create
+            in
+            let path = opj |> member "path" |> to_string in
+            let cid =
+              match opj |> member "cid" with
+              | `Null ->
+                  None
+              | v -> (
+                match Cid.of_yojson v with Ok c -> Some c | _ -> None )
+            in
+            let prev =
+              match opj |> member "prev" with
+              | `Null ->
+                  None
+              | v -> (
+                match Cid.of_yojson v with Ok c -> Some c | _ -> None )
+            in
+            {action; path; cid; prev} )
       in
       Ok
         { rebase

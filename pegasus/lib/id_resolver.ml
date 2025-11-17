@@ -1,5 +1,4 @@
 open Cohttp_lwt
-open Cohttp_lwt_unix
 
 let did_regex =
   Str.regexp {|^did:([a-z]+):([a-zA-Z0-9._:%\-]*[a-zA-Z0-9._\-])$|}
@@ -12,7 +11,7 @@ module Handle = struct
       let uri =
         Uri.of_string ("https://" ^ handle ^ "/.well-known/atproto-did")
       in
-      let%lwt {status; _}, body = Client.get uri in
+      let%lwt {status; _}, body = Util.http_get uri in
       match status with
       | `OK ->
           let%lwt did = Body.to_string body in
@@ -164,7 +163,7 @@ module Did = struct
             ~path:(Uri.pct_encode did) ()
         in
         let%lwt {status; _}, body =
-          Client.get uri
+          Util.http_get uri
             ~headers:(Cohttp.Header.of_list [("Accept", "application/json")])
         in
         match status with
@@ -186,7 +185,7 @@ module Did = struct
             ~path:"/.well-known/did.json" ()
         in
         let%lwt {status; _}, body =
-          Client.get uri
+          Util.http_get uri
             ~headers:(Cohttp.Header.of_list [("Accept", "application/json")])
         in
         match status with

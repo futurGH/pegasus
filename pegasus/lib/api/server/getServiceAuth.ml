@@ -1,7 +1,7 @@
 type response = {token: string} [@@deriving yojson {strict= false}]
 
 let handler =
-  Xrpc.handler ~auth:Authorization (fun {req; auth; db} ->
+  Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
       let did = Auth.get_authed_did_exn auth in
       let aud, lxm =
         match (Dream.query req "aud", Dream.query req "lxm") with

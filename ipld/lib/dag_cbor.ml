@@ -197,8 +197,8 @@ module Encoder = struct
         write_type_and_argument t 5 (Int64.of_int len) ;
         ordered_map_keys m
         |> List.iter (fun k ->
-               write_string t k ;
-               write_value t (String_map.find k m) )
+            write_string t k ;
+            write_value t (String_map.find k m) )
     | `Link cid ->
         write_cid t cid
 

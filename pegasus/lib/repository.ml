@@ -180,7 +180,7 @@ let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
   let%lwt map = get_map t in
   String_map.bindings map
   |> List.filter (fun (path, _) ->
-         String.starts_with ~prefix:(path ^ "/") collection )
+      String.starts_with ~prefix:(path ^ "/") collection )
   |> Lwt_list.fold_left_s
        (fun acc (path, cid) ->
          match%lwt User_store.get_record t.db path with
@@ -320,16 +320,16 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             let%lwt () =
               match old_cid with
               | Some _ -> (
-                  match%lwt User_store.get_record t.db path with
-                  | Some record ->
-                      let refs =
-                        Util.find_blob_refs record.value
-                        |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
-                      in
-                      let%lwt () = User_store.clear_blob_refs t.db path refs in
-                      Lwt.return_unit
-                  | None ->
-                      Lwt.return_unit )
+                match%lwt User_store.get_record t.db path with
+                | Some record ->
+                    let refs =
+                      Util.find_blob_refs record.value
+                      |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
+                    in
+                    let%lwt () = User_store.clear_blob_refs t.db path refs in
+                    Lwt.return_unit
+                | None ->
+                    Lwt.return_unit )
               | None ->
                   Lwt.return_unit
             in

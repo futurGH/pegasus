@@ -57,11 +57,11 @@ let handler =
       let%lwt did =
         match input.did with
         | Some did -> (
-            match%lwt Data_store.get_actor_by_identifier did ctx.db with
-            | Some _ ->
-                Errors.invalid_request "an account with that did already exists"
-            | None ->
-                Lwt.return did )
+          match%lwt Data_store.get_actor_by_identifier did ctx.db with
+          | Some _ ->
+              Errors.invalid_request "an account with that did already exists"
+          | None ->
+              Lwt.return did )
         | None -> (
             let sk_did = Kleidos.K256.pubkey_to_did_key signing_pubkey in
             let rotation_did_keys =
@@ -79,11 +79,11 @@ let handler =
       let%lwt _ =
         match input.invite_code with
         | Some code -> (
-            match%lwt Data_store.use_invite ~code ctx.db with
-            | Some _ ->
-                Lwt.return ()
-            | None ->
-                failwith "failed to use invite code" )
+          match%lwt Data_store.use_invite ~code ctx.db with
+          | Some _ ->
+              Lwt.return ()
+          | None ->
+              failwith "failed to use invite code" )
         | None ->
             Lwt.return ()
       in

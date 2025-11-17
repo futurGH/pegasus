@@ -386,7 +386,7 @@ let put_commit t commit : (Cid.t, exn) Lwt_result.t =
 let get_record t path : record option Lwt.t =
   Util.use_pool t.db @@ Queries.get_record ~path
   >|= Option.map (fun (cid, data, since) ->
-          {path; cid; value= Lex.of_cbor data; since} )
+      {path; cid; value= Lex.of_cbor data; since} )
 
 let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
     record list Lwt.t =
@@ -395,7 +395,7 @@ let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
   in
   Util.use_pool t.db @@ fn ~collection ~limit ~cursor
   >|= List.map (fun (path, cid, data, since) ->
-          {path; cid; value= Lex.of_cbor data; since} )
+      {path; cid; value= Lex.of_cbor data; since} )
 
 let put_record t record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in

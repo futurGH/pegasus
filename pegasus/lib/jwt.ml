@@ -19,9 +19,9 @@ let b64_encode str =
 let b64_decode str =
   match Base64.decode ~pad:false ~alphabet:Base64.uri_safe_alphabet str with
   | Ok s ->
-      Ok s
+      s
   | Error (`Msg e) ->
-      Error e
+      failwith e
 
 let extract_signature_components signature =
   if Bytes.length signature <> 64 then failwith "expected 64 byte jwt signature"
@@ -30,7 +30,7 @@ let extract_signature_components signature =
     let s = Bytes.sub signature 32 32 in
     (r, s)
 
-let sign_jwt payload signing_key =
+let sign_jwt payload ?(typ = "JWT") signing_key =
   let _, (module Curve : Kleidos.CURVE) = signing_key in
   let alg =
     match Curve.name with
@@ -51,7 +51,7 @@ let sign_jwt payload signing_key =
         failwith "invalid curve"
   in
   let header_json =
-    `Assoc [("alg", `String alg); ("crv", `String crv); ("typ", `String "JWT")]
+    `Assoc [("alg", `String alg); ("crv", `String crv); ("typ", `String typ)]
   in
   let encoded_header = header_json |> Yojson.Safe.to_string |> b64_encode in
   let encoded_payload = payload |> Yojson.Safe.to_string |> b64_encode in
@@ -65,32 +65,24 @@ let sign_jwt payload signing_key =
 let decode_jwt jwt =
   match String.split_on_char '.' jwt with
   | [header_b64; payload_b64; _] -> (
-    match (b64_decode header_b64, b64_decode payload_b64) with
-    | Ok header_str, Ok payload_str -> (
-      try
-        let header = Yojson.Safe.from_string header_str in
-        let payload = Yojson.Safe.from_string payload_str in
-        Ok (header, payload)
-      with _ -> Error "invalid json in jwt" )
-    | Error e, _ | _, Error e ->
-        Error e )
+    try
+      let header = Yojson.Safe.from_string (b64_decode header_b64) in
+      let payload = Yojson.Safe.from_string (b64_decode payload_b64) in
+      Ok (header, payload)
+    with _ -> Error "invalid jwt" )
   | _ ->
       Error "invalid jwt format"
 
 let verify_jwt jwt pubkey =
   match String.split_on_char '.' jwt with
-  | [header_b64; payload_b64; signature_b64] -> (
-    match b64_decode signature_b64 with
-    | Error e ->
-        Error e
-    | Ok signature_str ->
-        let signature = Bytes.of_string signature_str in
-        let signing_input = header_b64 ^ "." ^ payload_b64 in
-        let verified =
-          Kleidos.verify ~pubkey ~msg:(Bytes.of_string signing_input) ~signature
-        in
-        if verified then decode_jwt jwt
-        else Error "jwt signature verification failed" )
+  | [header_b64; payload_b64; signature_b64] ->
+      let signature = Bytes.of_string (b64_decode signature_b64) in
+      let signing_input = header_b64 ^ "." ^ payload_b64 in
+      let verified =
+        Kleidos.verify ~pubkey ~msg:(Bytes.of_string signing_input) ~signature
+      in
+      if verified then decode_jwt jwt
+      else Error "jwt signature verification failed"
   | _ ->
       Error "invalid jwt format"
 
@@ -98,7 +90,9 @@ let generate_jwt did =
   let now_s = int_of_float (Unix.gettimeofday ()) in
   let access_exp = now_s + Defaults.access_token_exp in
   let refresh_exp = now_s + Defaults.refresh_token_exp in
-  let jti = Uuidm.v4_gen (Random.get_state ()) () |> Uuidm.to_string in
+  let jti =
+    Uuidm.v4_gen (Random.State.make_self_init ()) () |> Uuidm.to_string
+  in
   let access_payload =
     symmetric_jwt_to_yojson
       { scope= "com.atproto.access"
