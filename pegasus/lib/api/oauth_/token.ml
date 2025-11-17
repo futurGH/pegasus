@@ -1,6 +1,8 @@
 open Oauth
 
-let handler =
+let options_handler = Xrpc.handler (fun _ -> Dream.empty `No_Content)
+
+let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let%lwt req = Xrpc.parse_body ctx.req Types.token_request_of_yojson in
       let proof = Auth.get_dpop_proof_exn ctx.auth in
@@ -47,7 +49,9 @@ let handler =
                               let computed =
                                 Digestif.SHA256.digest_string verifier
                                 |> Digestif.SHA256.to_raw_string
-                                |> Base64.encode_exn ~pad:false
+                                |> Base64.(
+                                     encode_exn ~pad:false
+                                       ~alphabet:uri_safe_alphabet )
                               in
                               if orig_req.code_challenge <> computed then
                                 Errors.invalid_request "invalid code_verifier"
@@ -60,12 +64,16 @@ let handler =
                           let token_id =
                             "tok-"
                             ^ Uuidm.to_string
-                                (Uuidm.v4_gen (Random.get_state ()) ())
+                                (Uuidm.v4_gen
+                                   (Random.State.make_self_init ())
+                                   () )
                           in
                           let refresh_token =
                             "ref-"
                             ^ Uuidm.to_string
-                                (Uuidm.v4_gen (Random.get_state ()) ())
+                                (Uuidm.v4_gen
+                                   (Random.State.make_self_init ())
+                                   () )
                           in
                           let now_sec = int_of_float (Unix.gettimeofday ()) in
                           let expires_in =
@@ -128,11 +136,13 @@ let handler =
                 else
                   let new_token_id =
                     "tok-"
-                    ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
+                    ^ Uuidm.to_string
+                        (Uuidm.v4_gen (Random.State.make_self_init ()) ())
                   in
                   let new_refresh =
                     "ref-"
-                    ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
+                    ^ Uuidm.to_string
+                        (Uuidm.v4_gen (Random.State.make_self_init ()) ())
                   in
                   let now_sec = int_of_float (Unix.gettimeofday ()) in
                   let expires_in = Constants.access_token_expiry_ms / 1000 in
@@ -153,7 +163,7 @@ let handler =
                   in
                   let%lwt () =
                     Queries.update_oauth_token ctx.db
-                      ~old_refresh_token:refresh_token ~new_token_id
+                      ~old_refresh_token:refresh_token
                       ~new_refresh_token:new_refresh ~expires_at:new_expires_at
                   in
                   Dream.json ~headers:[("Cache-Control", "no-store")]

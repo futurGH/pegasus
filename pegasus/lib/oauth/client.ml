@@ -1,9 +1,7 @@
 open Types
 
 let fetch_client_metadata client_id : client_metadata Lwt.t =
-  let%lwt {status; _}, res =
-    Cohttp_lwt_unix.Client.get (Uri.of_string client_id)
-  in
+  let%lwt {status; _}, res = Util.http_get (Uri.of_string client_id) in
   if status <> `OK then
     let%lwt () = Cohttp_lwt.Body.drain_body res in
     failwith
@@ -12,7 +10,13 @@ let fetch_client_metadata client_id : client_metadata Lwt.t =
   else
     let%lwt body = Cohttp_lwt.Body.to_string res in
     let json = Yojson.Safe.from_string body in
-    let metadata = client_metadata_of_yojson json |> Result.get_ok in
+    let metadata =
+      match client_metadata_of_yojson json with
+      | Ok metadata ->
+          metadata
+      | Error err ->
+          failwith err
+    in
     if metadata.client_id <> client_id then failwith "client_id mismatch"
     else
       let scopes = String.split_on_char ' ' metadata.scope in

@@ -1,20 +1,12 @@
 open Oauth
+open Oauth.Types
 
-type request =
-  { client_id: string
-  ; response_type: string
-  ; redirect_uri: string
-  ; scope: string
-  ; state: string
-  ; code_challenge: string
-  ; code_challenge_method: string
-  ; login_hint: string option }
-[@@deriving yojson]
+let options_handler = Xrpc.handler (fun _ -> Dream.empty `No_Content)
 
-let handler =
+let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let proof = Auth.get_dpop_proof_exn ctx.auth in
-      let%lwt req = Xrpc.parse_body ctx.req request_of_yojson in
+      let%lwt req = Xrpc.parse_body ctx.req par_request_of_yojson in
       let%lwt client =
         try%lwt Client.fetch_client_metadata req.client_id
         with e ->
@@ -29,19 +21,20 @@ let handler =
         Errors.invalid_request "invalid redirect_uri"
       else
         let request_id =
-          "req-" ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
+          "req-"
+          ^ Uuidm.to_string (Uuidm.v4_gen (Random.State.make_self_init ()) ())
         in
         let request_uri = Constants.request_uri_prefix ^ request_id in
         let expires_at = Util.now_ms () + Constants.par_request_ttl_ms in
-        let%lwt () =
-          Queries.insert_par_request ctx.db
-            { request_id
-            ; client_id= req.client_id
-            ; request_data= Yojson.Safe.to_string (request_to_yojson req)
-            ; dpop_jkt= Some proof.jkt
-            ; expires_at
-            ; created_at= Util.now_ms () }
+        let request : oauth_request =
+          { request_id
+          ; client_id= req.client_id
+          ; request_data= Yojson.Safe.to_string (par_request_to_yojson req)
+          ; dpop_jkt= Some proof.jkt
+          ; expires_at
+          ; created_at= Util.now_ms () }
         in
+        let%lwt () = Queries.insert_par_request ctx.db request in
         Dream.json ~status:`Created
         @@ Yojson.Safe.to_string
         @@ `Assoc

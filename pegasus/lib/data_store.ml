@@ -103,7 +103,7 @@ module Queries = struct
         execute
           {sql| CREATE TABLE IF NOT EXISTS oauth_codes (
                 code TEXT PRIMARY KEY,
-                request_id TEXT NOT NULL REFERENCES oauth_requests(request_id),
+                request_id TEXT NOT NULL REFERENCES oauth_requests(request_id) ON DELETE CASCADE,
                 authorized_by TEXT,
                 authorized_at INTEGER,
                 expires_at INTEGER NOT NULL,
@@ -311,6 +311,8 @@ end
 type t = Util.caqti_pool
 
 let connect ?create ?write () : t Lwt.t =
+  if create = Some true then
+    Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
   Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
 
 let init conn : unit Lwt.t = Util.use_pool conn Queries.create_tables

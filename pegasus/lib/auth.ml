@@ -16,6 +16,7 @@ type credentials =
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
   | OAuth of {did: string; proof: Oauth.Dpop.proof}
+  | DPoP of {proof: Oauth.Dpop.proof}
 
 let verify_bearer_jwt t token expected_scope =
   match Jwt.verify_jwt token Env.jwt_key with
@@ -59,7 +60,7 @@ let get_authed_did_exn = function
       Errors.auth_required "invalid authorization header"
 
 let get_dpop_proof_exn = function
-  | OAuth {proof; _} ->
+  | OAuth {proof; _} | DPoP {proof} ->
       proof
   | _ ->
       Errors.invalid_request "invalid DPoP header"
@@ -168,53 +169,70 @@ module Verifiers = struct
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
   let dpop : verifier =
+   fun {req; _} ->
+    let dpop_header = Dream.header req "DPoP" in
+    match
+      Oauth.Dpop.verify_dpop_proof
+        ~mthd:(Dream.method_to_string @@ Dream.method_ req)
+        ~url:(Dream.target req) ~dpop_header ()
+    with
+    | Error "use_dpop_nonce" ->
+        Lwt.return_error @@ Errors.use_dpop_nonce ()
+    | Error e ->
+        Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
+    | Ok proof ->
+        Lwt.return_ok (DPoP {proof})
+
+  let oauth : verifier =
    fun {req; db} ->
     match parse_dpop req with
     | Error e ->
-        Errors.invalid_request ("dpop error: " ^ e)
+        Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
     | Ok token -> (
-        let dpop_header = Dream.header req "DPoP" in
-        match
-          Oauth.Dpop.verify_dpop_proof
-            ~mthd:(Dream.method_to_string @@ Dream.method_ req)
-            ~url:(Dream.target req) ~dpop_header ~access_token:token ()
-        with
-        | Error "use_dpop_nonce" ->
-            Lwt.return_error
-            (* error must be this object; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
-            @@ Errors.invalid_request {|{ "error": "use_dpop_nonce" }|}
+      match%lwt dpop {req; db} with
+      | Error e ->
+          Lwt.return_error e
+      | Ok (DPoP {proof}) -> (
+        match Jwt.verify_jwt token Env.jwt_key with
         | Error e ->
-            Errors.invalid_request ("dpop error: " ^ e)
-        | Ok proof -> (
-          match Jwt.verify_jwt token Env.jwt_key with
-          | Error e ->
-              Lwt.return_error @@ Errors.auth_required e
-          | Ok (_header, claims) -> (
-              let open Yojson.Safe.Util in
-              try
-                let did = claims |> member "sub" |> to_string in
-                let exp = claims |> member "exp" |> to_int in
-                let jkt_claim =
-                  claims |> member "cnf" |> member "jkt" |> to_string
+            Lwt.return_error @@ Errors.auth_required e
+        | Ok (_header, claims) -> (
+            let open Yojson.Safe.Util in
+            try
+              let did = claims |> member "sub" |> to_string in
+              let exp = claims |> member "exp" |> to_int in
+              let jkt_claim =
+                claims |> member "cnf" |> member "jkt" |> to_string
+              in
+              let now = int_of_float (Unix.gettimeofday ()) in
+              if jkt_claim <> proof.jkt then
+                Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
+              else if exp < now then
+                Lwt.return_error @@ Errors.auth_required "token expired"
+              else
+                let%lwt session =
+                  try%lwt
+                    let%lwt sess = get_session_info did db in
+                    Lwt.return_ok sess
+                  with _ ->
+                    Lwt.return_error
+                    @@ Errors.auth_required "invalid credentials"
                 in
-                let now = int_of_float (Unix.gettimeofday ()) in
-                if jkt_claim <> proof.jkt then
-                  Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
-                else if exp < now then
-                  Lwt.return_error @@ Errors.auth_required "token expired"
-                else
-                  let%lwt {active; _} =
-                    try%lwt get_session_info did db
-                    with _ -> Errors.auth_required "invalid credentials"
-                  in
-                  if active <> Some true then
+                match session with
+                | Ok {active= Some true; _} ->
+                    Lwt.return_ok (OAuth {did; proof})
+                | Ok _ ->
                     Lwt.return_error
                     @@ Errors.auth_required ~name:"AccountDeactivated"
                          "account is deactivated"
-                  else Lwt.return_ok (Access {did})
-              with _ ->
-                Lwt.return_error @@ Errors.auth_required "malformed JWT claims"
-              ) ) )
+                | Error _ ->
+                    Lwt.return_error
+                    @@ Errors.auth_required "invalid credentials"
+            with _ ->
+              Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
+        )
+      | Ok _ ->
+          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
 
   let refresh : verifier =
    fun {req; db} ->
@@ -247,7 +265,7 @@ module Verifiers = struct
     | Some ("Bearer" :: _) ->
         bearer ctx
     | Some ("DPoP" :: _) ->
-        dpop ctx
+        oauth ctx
     | _ ->
         Lwt.return_error
         @@ Errors.auth_required ~name:"InvalidToken"
@@ -261,6 +279,7 @@ module Verifiers = struct
     | Admin
     | Bearer
     | DPoP
+    | OAuth
     | Refresh
     | Authorization
     | Any
@@ -274,6 +293,8 @@ module Verifiers = struct
         bearer
     | DPoP ->
         dpop
+    | OAuth ->
+        oauth
     | Refresh ->
         refresh
     | Authorization ->

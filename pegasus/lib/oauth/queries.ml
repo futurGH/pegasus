@@ -60,7 +60,7 @@ let activate_auth_code conn code did =
         UPDATE oauth_codes
         SET authorized_by = %string{did},
             authorized_at = %int{authorized_at}
-        WHERE code = %string{code} AND authorized_by = NULL
+        WHERE code = %string{code}
       |sql}]
        ~did ~authorized_at ~code
 
@@ -102,19 +102,17 @@ let get_oauth_token_by_refresh conn refresh_token =
          record_out]
        ~refresh_token
 
-let update_oauth_token conn ~old_refresh_token ~new_token_id ~new_refresh_token
-    ~expires_at =
+let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
   Util.use_pool conn
   @@ [%rapper
        execute
          {sql|
         UPDATE oauth_tokens
-        SET token_id = %string{new_token_id},
-            refresh_token = %string{new_refresh_token},
+        SET refresh_token = %string{new_refresh_token},
             expires_at = %int{expires_at}
         WHERE refresh_token = %string{old_refresh_token}
       |sql}]
-       ~new_token_id ~new_refresh_token ~expires_at ~old_refresh_token
+       ~new_refresh_token ~expires_at ~old_refresh_token
 
 let delete_oauth_token_by_refresh conn refresh_token =
   Util.use_pool conn

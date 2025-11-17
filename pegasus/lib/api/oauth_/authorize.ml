@@ -10,17 +10,18 @@ let get_session_user (ctx : Xrpc.context) =
 
 let get_handler =
   Xrpc.handler (fun ctx ->
-      let return_url = Uri.pct_encode (Dream.target ctx.req) in
+      let login_redirect =
+        Uri.make ~path:"/account/login" ~query:(Util.copy_query ctx.req) ()
+        |> Uri.to_string |> Dream.redirect ctx.req
+      in
       let client_id = Dream.query ctx.req "client_id" in
       let request_uri = Dream.query ctx.req "request_uri" in
       match (client_id, request_uri) with
       | None, _ | _, None ->
-          (* TODO: actually implement the page for this redirect *)
-          Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+          login_redirect
       | Some client_id, Some request_uri -> (
           let prefix = Constants.request_uri_prefix in
-          if not (String.starts_with ~prefix request_uri) then
-            Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+          if not (String.starts_with ~prefix request_uri) then login_redirect
           else
             let request_id =
               String.sub request_uri (String.length prefix)
@@ -28,10 +29,9 @@ let get_handler =
             in
             match%lwt Queries.get_par_request ctx.db request_id with
             | None ->
-                Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+                login_redirect
             | Some req_record -> (
-                if req_record.client_id <> client_id then
-                  Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+                if req_record.client_id <> client_id then login_redirect
                 else
                   let req =
                     Yojson.Safe.from_string req_record.request_data
@@ -41,7 +41,7 @@ let get_handler =
                           () )
                     |> Result.get_ok
                   in
-                  let%lwt _client =
+                  let%lwt metadata =
                     try%lwt Client.fetch_client_metadata client_id
                     with _ ->
                       Errors.internal_error
@@ -49,7 +49,8 @@ let get_handler =
                   in
                   let code =
                     "cod-"
-                    ^ Uuidm.to_string (Uuidm.v4_gen (Random.get_state ()) ())
+                    ^ Uuidm.to_string
+                        (Uuidm.v4_gen (Random.State.make_self_init ()) ())
                   in
                   let expires_at = Util.now_ms () + Constants.code_expiry_ms in
                   let%lwt () =
@@ -63,13 +64,12 @@ let get_handler =
                   in
                   match%lwt get_session_user ctx with
                   | None ->
-                      Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+                      login_redirect
                   | Some did -> (
                     match req.login_hint with
                     | Some hint when hint <> did ->
-                        Dream.redirect ctx.req ("/login?return_to=" ^ return_url)
+                        login_redirect
                     | _ ->
-                        (*
                         let%lwt handle =
                           match%lwt
                             Data_store.get_actor_by_identifier did ctx.db
@@ -81,21 +81,13 @@ let get_handler =
                                 ~msg:"failed to resolve user" ()
                         in
                         let scopes = String.split_on_char ' ' req.scope in
-                        let client_name =
-                          match client.client_name with
-                          | Some name ->
-                              name
-                          | None ->
-                              client_id
+                        let csrf_token = Dream.csrf_token ctx.req in
+                        let html =
+                          JSX.render
+                            (Templates.Oauth_authorize.make ~metadata ~handle
+                               ~scopes ~code ~request_uri ~csrf_token () )
                         in
-                            [ ("client_name", `String client_name)
-                            ; ("handle", `String handle)
-                            ; ( "scopes"
-                              , `List (List.map (fun s -> `String s) scopes) )
-                            ; ("code", `String code)
-                              ("request_uri", `String request_uri) ]
-                        *)
-                        Dream.html "" ) ) ) )
+                        Dream.html html ) ) ) )
 
 let post_handler =
   Xrpc.handler (fun ctx ->

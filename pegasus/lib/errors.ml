@@ -4,6 +4,8 @@ exception InternalServerError of (string * string)
 
 exception AuthError of (string * string)
 
+exception UseDpopNonceError
+
 let is_xrpc_error = function
   | InvalidRequestError _ | InternalServerError _ | AuthError _ ->
       true
@@ -19,6 +21,8 @@ let internal_error ?(name = "InternalServerError")
 
 let auth_required ?(name = "AuthRequired") msg = raise (AuthError (name, msg))
 
+let use_dpop_nonce () = raise UseDpopNonceError
+
 let exn_to_response exn =
   let format_response error msg status =
     Dream.json ~status @@ Yojson.Safe.to_string
@@ -31,6 +35,8 @@ let exn_to_response exn =
       format_response error message `Internal_Server_Error
   | AuthError (error, message) ->
       format_response error message `Unauthorized
+  | UseDpopNonceError ->
+      Dream.json ~status:`Bad_Request {|{ "error": "use_dpop_nonce" }|}
   | _ ->
       format_response "InternalServerError" "Internal server error"
         `Internal_Server_Error

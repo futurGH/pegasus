@@ -90,7 +90,9 @@ let generate_jwt did =
   let now_s = int_of_float (Unix.gettimeofday ()) in
   let access_exp = now_s + Defaults.access_token_exp in
   let refresh_exp = now_s + Defaults.refresh_token_exp in
-  let jti = Uuidm.v4_gen (Random.get_state ()) () |> Uuidm.to_string in
+  let jti =
+    Uuidm.v4_gen (Random.State.make_self_init ()) () |> Uuidm.to_string
+  in
   let access_payload =
     symmetric_jwt_to_yojson
       { scope= "com.atproto.access"

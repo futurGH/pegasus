@@ -10,18 +10,18 @@ type handler = context -> Dream.response Lwt.t
 let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
   let open Errors in
   let auth = Auth.Verifiers.of_t auth in
-  match%lwt auth init with
-  | Ok creds -> (
-    try%lwt hdlr {req= init.req; db= init.db; auth= creds}
-    with e ->
-      ( match is_xrpc_error e with
-      | true ->
-          ()
-      | false ->
-          log_exn ~req:init.req e ) ;
-      exn_to_response e )
-  | Error e ->
-      exn_to_response e
+  try%lwt
+    match%lwt auth init with
+    | Ok creds -> (
+      try%lwt hdlr {req= init.req; db= init.db; auth= creds}
+      with e ->
+        if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+        exn_to_response e )
+    | Error e ->
+        exn_to_response e
+  with e ->
+    if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+    exn_to_response e
 
 let parse_query (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a =
@@ -29,16 +29,14 @@ let parse_query (req : Dream.request)
     let queries = Dream.all_queries req in
     let query_json = `Assoc (List.map (fun (k, v) -> (k, `String v)) queries) in
     query_json |> of_yojson |> Result.get_ok
-  with _ -> Errors.invalid_request "Invalid query string"
+  with _ -> Errors.invalid_request "invalid query string"
 
 let parse_body (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
   try%lwt
     let%lwt body = Dream.body req in
     body |> Yojson.Safe.from_string |> of_yojson |> Result.get_ok |> Lwt.return
-  with e ->
-    Errors.log_exn e ;
-    Errors.invalid_request "Invalid request body"
+  with _ -> Errors.invalid_request "invalid request body"
 
 let service_proxy (ctx : context) (proxy_header : string) =
   let did = Auth.get_authed_did_exn ctx.auth in
@@ -87,7 +85,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
       let headers = Http.Header.of_list [("Authorization", "Bearer " ^ jwt)] in
       match Dream.method_ ctx.req with
       | `GET -> (
-          let%lwt res, body = Client.get uri ~headers in
+          let%lwt res, body = Util.http_get uri ~headers in
           match res.status with
           | `OK ->
               let%lwt body = Body.to_string body in
@@ -127,13 +125,23 @@ let service_proxy_middleware db inner_handler req =
 
 let dpop_middleware inner_handler req =
   let%lwt res = inner_handler req in
-  match Auth.Verifiers.parse_dpop req with
-  | Ok _ ->
+  match Dream.header req "DPoP" with
+  | Some _ ->
       Dream.add_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
       Dream.add_header res "Access-Control-Expose-Headers" "DPoP-Nonce" ;
       Lwt.return res
-  | Error _ ->
+  | None ->
       Lwt.return res
+
+let cors_middleware inner_handler req =
+  let%lwt res = inner_handler req in
+  Dream.add_header res "Access-Control-Allow-Origin" "*" ;
+  Dream.add_header res "Access-Control-Allow-Methods"
+    "GET, POST, PUT, DELETE, OPTIONS" ;
+  Dream.add_header res "Access-Control-Allow-Headers"
+    "Content-Type, Authorization, DPoP" ;
+  Dream.add_header res "Access-Control-Max-Age" "86400" ;
+  Lwt.return res
 
 let resolve_repo_did ctx repo =
   if String.starts_with ~prefix:"did:" repo then Lwt.return repo

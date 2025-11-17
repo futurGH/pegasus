@@ -1,19 +1,27 @@
 let get_handler =
   Xrpc.handler (fun ctx ->
       let redirect_url =
-        Dream.query ctx.req "redirect_url" |> Option.value ~default:"/"
+        if List.length @@ Dream.all_queries ctx.req > 0 then
+          Uri.make ~path:"/oauth/authorize" ~query:(Util.copy_query ctx.req) ()
+          |> Uri.to_string
+        else "/account"
       in
-      let html = JSX.render (Templates.Login.make ~redirect_url ()) in
+      let csrf_token = Dream.csrf_token ctx.req in
+      let html =
+        JSX.render (Templates.Login.make ~redirect_url ~csrf_token ())
+      in
       Dream.html html )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
+      let csrf_token = Dream.csrf_token ctx.req in
       match%lwt Dream.form ctx.req with
       | `Ok fields -> (
           let identifier = List.assoc "identifier" fields in
           let password = List.assoc "password" fields in
           let redirect_url =
-            List.assoc_opt "redirect_url" fields |> Option.value ~default:"/"
+            List.assoc_opt "redirect_url" fields
+            |> Option.value ~default:"/account"
           in
           let%lwt actor =
             Data_store.try_login ~id:identifier ~password ctx.db
@@ -23,7 +31,8 @@ let post_handler =
               let html =
                 JSX.render
                   (Templates.Login.make ~redirect_url
-                     ~error:"Invalid username or password. Please try again." () )
+                     ~error:"Invalid username or password. Please try again."
+                     ~csrf_token () )
               in
               Dream.html ~status:`Unauthorized html
           | Some {did; _} ->
@@ -33,7 +42,8 @@ let post_handler =
       | _ ->
           let html =
             JSX.render
-              (Templates.Login.make ~redirect_url:"/"
-                 ~error:"Invalid credentials provided. Please try again." () )
+              (Templates.Login.make ~redirect_url:"/account"
+                 ~error:"Invalid credentials provided. Please try again."
+                 ~csrf_token () )
           in
           Dream.html ~status:`Unauthorized html )

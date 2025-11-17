@@ -30,6 +30,7 @@
 	--color-*: initial;
 	--color-white: #fff;
 	--color-feather-100: #c8cfd2;
+	--color-phoenix-40: #e499a6;
 	--color-phoenix-100: #db4c64;
 	--color-mana-40: #9b9eaa;
 	--color-mana-100: #6558a1;
@@ -43,4 +44,5 @@
 	--shadow-whisper: inset 0 0 1em #97baff8c;
 	--shadow-shimmer: inset 0 0 1em #79a7ed99;
 	--shadow-glow: inset 0 0 2em #2d37ba73;
+	--shadow-bleed: inset 0 0 2em #db4c6466;
 }

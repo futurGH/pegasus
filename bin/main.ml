@@ -14,10 +14,12 @@ let handlers =
     , "/.well-known/oauth-authorization-server"
     , Api.Well_known.oauth_authorization_server )
   ; (* oauth *)
-    (get, "/oauth/par", Api.Oauth_.Par.handler)
+    (options, "/oauth/par", Api.Oauth_.Par.options_handler)
+  ; (post, "/oauth/par", Api.Oauth_.Par.post_handler)
   ; (get, "/oauth/authorize", Api.Oauth_.Authorize.get_handler)
   ; (post, "/oauth/authorize", Api.Oauth_.Authorize.post_handler)
-  ; (post, "/oauth/token", Api.Oauth_.Token.handler)
+  ; (options, "/oauth/token", Api.Oauth_.Token.options_handler)
+  ; (post, "/oauth/token", Api.Oauth_.Token.post_handler)
   ; (* account *)
     (get, "/account/login", Api.Account_.Login.get_handler)
   ; (post, "/account/login", Api.Account_.Login.post_handler)
@@ -91,7 +93,7 @@ let main =
   @@ Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
   @@ Dream.cookie_sessions
   @@ Xrpc.service_proxy_middleware db
-  @@ Xrpc.dpop_middleware @@ Dream.router
+  @@ Xrpc.dpop_middleware @@ Xrpc.cors_middleware @@ Dream.router
   @@ List.map
        (fun (fn, path, handler) ->
          fn path (fun req -> handler ({req; db} : Xrpc.init)) )

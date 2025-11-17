@@ -1,12 +1,33 @@
-let make ?id ?(type_ = "button") ?(class_ = "") ~children () =
-  <button
-    ?id
-    type_
-    class_=( "bg-white font-serif text-mana-200 text-lg py-1 px-4 rounded-lg \
-              w-full flex items-center justify-center transition delay-50 \
-              duration-300 shadow-whisper hover:shadow-shimmer \
-              hover:bg-mist-20 focus:shadow-shimmer focus:bg-mist-20 \
-              focus:outline-none active:shadow-glow disabled:bg-mana-40 \
-              disabled:text-mist-100 " ^ class_ )>
+let base_classes =
+  "py-1 px-4 text-lg rounded-lg w-full flex items-center justify-center \
+   transition delay-50 duration-300 focus-visible:outline-none disabled:text-mist-80"
+
+type kind = Primary | Secondary | Tertiary | Danger
+
+let classes = function
+  | Primary ->
+      base_classes
+      ^ " bg-white font-serif text-mana-200 shadow-whisper \
+         hover:shadow-shimmer hover:bg-mist-20 focus-visible:shadow-shimmer \
+         focus-visible:bg-mist-20 active:shadow-glow disabled:bg-mana-40"
+  | Secondary ->
+      base_classes
+      ^ " bg-feather font-serif underline text-mana-100 hover:no-underline \
+         focus-visible:shadow-whisper active:shadow-whisper disabled:no-underline \
+         disabled:bg-mana-40"
+  | Tertiary ->
+      base_classes
+      ^ " font-sans underline text-mana-100 hover:no-underline \
+         focus-visible:text-mana-200 active:text-mana-200"
+  | Danger ->
+      base_classes
+      ^ " bg-white font-serif text-phoenix-100 shadow-bleed hover:bg-mist-20 \
+         hover:text-phoenix-40 focus:bg-mist-20 focus:text-phoenix-40 \
+         focus-visible:outline-none active:bg-phoenix-40 active:text-mist-20 \
+         disabled:bg-mana-40"
+
+let make ?id ?name ?(kind = Primary) ?(type_ = "button") ?onclick ?value
+    ?(class_ = "") ~children () =
+  <button ?id ?name type_ ?onclick ?value class_=(classes kind ^ " " ^ class_)>
     children
   </button>

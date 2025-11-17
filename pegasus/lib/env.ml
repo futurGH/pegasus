@@ -21,10 +21,11 @@ let dpop_nonce_secret =
   match Sys.getenv_opt "DPOP_NONCE_SECRET" with
   | Some sec ->
       let secret =
-        Base64.(decode_exn ~alphabet:uri_safe_alphabet) sec |> Bytes.of_string
+        Base64.(decode_exn ~alphabet:uri_safe_alphabet ~pad:false) sec
+        |> Bytes.of_string
       in
       if Bytes.length secret = 32 then secret
-      else failwith "DPOP_NONCE_SECRET must be 32 bytes in base64"
+      else failwith "DPOP_NONCE_SECRET must be 32 bytes in base64uri"
   | None ->
       let secret = Mirage_crypto_rng_unix.getrandom 32 in
       Dream.warning (fun log ->
