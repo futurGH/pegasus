@@ -8,7 +8,8 @@ let get_handler =
       in
       let csrf_token = Dream.csrf_token ctx.req in
       let html =
-        JSX.render (Templates.Login.make ~redirect_url ~csrf_token ())
+        ReactDOM.renderToStaticMarkup
+          (Frontend.Templates.Login.make ~redirect_url ~csrf_token ())
       in
       Dream.html html )
 
@@ -29,8 +30,8 @@ let post_handler =
           match actor with
           | None ->
               let html =
-                JSX.render
-                  (Templates.Login.make ~redirect_url
+                ReactDOM.renderToStaticMarkup
+                  (Frontend.Templates.Login.make ~redirect_url
                      ~error:"Invalid username or password. Please try again."
                      ~csrf_token () )
               in
@@ -41,8 +42,8 @@ let post_handler =
               Dream.redirect ctx.req redirect_url )
       | _ ->
           let html =
-            JSX.render
-              (Templates.Login.make ~redirect_url:"/account"
+            ReactDOM.renderToStaticMarkup
+              (Frontend.Templates.Login.make ~redirect_url:"/account"
                  ~error:"Invalid credentials provided. Please try again."
                  ~csrf_token () )
           in

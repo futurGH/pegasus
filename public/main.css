@@ -1,4 +1,4 @@
-@import "tailwindcss" source("../pegasus/lib/templates");
+@import "tailwindcss" source("../frontend");
 
 @font-face {
 	font-family: "Fragment";

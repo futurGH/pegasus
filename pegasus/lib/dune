@@ -9,7 +9,7 @@
   cohttp-lwt-unix
   dns-client.unix
   dream
-  html_of_jsx
+  frontend
   ipld
   kleidos
   lwt
@@ -17,7 +17,7 @@
   mist
   re
   safepass
-  str
+  server-reason-react.reactDom
   timedesc
   uri
   uuidm
@@ -26,6 +26,6 @@
   ppx_deriving_yojson.runtime
   ppx_rapper_lwt)
  (preprocess
-  (pps html_of_jsx.ppx lwt_ppx ppx_deriving_yojson ppx_rapper)))
+  (pps lwt_ppx ppx_deriving_yojson ppx_rapper)))
 
 (include_subdirs qualified)

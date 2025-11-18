@@ -82,10 +82,22 @@ let get_handler =
                         in
                         let scopes = String.split_on_char ' ' req.scope in
                         let csrf_token = Dream.csrf_token ctx.req in
+                        let client_id_uri = Uri.of_string metadata.client_id in
+                        let host, path =
+                          ( Uri.host_with_default client_id_uri
+                              ~default:"unknown"
+                          , Uri.path client_id_uri )
+                        in
+                        let client_url = (host, path) in
+                        let client_name =
+                          Option.value metadata.client_name
+                            ~default:(host ^ "/" ^ path)
+                        in
                         let html =
-                          JSX.render
-                            (Templates.Oauth_authorize.make ~metadata ~handle
-                               ~scopes ~code ~request_uri ~csrf_token () )
+                          ReactDOM.renderToStaticMarkup
+                            (Frontend.Templates.Authorize.make ~client_name
+                               ~client_url ~handle ~scopes ~code ~request_uri
+                               ~csrf_token () )
                         in
                         Dream.html html ) ) ) )
 

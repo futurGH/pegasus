@@ -41,7 +41,7 @@ let execute_raw db_path sql =
   let db = Sqlite3.db_open db_path in
   try
     let rc = Sqlite3.exec db sql in
-    let _ = Sqlite3.db_close db in
+    let _ = try Sqlite3.db_close db with _ -> true in
     match rc with
     | Sqlite3.Rc.OK ->
         Lwt.return_ok ()
@@ -49,7 +49,7 @@ let execute_raw db_path sql =
         let err_msg = Sqlite3.errmsg db in
         Lwt.return_error (Failure ("sql error: " ^ err_msg))
   with e ->
-    let _ = Sqlite3.db_close db in
+    let _ = try Sqlite3.db_close db with _ -> true in
     Lwt.return_error e
 
 let parse_migration_filename filename =

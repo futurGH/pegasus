@@ -1,6 +1,6 @@
-let make ?class_ () =
+let[@react.component] make ?className () =
   <svg
-    ?class_
+    ?className
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"

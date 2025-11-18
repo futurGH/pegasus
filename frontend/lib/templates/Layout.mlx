@@ -1,16 +1,16 @@
-open JSX
+open React
 
-let make ?(title = "Pegasus") ~children () =
+let[@react.component] make ?(title = "Pegasus") ~children () =
   <html lang="en">
     <head>
-      <meta charset="utf-8" />
+      <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <link rel="stylesheet" href="/public/index.css" />
       <title>(string title)</title>
     </head>
     <body
-      class_="bg-feather-100 font-sans font-normal text-base tracking-normal \
-              flex items-center justify-center min-h-screen">
+      className="bg-feather-100 font-sans font-normal text-base \
+                 tracking-normal flex items-center justify-center min-h-screen">
       children
     </body>
   </html>

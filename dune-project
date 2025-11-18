@@ -1,4 +1,5 @@
 (lang dune 3.20)
+(using melange 0.1)
 
 (name pegasus)
 
@@ -30,6 +31,15 @@
  (url "git+https://github.com/roddyyaga/ppx_rapper.git")
  (package (name ppx_rapper_lwt)))
 
+(pin ; version on opam is outdated
+ (url "git+https://github.com/melange-community/melange-fetch.git")
+ (package (name melange-fetch)))
+(pin ; version on opam is outdated
+ (url "git+https://github.com/melange-community/melange-webapi.git")
+ (package (name melange-webapi)))
+(pin ; version on opam is outdated
+ (url "git+https://github.com/ml-in-barcelona/server-reason-react.git")
+ (package (name server-reason-react)))
 
 (package
  (name pegasus)
@@ -47,10 +57,9 @@
   (cohttp-lwt-unix (>= 6.1.1))
   (dns-client (>= 10.2.0))
   dream
-  html_of_jsx
-  mlx
   (re (>= 1.13.2))
   (safepass (>= 3.1))
+  server-reason-react
   (timedesc (>= 3.1.0))
   (uri (>= 4.4.0))
   (uuidm (>= 0.9.10))
@@ -62,6 +71,19 @@
   (alcotest :with-test)
   (ocamlformat-mlx :with-dev-setup)
   (ocamlmerlin-mlx :with-dev-setup)))
+
+(package
+ (name frontend)
+ (allow_empty)
+ (depends
+  (ocaml (= 5.2.1))
+  dune
+  lwt
+  melange
+  mlx
+  (reason-react (>= 0.16.0))
+  (reason-react-ppx (>= 0.16.0))
+  server-reason-react))
 
 (package
  (name mist)
@@ -105,7 +127,8 @@
   (multibase (>= 0.1.0))))
 
 (package
-    (name tailwindcss) (allow_empty))
+ (name tailwindcss)
+ (allow_empty))
 
 (dialect
  (name mlx)

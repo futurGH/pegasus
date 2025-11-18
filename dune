@@ -6,7 +6,7 @@
    %{workspace_root}/tools/tailwindcss/tailwindcss
    (:input %{workspace_root}/public/main.css)
    (source_tree %{workspace_root}/public)
-   (source_tree %{workspace_root}/pegasus/lib/templates))
+   (source_tree %{workspace_root}/frontend))
   (action
    (chdir
     %{workspace_root}

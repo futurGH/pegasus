@@ -1,0 +1,55 @@
+open React
+
+(* putting this inline messes with ocamlformat-mlx *)
+let req_marker = " *"
+
+let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
+    ?(sr_only = false) ?value ?placeholder ?(required = false)
+    ?(disabled = false) ?trailing () =
+  let id = Option.value id ~default:name in
+  let placeholder = if label <> None && sr_only then label else placeholder in
+  let input =
+    <input
+      id
+      type_
+      name
+      ?placeholder
+      required
+      disabled
+      ?value
+      className="block min-w-0 grow text-mist-100 placeholder:text-mist-80 \
+                 placeholder:font-medium focus-visible:outline-none"
+    />
+  in
+  <div>
+    ( match label with
+    | Some label ->
+        <div
+          className=( "flex justify-between text-sm"
+                    ^ if sr_only then " sr-only" else "" )>
+          <label htmlFor=id className="text-mist-100">
+            (string label)
+            ( if required then
+                <span className="text-phoenix-100">(string req_marker)</span>
+              else null )
+          </label>
+          ( if required then null
+            else <span className="text-mist-80">(string "optional")</span> )
+        </div>
+    | None ->
+        null )
+    ( if type_ = "hidden" then input
+      else
+        <div
+          className=( "flex items-center rounded-lg py-1.5 px-3 outline-1 \
+                       outline-mana-40 disabled:outline-mana-40/20 \
+                       disabled:bg-mana-40/20 focus-within:outline-2 \
+                       focus-within:outline-mana-100" ^ className )>
+          input
+          ( match trailing with
+          | Some trailing ->
+              <div className="shrink-0 text-mist-100 select-none">trailing</div>
+          | None ->
+              null )
+        </div> )
+  </div>
