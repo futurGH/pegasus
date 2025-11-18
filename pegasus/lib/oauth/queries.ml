@@ -83,8 +83,8 @@ let insert_oauth_token conn token =
   @@ [%rapper
        execute
          {sql|
-         INSERT INTO oauth_tokens (refresh_token, client_id, did, dpop_jkt, scope, created_at, expires_at, last_refreshed_at)
-         VALUES (%string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{created_at}, %int{expires_at}, %int{last_refreshed_at})
+         INSERT INTO oauth_tokens (refresh_token, client_id, did, dpop_jkt, scope, created_at, expires_at, last_refreshed_at, last_ip, last_user_agent)
+         VALUES (%string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{created_at}, %int{expires_at}, %int{last_refreshed_at}, %string{last_ip}, %string?{last_user_agent})
       |sql}
          record_in]
        token
@@ -95,7 +95,8 @@ let get_oauth_token_by_refresh conn refresh_token =
        get_opt
          {sql|
         SELECT @string{refresh_token}, @string{client_id}, @string{did},
-               @string{dpop_jkt}, @string{scope}, @int{created_at}, @int{expires_at}, @int{last_refreshed_at}
+               @string{dpop_jkt}, @string{scope}, @int{created_at}, @int{expires_at},
+               @int{last_refreshed_at}, @string{last_ip}, @string?{last_user_agent}
         FROM oauth_tokens
         WHERE refresh_token = %string{refresh_token}
       |sql}
@@ -129,7 +130,8 @@ let get_oauth_tokens_by_did conn did =
        get_many
          {sql|
         SELECT @string{refresh_token}, @string{client_id}, @string{did},
-        	   @string{dpop_jkt}, @string{scope}, @int{created_at}, @int{expires_at}, @int{last_refreshed_at}
+                @string{dpop_jkt}, @string{scope}, @int{created_at}, @int{expires_at},
+                @int{last_refreshed_at}, @string{last_ip}, @string?{last_user_agent}
         FROM oauth_tokens
         WHERE did = %string{did}
         ORDER BY expires_at ASC

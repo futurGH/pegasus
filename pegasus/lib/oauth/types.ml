@@ -69,5 +69,7 @@ type oauth_token =
   ; scope: string
   ; created_at: int
   ; last_refreshed_at: int
-  ; expires_at: int }
+  ; expires_at: int
+  ; last_ip: string
+  ; last_user_agent: string option [@default None] }
 [@@deriving yojson {strict= false}]

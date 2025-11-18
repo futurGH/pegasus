@@ -6,6 +6,8 @@ let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let%lwt req = Xrpc.parse_body ctx.req Types.token_request_of_yojson in
       let proof = Auth.get_dpop_proof_exn ctx.auth in
+      let ip = Dream.client ctx.req in
+      let user_agent = Dream.header ctx.req "User-Agent" in
       match req.grant_type with
       | "authorization_code" -> (
         match req.code with
@@ -104,7 +106,9 @@ let post_handler =
                               ; scope= orig_req.scope
                               ; created_at= now_ms
                               ; last_refreshed_at= now_ms
-                              ; expires_at }
+                              ; expires_at
+                              ; last_ip= ip
+                              ; last_user_agent= user_agent }
                           in
                           let nonce = Dpop.next_nonce () in
                           Dream.json

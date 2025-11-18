@@ -1,5 +1,4 @@
 open Util.Rapper
-open Util.Syntax
 
 module Types = struct
   type actor =
