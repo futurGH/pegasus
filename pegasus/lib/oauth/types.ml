@@ -67,5 +67,7 @@ type oauth_token =
   ; did: string
   ; dpop_jkt: string
   ; scope: string
+  ; created_at: int
+  ; last_refreshed_at: int
   ; expires_at: int }
 [@@deriving yojson {strict= false}]

@@ -76,6 +76,7 @@ let post_handler =
                                    () )
                           in
                           let now_sec = int_of_float (Unix.gettimeofday ()) in
+                          let now_ms = Util.now_ms () in
                           let expires_in =
                             Constants.access_token_expiry_ms / 1000
                           in
@@ -101,6 +102,8 @@ let post_handler =
                               ; did
                               ; dpop_jkt= proof.jkt
                               ; scope= orig_req.scope
+                              ; created_at= now_ms
+                              ; last_refreshed_at= now_ms
                               ; expires_at }
                           in
                           let nonce = Dpop.next_nonce () in

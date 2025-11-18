@@ -1,0 +1,4 @@
+ALTER TABLE oauth_tokens ADD COLUMN created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE oauth_tokens ADD COLUMN last_refreshed_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS oauth_tokens_did_idx ON oauth_tokens(did);
