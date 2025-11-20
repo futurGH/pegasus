@@ -1,0 +1,17 @@
+let () =
+  try
+    match ReactDOM.querySelector "#root" with
+    | Some elem ->
+        let _ = ReactDOM.Client.hydrateRoot elem <Router /> in
+        ()
+    | None ->
+        Js.log "No root element found"
+  with exn -> (
+    match Js.Exn.asJsExn exn with
+    | Some error ->
+        Js.log2 "Error type:" (Js.Exn.name error) ;
+        Js.log2 "Stack:" (Js.Exn.stack error) ;
+        Js.log2 "Full error:" error
+    | None ->
+        Js.log "No JavaScript exception, got:" ;
+        Js.log exn )

@@ -1,1 +1,0 @@
-import "../_build/default/pegasus/lib/client/js/src/client/App.js";

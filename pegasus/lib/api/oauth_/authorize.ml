@@ -89,17 +89,17 @@ let get_handler =
                           , Uri.path client_id_uri )
                         in
                         let client_url = (host, path) in
-                        let client_name =
-                          Option.value metadata.client_name
-                            ~default:(host ^ "/" ^ path)
-                        in
-                        let html =
-                          ReactDOM.renderToStaticMarkup
-                            (Frontend.Templates.Authorize.make ~client_name
-                               ~client_url ~handle ~scopes ~code ~request_uri
-                               ~csrf_token () )
-                        in
-                        Dream.html html ) ) ) )
+                        let client_name = metadata.client_name in
+                        Util.render_html ~title:("Authorizing " ^ host)
+                          (module Frontend.OauthAuthorizePage)
+                          ~props:
+                            { client_url
+                            ; client_name
+                            ; handle
+                            ; scopes
+                            ; code
+                            ; request_uri
+                            ; csrf_token } ) ) ) )
 
 let post_handler =
   Xrpc.handler (fun ctx ->

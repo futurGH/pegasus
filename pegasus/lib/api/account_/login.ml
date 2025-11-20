@@ -7,11 +7,9 @@ let get_handler =
         else "/account"
       in
       let csrf_token = Dream.csrf_token ctx.req in
-      let html =
-        ReactDOM.renderToStaticMarkup
-          (Frontend.Templates.Login.make ~redirect_url ~csrf_token ())
-      in
-      Dream.html html )
+      Util.render_html ~title:"Login"
+        (module Frontend.LoginPage)
+        ~props:{redirect_url; csrf_token; error= None} )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
@@ -29,22 +27,17 @@ let post_handler =
           in
           match actor with
           | None ->
-              let html =
-                ReactDOM.renderToStaticMarkup
-                  (Frontend.Templates.Login.make ~redirect_url
-                     ~error:"Invalid username or password. Please try again."
-                     ~csrf_token () )
-              in
-              Dream.html ~status:`Unauthorized html
+              let error = "Invalid username or password. Please try again." in
+              Util.render_html ~status:`Unauthorized ~title:"Login"
+                (module Frontend.LoginPage)
+                ~props:{redirect_url; csrf_token; error= Some error}
           | Some {did; _} ->
               let%lwt () = Dream.invalidate_session ctx.req in
               let%lwt () = Dream.set_session_field ctx.req "did" did in
               Dream.redirect ctx.req redirect_url )
       | _ ->
-          let html =
-            ReactDOM.renderToStaticMarkup
-              (Frontend.Templates.Login.make ~redirect_url:"/account"
-                 ~error:"Invalid credentials provided. Please try again."
-                 ~csrf_token () )
-          in
-          Dream.html ~status:`Unauthorized html )
+          let redirect_url = "/account" in
+          let error = "Something went wrong, go back and try again." in
+          Util.render_html ~status:`Unauthorized ~title:"Login"
+            (module Frontend.LoginPage)
+            ~props:{redirect_url; csrf_token; error= Some error} )

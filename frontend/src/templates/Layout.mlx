@@ -1,6 +1,6 @@
 open React
 
-let[@react.component] make ?(title = "Pegasus") ~children () =
+let[@react.component] make ?(title = "Pegasus") ?(children = null) () =
   <html lang="en">
     <head>
       <meta charSet="utf-8" />
@@ -9,8 +9,9 @@ let[@react.component] make ?(title = "Pegasus") ~children () =
       <title>(string title)</title>
     </head>
     <body
-      className="bg-feather-100 font-sans font-normal text-base \
-                 tracking-normal flex items-center justify-center min-h-screen">
-      children
+      className="bg-feather-100 font-sans font-normal text-base tracking-normal">
+      <div id="root" className="flex items-center justify-center min-h-screen">
+        children
+      </div>
     </body>
   </html>

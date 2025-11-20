@@ -5,6 +5,8 @@ _test_boot
 dune.lock
 dev-tools.locks
 
+node_modules
+
 .DS_Store
 .vscode/
 .idea/

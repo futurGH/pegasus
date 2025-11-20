@@ -1,0 +1,21 @@
+(melange.emit
+ (target client)
+ (module_systems es6)
+ (libraries
+  melange
+  melange-json
+  melange-webapi
+  reason-react
+  server-reason-react.url_js)
+ (preprocess
+  (pps
+   server-reason-react.browser_ppx -js
+   melange.ppx
+   melange-json.ppx
+   reason-react-ppx)))
+
+(include_subdirs qualified)
+
+(copy_files# "../src/components/*.mlx")
+(copy_files# "../src/icons/*.mlx")
+(copy_files# "../src/templates/*.mlx")

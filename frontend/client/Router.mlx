@@ -1,0 +1,47 @@
+open React
+
+module type Template = sig
+  type props
+
+  val props_of_json : Melange_json.t -> props
+
+  val props_to_json : props -> Melange_json.t
+
+  val [@react.component] make : props:props -> React.element
+end
+
+type route = {path: string; template: (module Template)}
+
+let routes =
+  [ {path= "/oauth/authorize"; template= (module OauthAuthorizePage)}
+  ; {path= "/account/login"; template= (module LoginPage)} ]
+
+let find_by_path path_to_find =
+  List.find_opt (fun {path; _} -> path = path_to_find) routes
+
+let get_current_path () = [%mel.raw {| window.location.pathname |}]
+
+let render_page path props_json =
+  match find_by_path path with
+  | Some {template; _} -> (
+      let module Template = (val template) in
+      try
+        let props = Template.props_of_json props_json in
+        <Template props />
+      with
+      | Melange_json.Of_json_error err ->
+          <div>
+            (string
+               ("parse error: " ^ Melange_json.of_json_error_to_string err) )
+          </div>
+      | exn ->
+          <div>(string ("render error: " ^ Printexc.to_string exn))</div> )
+  | _ ->
+      <h1>(string "page not found")</h1>
+
+let[@react.component] make () =
+  let path = get_current_path () in
+  let props_json =
+    [%mel.raw {| (window.__PAGE__ || {page: "", props: {}}).props |}]
+  in
+  render_page path props_json

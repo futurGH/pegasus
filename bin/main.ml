@@ -13,12 +13,13 @@ let handlers =
   ; ( get
     , "/.well-known/oauth-authorization-server"
     , Api.Well_known.oauth_authorization_server )
+  ; (options, "/xrpc/**", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (* oauth *)
-    (options, "/oauth/par", Api.Oauth_.Par.options_handler)
+    (options, "/oauth/par", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (post, "/oauth/par", Api.Oauth_.Par.post_handler)
   ; (get, "/oauth/authorize", Api.Oauth_.Authorize.get_handler)
   ; (post, "/oauth/authorize", Api.Oauth_.Authorize.post_handler)
-  ; (options, "/oauth/token", Api.Oauth_.Token.options_handler)
+  ; (options, "/oauth/token", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (post, "/oauth/token", Api.Oauth_.Token.post_handler)
   ; (* account *)
     (get, "/account/login", Api.Account_.Login.get_handler)

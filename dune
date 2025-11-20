@@ -18,4 +18,21 @@
      -o
      %{target})))))
 
-(copy_files public/*)
+(subdir
+ public/
+ (rule
+  (alias client)
+  (target client.js)
+  (deps
+   (:script ../frontend/build.mjs)
+   (:entrypoints ../frontend/client/client/frontend/client/client.js)
+   (source_tree ../frontend/client)
+   (source_tree ../frontend/src))
+  (action
+   (run
+    node
+    %{script}
+    %{entrypoints}
+    --output=./client.js
+    --extract=true
+    --env=%{env:NODE_ENV='production'}))))

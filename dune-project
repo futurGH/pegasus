@@ -80,6 +80,8 @@
   dune
   lwt
   melange
+  melange-json
+  melange-json-native
   mlx
   (reason-react (>= 0.16.0))
   (reason-react-ppx (>= 0.16.0))

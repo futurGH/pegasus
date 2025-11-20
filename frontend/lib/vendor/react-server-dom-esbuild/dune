@@ -1,9 +1,0 @@
-(library
- (name react_server_dom_esbuild)
- (modes melange)
- (wrapped false)
- (libraries reason-react melange-webapi melange-fetch)
- (preprocess
-  (pps melange.ppx)))
-
-(include_subdirs qualified)

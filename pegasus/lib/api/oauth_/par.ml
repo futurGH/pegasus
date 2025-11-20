@@ -1,8 +1,6 @@
 open Oauth
 open Oauth.Types
 
-let options_handler = Xrpc.handler (fun _ -> Dream.empty `No_Content)
-
 let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let proof = Auth.get_dpop_proof_exn ctx.auth in

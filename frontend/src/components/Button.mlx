@@ -28,8 +28,14 @@ let classes = function
          disabled:bg-mana-40"
 
 let[@react.component] make ?id ?name ?(kind = `Primary) ?(type_ = "button")
-    ?onClick ?value ?(className = "") ~children () =
+    ?formMethod ?onClick ?value ?(className = "") ~children () =
   <button
-    ?id ?name type_ ?onClick ?value className=(classes kind ^ " " ^ className)>
+    ?id
+    ?name
+    type_
+    ?formMethod
+    ?onClick
+    ?value
+    className=(classes kind ^ " " ^ className)>
     children
   </button>

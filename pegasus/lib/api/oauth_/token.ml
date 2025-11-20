@@ -1,7 +1,5 @@
 open Oauth
 
-let options_handler = Xrpc.handler (fun _ -> Dream.empty `No_Content)
-
 let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let%lwt req = Xrpc.parse_body ctx.req Types.token_request_of_yojson in
