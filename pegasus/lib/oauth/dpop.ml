@@ -175,8 +175,9 @@ let verify_dpop_proof ~mthd ~url ~dpop_header ?access_token () =
                       else if iat - now > 5 then Error "dpop proof in future"
                       else if not (add_jti jti) then
                         Error "dpop proof replay detected"
-                      else if not (verify_signature jwt jwk) then
-                        Error "invalid dpop signature"
+                      else if
+                        not (try verify_signature jwt jwk with _ -> false)
+                      then Error "invalid dpop signature"
                       else
                         let jkt = compute_jwk_thumbprint jwk in
                         (* verify ath if access token is provided *)

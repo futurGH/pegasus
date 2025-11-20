@@ -189,11 +189,18 @@ module Verifiers = struct
     | Error e ->
         Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
     | Ok token -> (
-      match%lwt dpop {req; db} with
+      match
+        Oauth.Dpop.verify_dpop_proof
+          ~mthd:(Dream.method_to_string @@ Dream.method_ req)
+          ~url:(Dream.target req) ~dpop_header:(Dream.header req "DPoP")
+          ~access_token:token ()
+      with
+      | Error "use_dpop_nonce" ->
+          Lwt.return_error @@ Errors.use_dpop_nonce ()
       | Error e ->
-          Lwt.return_error e
-      | Ok (DPoP {proof}) -> (
-        match Jwt.verify_jwt token Env.jwt_key with
+          Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
+      | Ok proof -> (
+        match Jwt.verify_jwt token Env.jwt_pubkey with
         | Error e ->
             Lwt.return_error @@ Errors.auth_required e
         | Ok (_header, claims) -> (
@@ -230,9 +237,7 @@ module Verifiers = struct
                     @@ Errors.auth_required "invalid credentials"
             with _ ->
               Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
-        )
-      | Ok _ ->
-          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+        ) )
 
   let refresh : verifier =
    fun {req; db} ->

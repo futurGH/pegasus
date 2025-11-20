@@ -15,6 +15,8 @@ let rotation_key = getenv "ROTATION_KEY_MULTIBASE" |> Kleidos.parse_multikey_str
 
 let jwt_key = getenv "JWK_MULTIBASE" |> Kleidos.parse_multikey_str
 
+let jwt_pubkey = Kleidos.derive_pubkey jwt_key
+
 let admin_password = getenv "ADMIN_PASSWORD"
 
 let dpop_nonce_secret =

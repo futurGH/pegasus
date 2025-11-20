@@ -57,7 +57,7 @@ module K256 : CURVE = struct
 
   let normalize_pubkey_to_raw key : bytes =
     match Bytes.length key with
-    | 64 | 32 ->
+    | 64 ->
         key
     | 65 -> (
       match K256.uncompressed_to_raw key with
@@ -220,6 +220,10 @@ let verify ~pubkey ~msg ~signature : bool =
 let pubkey_to_did_key pubkey : string =
   let pubkey, (module Curve : CURVE) = pubkey in
   Curve.pubkey_to_did_key pubkey
+
+let derive_pubkey privkey : key =
+  let privkey, (module Curve : CURVE) = privkey in
+  (Curve.derive_pubkey ~privkey, (module Curve : CURVE))
 
 let privkey_to_multikey privkey : string =
   let privkey, (module Curve : CURVE) = privkey in
