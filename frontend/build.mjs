@@ -7,7 +7,7 @@ async function build(entryPoints, { env, output }) {
 	const outdir = path.dirname(outfile);
 	const splitting = true;
 
-	const isDev = env === "development";
+	const isDev = env === "dev";
 
 	try {
 		const result = await viteBuild({

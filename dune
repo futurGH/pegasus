@@ -26,8 +26,8 @@
   (deps
    (:script ../frontend/build.mjs)
    (:entrypoints ../frontend/client/client/frontend/client/client.js)
-   (source_tree ../frontend/client)
-   (source_tree ../frontend/src))
+   (alias_rec ../frontend/melange)
+   (package frontend))
   (action
    (run
     node
@@ -35,4 +35,15 @@
     %{entrypoints}
     --output=./client.js
     --extract=true
-    --env=%{env:NODE_ENV='production'}))))
+    --env=%{profile}))))
+
+(subdir
+ bin/
+ (rule
+  (target public.ml)
+  (deps
+   (file ../public/client.js)
+   (file ../public/index.css)
+   (source_tree ../public/fonts))
+  (action (with-stdout-to %{null}
+   (run ocaml-crunch -e woff -e woff2 -e js -e css -m plain ../public -o %{target})))))

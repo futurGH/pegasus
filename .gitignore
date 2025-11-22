@@ -4,6 +4,7 @@ _boot
 _test_boot
 dune.lock
 dev-tools.locks
+*.install
 
 node_modules
 

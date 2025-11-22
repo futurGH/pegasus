@@ -105,8 +105,7 @@ let run_migrations ?(migrations_dir = "migrations") conn =
     List.filter (fun (id, _, _) -> not (List.mem id applied)) available
   in
   match pending with
-  | [] ->
-      Lwt_io.printl "no pending migrations"
+  | [] -> Lwt.return_unit
   | _ ->
       let%lwt () =
         Lwt_io.printlf "found %d pending migrations" (List.length pending)

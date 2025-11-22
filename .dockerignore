@@ -7,8 +7,11 @@
 
 _opam/
 _build/
+node_modules/
 *.lock
 *.locks
+*.env
+*.install
 
 Dockerfile
 docker-compose.yml

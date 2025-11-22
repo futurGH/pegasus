@@ -83,8 +83,13 @@ let handlers =
     , "/xrpc/com.atproto.actor.putPreferences"
     , Api.Actor.PutPreferences.handler ) ]
 
+let public_loader _root path _request =
+  match Public.read path with
+  | None -> Dream.empty `Not_Found
+  | Some asset -> Dream.respond asset
+
 let static_routes =
-  [Dream.get "/public/**" (Dream.static "_build/default/public")]
+  [Dream.get "/public/**" (Dream.static  ~loader:public_loader "")]
 
 let main =
   let%lwt db = Data_store.connect ~create:true () in

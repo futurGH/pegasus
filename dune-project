@@ -69,6 +69,7 @@
   ppx_rapper
   ppx_rapper_lwt
   (alcotest :with-test)
+  crunch
   (ocamlformat-mlx :with-dev-setup)
   (ocamlmerlin-mlx :with-dev-setup)))
 
