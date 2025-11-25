@@ -1,13 +1,6 @@
 open Oauth
 open Oauth.Types
 
-let get_session_user (ctx : Xrpc.context) =
-  match Dream.session_field ctx.req "did" with
-  | Some did ->
-      Lwt.return_some did
-  | None ->
-      Lwt.return_none
-
 let get_handler =
   Xrpc.handler (fun ctx ->
       let login_redirect =
@@ -62,48 +55,64 @@ let get_handler =
                       ; expires_at
                       ; used= false }
                   in
-                  match%lwt get_session_user ctx with
+                  match%lwt Session.Raw.get_session ctx.req with
                   | None ->
                       login_redirect
-                  | Some did -> (
-                    match req.login_hint with
-                    | Some hint when hint <> did ->
-                        login_redirect
-                    | _ ->
-                        let%lwt handle =
-                          match%lwt
-                            Data_store.get_actor_by_identifier did ctx.db
-                          with
-                          | Some {handle; _} ->
-                              Lwt.return handle
-                          | None ->
-                              Errors.internal_error
-                                ~msg:"failed to resolve user" ()
-                        in
-                        let scopes = String.split_on_char ' ' req.scope in
-                        let csrf_token = Dream.csrf_token ctx.req in
-                        let client_id_uri = Uri.of_string metadata.client_id in
-                        let host, path =
-                          ( Uri.host_with_default client_id_uri
-                              ~default:"unknown"
-                          , Uri.path client_id_uri )
-                        in
-                        let client_url = (host, path) in
-                        let client_name = metadata.client_name in
-                        Util.render_html ~title:("Authorizing " ^ host)
-                          (module Frontend.OauthAuthorizePage)
-                          ~props:
-                            { client_url
-                            ; client_name
-                            ; handle
-                            ; scopes
-                            ; code
-                            ; request_uri
-                            ; csrf_token } ) ) ) )
+                  | Some session when session.logged_in_dids = [] ->
+                      login_redirect
+                  | Some {current_did; logged_in_dids} -> (
+                      let%lwt did =
+                        match req.login_hint with
+                        | Some hint when List.mem hint logged_in_dids ->
+                            let%lwt () =
+                              if Some hint <> current_did then
+                                Session.Raw.set_current_did ctx.req hint
+                              else Lwt.return_unit
+                            in
+                            Lwt.return_some hint
+                        | _ ->
+                            Lwt.return current_did
+                      in
+                      match did with
+                      | None ->
+                          login_redirect
+                      | Some did ->
+                          let%lwt handle =
+                            match%lwt
+                              Data_store.get_actor_by_identifier did ctx.db
+                            with
+                            | Some {handle; _} ->
+                                Lwt.return handle
+                            | None ->
+                                Errors.internal_error
+                                  ~msg:"failed to resolve user" ()
+                          in
+                          let scopes = String.split_on_char ' ' req.scope in
+                          let csrf_token = Dream.csrf_token ctx.req in
+                          let client_id_uri =
+                            Uri.of_string metadata.client_id
+                          in
+                          let host, path =
+                            ( Uri.host_with_default client_id_uri
+                                ~default:"unknown"
+                            , Uri.path client_id_uri )
+                          in
+                          let client_url = (host, path) in
+                          let client_name = metadata.client_name in
+                          Util.render_html ~title:("Authorizing " ^ host)
+                            (module Frontend.OauthAuthorizePage)
+                            ~props:
+                              { client_url
+                              ; client_name
+                              ; handle
+                              ; scopes
+                              ; code
+                              ; request_uri
+                              ; csrf_token } ) ) ) )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
-      match%lwt get_session_user ctx with
+      match%lwt Session.Raw.get_current_did ctx.req with
       | None ->
           Errors.auth_required "missing authentication"
       | Some user_did -> (

@@ -170,6 +170,7 @@ let post_handler =
                     Queries.update_oauth_token ctx.db
                       ~old_refresh_token:refresh_token
                       ~new_refresh_token:new_refresh ~expires_at:new_expires_at
+                      ~ip ~user_agent
                   in
                   Dream.json ~headers:[("Cache-Control", "no-store")]
                   @@ Yojson.Safe.to_string

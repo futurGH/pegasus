@@ -33,7 +33,7 @@ let post_handler =
                 ~props:{redirect_url; csrf_token; error= Some error}
           | Some {did; _} ->
               let%lwt () = Dream.invalidate_session ctx.req in
-              let%lwt () = Dream.set_session_field ctx.req "did" did in
+              let%lwt () = Session.log_in_did ctx.req did in
               Dream.redirect ctx.req redirect_url )
       | _ ->
           let redirect_url = "/account" in

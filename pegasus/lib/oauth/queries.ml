@@ -103,17 +103,19 @@ let get_oauth_token_by_refresh conn refresh_token =
          record_out]
        ~refresh_token
 
-let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
+let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at
+    ~ip ~user_agent =
   Util.use_pool conn
   @@ [%rapper
        execute
          {sql|
         UPDATE oauth_tokens
         SET refresh_token = %string{new_refresh_token},
-            expires_at = %int{expires_at}
+            expires_at = %int{expires_at}, last_ip = %string{ip},
+            last_user_agent = %string?{user_agent}
         WHERE refresh_token = %string{old_refresh_token}
       |sql}]
-       ~new_refresh_token ~expires_at ~old_refresh_token
+       ~new_refresh_token ~expires_at ~old_refresh_token ~ip ~user_agent
 
 let delete_oauth_token_by_refresh conn refresh_token =
   Util.use_pool conn
