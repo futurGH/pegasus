@@ -1,0 +1,88 @@
+module Button = struct
+  external make : children:React.element -> ?className:string -> React.element
+    = "Button"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Button = struct
+  let make ~children ?className () = <button ?className>children</button>
+end
+[@@platform native]
+
+module ListBox = struct
+  external make : children:React.element -> ?className:string -> React.element
+    = "ListBox"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module ListBox = struct
+  let make ~children ?className () = <ul ?className>children</ul>
+end
+[@@platform native]
+
+module ListBoxItem = struct
+  external make :
+       children:React.element
+    -> ?id:string
+    -> ?className:string
+    -> ?href:string
+    -> React.element = "ListBoxItem"
+  [@@react.component] [@@mel.module "react-aria-components"]
+end
+[@@platform js]
+
+module ListBoxItem = struct
+  let make ~children ?key:_key ?id ?className ?href:_href () =
+    <li ?id ?className>children</li>
+end
+[@@platform native]
+
+module Popover = struct
+  external make :
+       children:React.element
+    -> ?className:string
+    -> ?style:ReactDOM.Style.t
+    -> React.element = "Popover"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Popover = struct
+  let make ~children ?className ?style () =
+    <div ?className ?style>children</div>
+end
+[@@platform native]
+
+module Select = struct
+  external make :
+       children:React.element
+    -> ?className:string
+    -> ?name:string
+    -> ?value:string
+    -> ?defaultValue:string
+    -> ?onChange:(string -> unit)
+    -> React.element = "Select"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Select = struct
+  let make ~children ?className ?name ?value ?defaultValue ?onChange () =
+    <select ?className ?name ?value ?defaultValue ?onChange>children</select>
+end
+[@@platform native]
+
+module SelectValue = struct
+  external make : ?children:React.element -> ?className:string -> React.element
+    = "SelectValue"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module SelectValue = struct
+  let make ?children ?className () =
+    <span ?className>(Option.value children ~default:React.null)</span>
+end
+[@@platform native]

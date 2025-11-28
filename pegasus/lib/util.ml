@@ -403,3 +403,7 @@ let render_html ?status ?title (type props)
                       Dream.flush stream] )
               in
               Dream.flush stream]]]] )
+
+let make_data_uri ~mimetype ~data =
+  let base64_data = data |> Bytes.to_string |> Base64.encode_string in
+  Printf.sprintf "data:%s;base64,%s" mimetype base64_data

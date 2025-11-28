@@ -7,7 +7,8 @@
   server-reason-react.react
   server-reason-react.reactDom
   dream
-  melange-json-native)
+  melange-json-native
+  melange-webapi)
  (preprocess
   (pps
    melange-json-native.ppx

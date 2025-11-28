@@ -3,9 +3,19 @@
 @font-face {
 	font-family: "Fragment";
 	src:
-		url("fonts/Fragment.woff2") format("woff2"),
-		url("fonts/Fragment.woff") format("woff");
-	font-weight: normal;
+		url("fonts/FragmentLight.woff2") format("woff2"),
+		url("fonts/FragmentLight.woff") format("woff");
+	font-weight: 300;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Fragment";
+	src:
+		url("fonts/FragmentRegular.woff2") format("woff2"),
+		url("fonts/FragmentRegular.woff") format("woff");
+	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
 }
@@ -14,16 +24,25 @@
 	font-family: "Geist";
 	src: url("https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2")
 		format("woff2");
-	font-weight: 300 400;
+	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
+	font-variation-settings: "wght" 300;
+}
+
+@font-face {
+	font-family: "Geist";
+	src: url("https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2")
+		format("woff2");
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+	font-variation-settings: "wght" 400;
 }
 
 @theme {
 	--font-serif: Fragment, Georgia, "Times New Roman", Times, serif;
 	--font-sans: Geist, Helvetica, -apple-system, system-ui, sans-serif;
-	--font-weight-normal: 300;
-	--font-weight-medium: 400;
 
 	--tracking-normal: 0.01em;
 
