@@ -276,15 +276,15 @@ let ms_to_iso8601 ms =
   Timedesc.(of_timestamp_float_s_exn s |> to_iso8601)
 
 (* returns all blob refs in a record *)
-let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
+let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
   List.fold_left
     (fun acc (_, value) ->
-      match value with `BlobRef blob -> blob :: acc | _ -> acc )
+      match value with
+      | `BlobRef blob -> blob :: acc
+      | `LexMap map -> (find_blob_refs map) @ acc
+      | _ -> acc )
     []
     (Mist.Lex.String_map.bindings record)
-
-(* returns whether the value is None *)
-let is_none = function None -> true | _ -> false
 
 let validate_handle handle =
   let front =
@@ -292,14 +292,13 @@ let validate_handle handle =
   in
   if String.contains front '.' then
     Error
-      (Errors.InvalidRequestError
-         ("InvalidHandle", "invalid characters in handle") )
+     "handle can't contain periods"
   else
     match String.length front with
     | l when l < 3 ->
-        Error (Errors.InvalidRequestError ("InvalidHandle", "handle too short"))
+        Error "handle too short"
     | l when l > 18 ->
-        Error (Errors.InvalidRequestError ("InvalidHandle", "handle too long"))
+        Error "handle too long"
     | _ ->
         Ok ()
 

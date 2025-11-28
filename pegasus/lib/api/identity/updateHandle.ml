@@ -13,7 +13,7 @@ let handler =
       in
       match Util.validate_handle handle with
       | Error e ->
-          raise e
+      Errors.invalid_request ~name:"InvalidHandle" e
       | Ok () -> (
         match%lwt Data_store.get_actor_by_identifier handle db with
         | Some _ ->
