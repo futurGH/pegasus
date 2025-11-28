@@ -34,14 +34,14 @@ let[@react.component] make
   let rendered_name =
     match client_name with
     | Some client_name ->
-        <span className="text-mana-100 font-serif">
+        <span className="text-mana-100 font-serif mr-1">
           (string client_name)
           <span className="font-sans">(string (" (" ^ host ^ ")"))</span>
         </span>
     | None when String.length path = 0 ->
-        <span className="text-mana-100 font-serif">(string host)</span>
+        <span className="text-mana-100 font-serif mr-1">(string host)</span>
     | None ->
-        <span className="text-mana-100 font-serif">
+        <span className="text-mana-100 font-serif mr-1">
           (string host) <span className="text-mana-40">(string path)</span>
         </span>
   in
@@ -53,21 +53,31 @@ let[@react.component] make
         Webapi.Dom.Location.search Webapi.Dom.location
   in
   let add_account_url = "/account/login" ^ query_string in
+  let favicon_url, set_favicon_url =
+    useState (fun () -> "https://" ^ host ^ "/favicon.ico")
+  in
   <form className="w-full h-auto max-w-lg px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string ("authorizing " ^ host))
     </h1>
     <span className="w-full inline text-mist-100">
       (string "You're signing into ")
+      ( if favicon_url <> "" then
+          <img
+            src=favicon_url
+            className="w-4 h-4 inline ml-1.5 mr-1 -mt-0.5"
+            onError=(fun _ -> set_favicon_url (fun _ -> "")) />
+        else null )
       rendered_name
       (string " as ")
       <Aria.Select name="did" className="inline" defaultValue=current_user.did>
         <Aria.Button
-          className="group inline-flex flex-row items-center px-1.5 py-1 -mx-0.5 -my-1 rounded-lg \
-                     focus-visible:outline-none hover:bg-mist-20/40 \
-                     active:bg-mist-20/40">
+          className="group inline-flex flex-row items-center px-1.5 py-1 \
+                     -mx-0.5 -my-1 rounded-lg focus-visible:outline-none \
+                     hover:bg-mist-20/40 active:bg-mist-20/40">
           <Aria.SelectValue
-            className="text-mana-100 font-serif inline-flex items-center gap-x-1"
+            className="text-mana-100 font-serif inline-flex items-center \
+                       gap-x-1"
           />
         </Aria.Button>
         <Aria.Popover
@@ -94,7 +104,7 @@ let[@react.component] make
                     | Some src ->
                         <img src className="w-5 h-5 mr-1 rounded-md" />
                     | None ->
-                        null)
+                        null )
                     <span className="self-baseline select-none">
                       (string ("@" ^ user.handle))
                     </span>
@@ -107,10 +117,11 @@ let[@react.component] make
                 logged_in_users
             |> Array.of_list |> array )
             <Aria.ListBoxItem
-              className="flex flex-row items-center p-1 pl-2 text-mana-100 font-normal \
-                         underline rounded-md focus-visible:outline-none \
-                         data-hovered:text-mist-20 data-focused:text-mist-20 \
-                         data-hovered:bg-mana-100 data-focused:bg-mana-100"
+              className="flex flex-row items-center p-1 pl-2 text-mana-100 \
+                         font-normal underline rounded-md \
+                         focus-visible:outline-none data-hovered:text-mist-20 \
+                         data-focused:text-mist-20 data-hovered:bg-mana-100 \
+                         data-focused:bg-mana-100"
               href=add_account_url>
               (string "add account")
             </Aria.ListBoxItem>
@@ -146,4 +157,4 @@ let[@react.component] make
         (string "authorize")
       </Button>
     </div>
-    </form>
+  </form>
