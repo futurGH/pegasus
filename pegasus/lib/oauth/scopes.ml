@@ -424,3 +424,28 @@ let has_transition_generic scopes = List.mem (Static TransitionGeneric) scopes
 
 let has_transition_chat_bsky scopes =
   List.mem (Static TransitionChatBsky) scopes
+
+module Transition = struct
+  let allows_account scopes (opts : account_match) =
+    if opts.attr = Email && opts.action == Read && has_transition_email scopes
+    then true
+    else allows_account scopes opts
+
+  let allows_blob scopes (opts : blob_match) =
+    if has_transition_generic scopes then true else allows_blob scopes opts
+
+  let allows_repo scopes (opts : repo_match) =
+    if has_transition_generic scopes then true else allows_repo scopes opts
+
+  let allows_rpc scopes (opts : rpc_match) =
+    if opts.lxm = "*" && has_transition_generic scopes then true
+    else if
+      (not (String.starts_with opts.lxm ~prefix:"chat.bsky."))
+      && has_transition_generic scopes
+    then true
+    else if
+      String.starts_with opts.lxm ~prefix:"chat.bsky."
+      && has_transition_chat_bsky scopes
+    then true
+    else allows_rpc scopes opts
+end
