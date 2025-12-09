@@ -20,6 +20,11 @@ and res_commit = {cid: string; rev: string} [@@deriving yojson]
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
+      (* assert create and update because we don't know which will end up happening *)
+      Auth.assert_repo_scope ctx.auth ~collection:input.collection
+        ~action:Oauth.Scopes.Create ;
+      Auth.assert_repo_scope ctx.auth ~collection:input.collection
+        ~action:Oauth.Scopes.Update ;
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       let%lwt repo = Repository.load did in
       let write : Repository.repo_write =

@@ -15,7 +15,7 @@ type credentials =
   | Admin
   | Access of {did: string}
   | Refresh of {did: string; jti: string}
-  | OAuth of {did: string; proof: Oauth.Dpop.proof}
+  | OAuth of {did: string; proof: Oauth.Dpop.proof; scopes: Oauth.Scopes.t}
   | DPoP of {proof: Oauth.Dpop.proof}
 
 let verify_bearer_jwt t token expected_scope =
@@ -50,6 +50,66 @@ let verify_auth ?(refresh = false) credentials did =
       true
   | _ ->
       false
+
+let get_scopes = function OAuth {scopes; _} -> Some scopes | _ -> None
+
+let is_oauth = function OAuth _ -> true | _ -> false
+
+let assert_repo_scope credentials ~collection ~action =
+  match credentials with
+  | OAuth {scopes; _} ->
+      if not (Oauth.Scopes.Transition.allows_repo scopes {collection; action})
+      then
+        Errors.auth_required ~name:"InsufficientScope"
+          ( "scope doesn't allow "
+          ^ Oauth.Scopes.show_repo_action action
+          ^ " on " ^ collection )
+  | _ ->
+      ()
+
+let assert_blob_scope credentials ~mime =
+  match credentials with
+  | OAuth {scopes; _} ->
+      if not (Oauth.Scopes.Transition.allows_blob scopes {mime}) then
+        Errors.auth_required ~name:"InsufficientScope"
+          ("scope doesn't allow blob upload for " ^ mime)
+  | _ ->
+      ()
+
+let assert_identity_scope credentials ~attr =
+  match credentials with
+  | OAuth {scopes; _} ->
+      if not (Oauth.Scopes.allows_identity scopes {attr}) then
+        Errors.auth_required ~name:"InsufficientScope"
+          "scope doesn't allow identity operations"
+  | _ ->
+      ()
+
+let assert_account_scope credentials ~attr ~action =
+  match credentials with
+  | OAuth {scopes; _} ->
+      if not (Oauth.Scopes.Transition.allows_account scopes {attr; action}) then
+        Errors.auth_required ~name:"InsufficientScope"
+          "scope doesn't allow account operations"
+  | _ ->
+      ()
+
+let allows_email_read credentials =
+  match credentials with
+  | OAuth {scopes; _} ->
+      Oauth.Scopes.Transition.allows_account scopes
+        {attr= Oauth.Scopes.Email; action= Oauth.Scopes.Read}
+  | _ ->
+      true
+
+let assert_rpc_scope credentials ~lxm ~aud =
+  match credentials with
+  | OAuth {scopes; _} ->
+      if not (Oauth.Scopes.Transition.allows_rpc scopes {lxm; aud}) then
+        Errors.auth_required ~name:"InsufficientScope"
+          ("scope doesn't allow rpc call to " ^ lxm)
+  | _ ->
+      ()
 
 let get_authed_did_exn = function
   | Access {did} | OAuth {did; _} ->
@@ -211,11 +271,20 @@ module Verifiers = struct
               let jkt_claim =
                 claims |> member "cnf" |> member "jkt" |> to_string
               in
+              let scope_str =
+                claims |> member "scope" |> to_string_option
+                |> Option.value ~default:""
+              in
+              let scopes = Oauth.Scopes.of_string scope_str in
               let now = int_of_float (Unix.gettimeofday ()) in
               if jkt_claim <> proof.jkt then
                 Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
               else if exp < now then
                 Lwt.return_error @@ Errors.auth_required "token expired"
+              else if not (Oauth.Scopes.has_atproto scopes) then
+                Lwt.return_error
+                @@ Errors.auth_required ~name:"InvalidToken"
+                     "oauth token missing 'atproto' scope"
               else
                 let%lwt session =
                   try%lwt
@@ -227,7 +296,7 @@ module Verifiers = struct
                 in
                 match session with
                 | Ok {active= Some true; _} ->
-                    Lwt.return_ok (OAuth {did; proof})
+                    Lwt.return_ok (OAuth {did; proof; scopes})
                 | Ok _ ->
                     Lwt.return_error
                     @@ Errors.auth_required ~name:"AccountDeactivated"

@@ -2,6 +2,7 @@ type request = {handle: string} [@@deriving yojson]
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
+      Auth.assert_identity_scope auth ~attr:Oauth.Scopes.Handle ;
       let did = Auth.get_authed_did_exn auth in
       let%lwt body = Dream.body req in
       let handle =
@@ -13,7 +14,7 @@ let handler =
       in
       match Util.validate_handle handle with
       | Error e ->
-      Errors.invalid_request ~name:"InvalidHandle" e
+          Errors.invalid_request ~name:"InvalidHandle" e
       | Ok () -> (
         match%lwt Data_store.get_actor_by_identifier handle db with
         | Some _ ->

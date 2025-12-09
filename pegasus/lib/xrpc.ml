@@ -57,6 +57,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
     | _ ->
         Errors.invalid_request "invalid proxy header"
   in
+  Auth.assert_rpc_scope ctx.auth ~lxm:nsid ~aud:service_did ;
   let fragment = "#" ^ service_type in
   match%lwt Id_resolver.Did.resolve service_did with
   | Ok did_doc -> (

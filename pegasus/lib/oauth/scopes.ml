@@ -10,6 +10,14 @@ type identity_permission = {attr: identity_attr}
 
 type repo_action = Create | Update | Delete
 
+let show_repo_action = function
+  | Create ->
+      "create"
+  | Update ->
+      "update"
+  | Delete ->
+      "delete"
+
 type repo_collection = All | Collection of string
 
 type repo_permission =

@@ -21,6 +21,8 @@ let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
+      Auth.assert_repo_scope ctx.auth ~collection:input.collection
+        ~action:Oauth.Scopes.Create ;
       let%lwt repo = Repository.load did in
       let write : Repository.repo_write =
         match input.swap_record with

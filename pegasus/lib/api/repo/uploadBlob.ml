@@ -7,6 +7,7 @@ let handler =
         Option.value ~default:"application/octet-stream"
           (Dream.header ctx.req "Content-Type")
       in
+      Auth.assert_blob_scope ctx.auth ~mime:mime_type ;
       let%lwt data = Dream.body ctx.req |> Lwt.map Bytes.of_string in
       let size = Int64.of_int @@ Bytes.length data in
       let cid = Cid.create Raw data in
