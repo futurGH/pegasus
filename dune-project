@@ -19,27 +19,21 @@
  (url "git+https://github.com/futurGH/bin_prot.git") ; https://github.com/janestreet/bin_prot pinned to #03c783d
  (package
    (name bin_prot)
-   (version v0.17~preview.128.20+135))) ; this is actually v0.16~preview.128.20+135 but some other package requires >=v0.17
+   (version v0.17~preview.128.20+135))) ; this is actually v0.16~preview.128.20+135 but core requires >=v0.17
 
 (pin ; these 3 all need to be pinned or they'll conflict
- (url "git+https://github.com/aantron/dream.git")
+ (url "git+https://github.com/aantron/dream.git#af3c9bf")
  (package (name dream)))
 (pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git")
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62d")
  (package (name ppx_rapper)))
 (pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git")
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62d")
  (package (name ppx_rapper_lwt)))
 
-(pin ; version on opam is outdated
- (url "git+https://github.com/melange-community/melange-fetch.git")
- (package (name melange-fetch)))
-(pin ; version on opam is outdated
- (url "git+https://github.com/melange-community/melange-webapi.git")
+(pin ; version on opam requires too high a melange version
+ (url "git+https://github.com/melange-community/melange-webapi.git#42daaa4")
  (package (name melange-webapi)))
-(pin ; version on opam is outdated
- (url "git+https://github.com/ml-in-barcelona/server-reason-react.git")
- (package (name server-reason-react)))
 
 (package
  (name pegasus)
