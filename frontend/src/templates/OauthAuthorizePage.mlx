@@ -1,3 +1,5 @@
+[@@@ocaml.warning "-26-27"]
+
 open Melange_json.Primitives
 open React
 module Aria = ReactAria
@@ -18,6 +20,510 @@ type props =
   ; request_uri: string
   ; csrf_token: string }
 [@@deriving json]
+
+module ScopesTable = struct
+  type repo_action = Create | Update | Delete
+
+  type parsed_repo_scope = {collections: string list; actions: repo_action list}
+
+  type parsed_rpc_scope = {lxm: string; aud: string}
+
+  type parsed_scope =
+    | Email of [`Read | `Manage]
+    | Identity of [`Handle | `Full]
+    | Repo of parsed_repo_scope
+    | Rpc of parsed_rpc_scope
+    | Blob of string list (* mimetypes *)
+    | Bluesky (* transition:generic or app.bsky.* *)
+    | Chat (* transition:chat.bsky or chat.bsky.* *)
+    | Atproto
+    | Unknown of string
+
+  let parse_scope scope =
+    if scope = "atproto" then Atproto
+    else if scope = "transition:generic" then Bluesky
+    else if scope = "transition:chat.bsky" then Chat
+    else if scope = "transition:email" then Email `Read
+    else if String.starts_with ~prefix:"account:email" scope then
+      if String.exists (fun c -> c = '=') scope then Email `Manage
+      else Email `Read
+    else if String.starts_with ~prefix:"identity:" scope then
+      let rest = String.sub scope 9 (String.length scope - 9) in
+      if rest = "*" || String.starts_with ~prefix:"*" rest then Identity `Full
+      else Identity `Handle
+    else if String.starts_with ~prefix:"repo:" scope then
+      let rest = String.sub scope 5 (String.length scope - 5) in
+      let parts = String.split_on_char '?' rest in
+      let collection =
+        match parts with coll :: _ when coll <> "" -> [coll] | _ -> ["*"]
+      in
+      let actions =
+        if List.length parts > 1 then
+          let params = List.nth parts 1 in
+          if String.contains params '=' then
+            List.filter_map
+              (fun a ->
+                if
+                  String.ends_with ~suffix:a params
+                  || String.contains params ','
+                then
+                  match a with
+                  | "create" ->
+                      Some Create
+                  | "update" ->
+                      Some Update
+                  | "delete" ->
+                      Some Delete
+                  | _ ->
+                      None
+                else None )
+              ["create"; "update"; "delete"]
+            |> function [] -> [Create; Update; Delete] | l -> l
+          else [Create; Update; Delete]
+        else [Create; Update; Delete]
+      in
+      if
+        List.exists
+          (fun c ->
+            String.starts_with ~prefix:"app.bsky." c
+            || String.starts_with ~prefix:"chat.bsky." c )
+          collection
+      then
+        if
+          List.exists
+            (fun c -> String.starts_with ~prefix:"chat.bsky." c)
+            collection
+        then Chat
+        else Bluesky
+      else Repo {collections= collection; actions}
+    else if String.starts_with ~prefix:"rpc:" scope then
+      let rest = String.sub scope 4 (String.length scope - 4) in
+      let parts = String.split_on_char '?' rest in
+      let lxm = match parts with l :: _ -> l | [] -> "*" in
+      let aud =
+        if List.length parts > 1 then
+          let params = List.nth parts 1 in
+          if String.starts_with ~prefix:"aud=" params then
+            String.sub params 4 (String.length params - 4)
+          else "*"
+        else "*"
+      in
+      if String.starts_with ~prefix:"app.bsky." lxm then Bluesky
+      else if String.starts_with ~prefix:"chat.bsky." lxm then Chat
+      else Rpc {lxm; aud}
+    else if String.starts_with ~prefix:"blob:" scope then
+      let rest = String.sub scope 5 (String.length scope - 5) in
+      Blob [rest]
+    else Unknown scope
+
+  type collection_actions = {create: bool; update: bool; delete: bool}
+
+  module StringMap = Map.Make (String)
+
+  let build_collection_actions_map repos =
+    List.fold_left
+      (fun acc r ->
+        List.fold_left
+          (fun acc coll ->
+            let existing =
+              StringMap.find_opt coll acc
+              |> Option.value
+                   ~default:{create= false; update= false; delete= false}
+            in
+            let updated =
+              { create= existing.create || List.mem Create r.actions
+              ; update= existing.update || List.mem Update r.actions
+              ; delete= existing.delete || List.mem Delete r.actions }
+            in
+            StringMap.add coll updated acc )
+          acc r.collections )
+      StringMap.empty repos
+
+  let build_aud_lxms_map rpcs =
+    List.fold_left
+      (fun acc r ->
+        let existing =
+          StringMap.find_opt r.aud acc |> Option.value ~default:[]
+        in
+        let lxms =
+          if List.mem r.lxm existing then existing else r.lxm :: existing
+        in
+        StringMap.add r.aud lxms acc )
+      StringMap.empty rpcs
+
+  let merge_parsed_scopes scopes =
+    let email = ref None in
+    let identity = ref None in
+    let repos = ref [] in
+    let rpcs = ref [] in
+    let blobs = ref [] in
+    let has_bluesky = ref false in
+    let has_chat = ref false in
+    let unknowns = ref [] in
+    List.iter
+      (fun scope ->
+        match parse_scope scope with
+        | Email `Manage ->
+            email := Some `Manage
+        | Email `Read ->
+            if !email = None then email := Some `Read
+        | Identity `Full ->
+            identity := Some `Full
+        | Identity `Handle ->
+            if !identity = None then identity := Some `Handle
+        | Repo r ->
+            repos := r :: !repos
+        | Rpc r ->
+            rpcs := r :: !rpcs
+        | Blob mimes ->
+            blobs := mimes @ !blobs
+        | Bluesky ->
+            has_bluesky := true
+        | Chat ->
+            has_chat := true
+        | Atproto ->
+            ()
+        | Unknown s ->
+            unknowns := s :: !unknowns )
+      scopes ;
+    ( !email
+    , !identity
+    , !repos
+    , !rpcs
+    , !blobs
+    , !has_bluesky
+    , !has_chat
+    , !unknowns )
+
+  let[@react.component] make ~scopes () =
+    let email, identity, repos, rpcs, blobs, has_bluesky, has_chat, unknowns =
+      merge_parsed_scopes scopes
+    in
+    <div className="w-full mt-3 space-y-3">
+      ( match email with
+      | Some level ->
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <MailIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">(string "Email")</div>
+              <div className="text-sm text-mist-100">
+                (string
+                   ( if level = `Manage then
+                       "Read and update your account's email address"
+                     else "Read your account's email address" ) )
+              </div>
+            </div>
+          </div>
+      | None ->
+          null )
+      ( match identity with
+      | Some level ->
+          <div className="flex items-start gap-3 p-3">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <AtIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">
+                (string "Identity")
+              </div>
+              <div className="text-sm text-mist-100">
+                (string
+                   ( if level = `Full then
+                       "Manage your full identity including your @handle"
+                     else "Change your @handle" ) )
+              </div>
+            </div>
+          </div>
+      | None ->
+          null )
+      ( if has_bluesky then
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <BlueskyIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">(string "Bluesky")</div>
+              <div className="text-sm text-mist-100">
+                (string "Manage your profile, posts, likes and follows")
+              </div>
+            </div>
+          </div>
+        else null )
+      ( if has_chat then
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <MessageIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">(string "Chat")</div>
+              <div className="text-sm text-mist-100">
+                (string "Read and send messages")
+              </div>
+            </div>
+          </div>
+        else null )
+      ( if List.length repos > 0 && not has_bluesky then
+          let coll_actions_map = build_collection_actions_map repos in
+          let coll_actions_list =
+            StringMap.bindings coll_actions_map
+            |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+          in
+          let star_actions = StringMap.find_opt "*" coll_actions_map in
+          let has_full_access =
+            match star_actions with
+            | Some a ->
+                a.create && a.update && a.delete
+            | None ->
+                false
+          in
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <FolderGitIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">
+                (string "Repository")
+              </div>
+              <div className="text-sm text-mist-100">
+                (string
+                   ( if has_full_access then
+                       "Create, update, and delete any public record"
+                     else "Publish changes to your repository" ) )
+              </div>
+              ( if not has_full_access then
+                  <table className="w-full mt-2 text-xs">
+                    <thead>
+                      <tr className="text-mist-80">
+                        <th className="text-left font-normal pb-1">
+                          (string "Collection")
+                        </th>
+                        <th className="text-center font-normal pb-1 w-16">
+                          (string "Create")
+                        </th>
+                        <th className="text-center font-normal pb-1 w-16">
+                          (string "Update")
+                        </th>
+                        <th className="text-center font-normal pb-1 w-16">
+                          (string "Delete")
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ( coll_actions_list
+                      |> List.map (fun (coll, actions) ->
+                             let star_create =
+                               Option.map (fun a -> a.create) star_actions
+                               |> Option.value ~default:false
+                             in
+                             let star_update =
+                               Option.map (fun a -> a.update) star_actions
+                               |> Option.value ~default:false
+                             in
+                             let star_delete =
+                               Option.map (fun a -> a.delete) star_actions
+                               |> Option.value ~default:false
+                             in
+                             <tr key=coll className="text-mist-100">
+                               <td className="py-0.5">
+                                 <span className="font-medium">
+                                   (string
+                                      ( if coll = "*" then "Any collection"
+                                        else coll ) )
+                                 </span>
+                               </td>
+                               <td className="text-center">
+                                 ( if star_create || actions.create then
+                                     <span className="text-mana-100">
+                                       (string {js|✓|js})
+                                     </span>
+                                   else null )
+                               </td>
+                               <td className="text-center">
+                                 ( if star_update || actions.update then
+                                     <span className="text-mana-100">
+                                       (string {js|✓|js})
+                                     </span>
+                                   else null )
+                               </td>
+                               <td className="text-center">
+                                 ( if star_delete || actions.delete then
+                                     <span className="text-mana-100">
+                                       (string {js|✓|js})
+                                     </span>
+                                   else null )
+                               </td>
+                             </tr> )
+                      |> Array.of_list |> array )
+                    </tbody>
+                  </table>
+                else null )
+            </div>
+          </div>
+        else null )
+      ( if List.length rpcs > 0 then
+          let aud_lxms_map = build_aud_lxms_map rpcs in
+          let aud_lxms_list =
+            StringMap.bindings aud_lxms_map
+            |> List.map (fun (aud, lxms) ->
+                   let sorted_lxms =
+                     if List.mem "*" lxms then ["*"]
+                     else List.sort String.compare lxms
+                   in
+                   (aud, sorted_lxms) )
+            |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+          in
+          let has_full_access =
+            List.exists
+              (fun (aud, lxms) -> aud = "*" && List.mem "*" lxms)
+              aud_lxms_list
+          in
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <UsersRoundIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">
+                (string "Authenticate")
+              </div>
+              <div className="text-sm text-mist-100">
+                (string
+                   ( if has_full_access then
+                       "Act on your behalf towards any service"
+                     else "Perform actions on your behalf" ) )
+              </div>
+              ( if not has_full_access then
+                  <table className="w-full mt-2 text-xs">
+                    <thead>
+                      <tr className="text-mist-80">
+                        <th className="text-left font-normal pb-1">
+                          (string "Method")
+                        </th>
+                        <th className="text-left font-normal pb-1">
+                          (string "Service")
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ( aud_lxms_list
+                      |> List.concat_map (fun (aud, lxms) ->
+                             let render_aud () =
+                               if aud = "*" then
+                                 <span className="text-mist-100 font-medium">
+                                   (string "Any service")
+                                 </span>
+                               else if
+                                 String.starts_with
+                                   ~prefix:"did:web:api.bsky.app#" aud
+                               then
+                                 <span className="text-mist-100" title=aud>
+                                   (string "Bluesky services")
+                                 </span>
+                               else if
+                                 String.starts_with
+                                   ~prefix:"did:web:api.bsky.chat#" aud
+                               then
+                                 <span className="text-mist-100" title=aud>
+                                   (string "Bluesky chat services")
+                                 </span>
+                               else if
+                                 String.starts_with ~prefix:"did:web:" aud
+                                 && String.contains aud '#'
+                               then
+                                 let domain =
+                                   String.sub aud 8 (String.index aud '#' - 8)
+                                 in
+                                 <span className="text-mist-100" title=aud>
+                                   (string ("Service by " ^ domain))
+                                 </span>
+                               else
+                                 <span className="text-mist-100">
+                                   (string aud)
+                                 </span>
+                             in
+                             List.map
+                               (fun lxm ->
+                                 <tr key=(aud ^ lxm) className="text-mist-100">
+                                   <td className="py-0.5">
+                                     <span
+                                       className="text-mist-100 font-medium">
+                                       (string
+                                          ( if lxm = "*" then "Any method"
+                                            else lxm ) )
+                                     </span>
+                                   </td>
+                                   <td className="py-0.5">(render_aud ())</td>
+                                 </tr> )
+                               lxms )
+                      |> Array.of_list |> array )
+                    </tbody>
+                  </table>
+                else null )
+            </div>
+          </div>
+        else null )
+      ( if List.length blobs > 0 && not has_bluesky then
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <UploadIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">
+                (string "File Upload")
+              </div>
+              <div className="text-sm text-mist-100">
+                (string
+                   ( if List.mem "*/*" blobs then "Upload any files"
+                     else "Upload files to your repository" ) )
+              </div>
+            </div>
+          </div>
+        else null )
+      ( if List.length unknowns > 0 then
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-mist-10/50">
+            <div
+              className="flex-shrink-0 w-8 h-8 flex items-center \
+                         justify-center rounded-full bg-mist-20/50 \
+                         text-mist-80">
+              <BoxesIcon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-serif text-mana-100">
+                (string "Other Permissions")
+              </div>
+              <div className="text-sm text-mist-100">
+                ( unknowns
+                |> List.map (fun s ->
+                       <span key=s className="block">(string s)</span> )
+                |> Array.of_list |> array )
+              </div>
+            </div>
+          </div>
+        else null )
+    </div>
+end
 
 let[@react.component] make
     ~props:
@@ -65,75 +571,77 @@ let[@react.component] make
       ( if favicon_url <> "" then
           <img
             src=favicon_url
-            className="w-4 h-4 inline ml-1.5 mr-1 -mt-0.5"
+            className="w-4 h-4 inline ml-0.5 mr-1 -mt-0.5"
             onError=(fun _ -> set_favicon_url (fun _ -> "")) />
         else null )
       rendered_name
       (string " as ")
-      <Aria.Select name="did" className="inline" defaultValue=current_user.did>
-        <Aria.Button
-          className="group inline-flex flex-row items-center px-1.5 py-1 \
-                     -mx-0.5 -my-1 rounded-lg focus-visible:outline-none \
-                     hover:bg-mist-20/40 active:bg-mist-20/40">
-          <Aria.SelectValue
-            className="text-mana-100 font-serif inline-flex items-center \
-                       gap-x-1"
-          />
-        </Aria.Button>
-        <Aria.Popover
-          style=(ReactDOM.Style.make
-                   ~minWidth:"calc(var(--trigger-width) + var(--spacing) * 3)"
-                   () )
-          className="focus-visible:outline-none">
-          <Aria.ListBox
-            className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \
-                       bg-mist-20 font-light">
-            ( List.map
-                (fun user ->
-                  <Aria.ListBoxItem
-                    className="flex flex-row items-center py-1.5 px-2 gap-x-1 \
-                               font-serif text-mist-100 rounded-md \
-                               focus-visible:outline-none \
-                               data-hovered:text-mist-20 \
-                               data-focused:text-mist-20 \
-                               data-hovered:bg-mana-100 \
-                               data-focused:bg-mana-100"
-                    key=user.did
-                    id=user.did>
-                    ( match user.avatar_data_uri with
-                    | Some src ->
-                        <img src className="w-5 h-5 mr-1 rounded-md" />
-                    | None ->
-                        null )
-                    <span className="self-baseline select-none">
-                      (string ("@" ^ user.handle))
-                    </span>
-                    <ChevronDownIcon
-                      className="w-3 h-3 mt-0.5 text-mana-100 hidden \
-                                 group-aria-[haspopup]:inline"
-                      strokeWidth="3"
-                    />
-                  </Aria.ListBoxItem> )
-                logged_in_users
-            |> Array.of_list |> array )
-            <Aria.ListBoxItem
-              className="flex flex-row items-center p-1 pl-2 text-mana-100 \
-                         font-normal underline rounded-md \
-                         focus-visible:outline-none data-hovered:text-mist-20 \
-                         data-focused:text-mist-20 data-hovered:bg-mana-100 \
-                         data-focused:bg-mana-100"
-              href=add_account_url>
-              (string "add account")
-            </Aria.ListBoxItem>
-          </Aria.ListBox>
-        </Aria.Popover>
-      </Aria.Select>
+      <ClientOnly>
+      [%browser_only (fun () -> (
+        <Aria.Select
+          name="did" className="inline" defaultValue=current_user.did>
+          <Aria.Button
+            className="group inline-flex flex-row items-center px-1.5 py-1 \
+                       -mx-0.75 -my-1 rounded-lg focus-visible:outline-none \
+                       hover:bg-mist-20/40 active:bg-mist-20/40">
+            <Aria.SelectValue
+              className="text-mana-100 font-serif inline-flex items-center \
+                         gap-x-1"
+            />
+          </Aria.Button>
+          <Aria.Popover
+            style=(ReactDOM.Style.make
+                     ~minWidth:"calc(var(--trigger-width) + var(--spacing) * 3)"
+                     () )
+            className="focus-visible:outline-none">
+            <Aria.ListBox
+              className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \
+                         bg-mist-20 font-light">
+              ( List.map
+                  (fun user ->
+                    <Aria.ListBoxItem
+                      className="flex flex-row items-center py-1.5 px-2 \
+                                 gap-x-1 font-serif text-mist-100 rounded-md \
+                                 focus-visible:outline-none \
+                                 data-hovered:text-mist-20 \
+                                 data-focused:text-mist-20 \
+                                 data-hovered:bg-mana-100 \
+                                 data-focused:bg-mana-100"
+                      key=user.did
+                      id=user.did>
+                      ( match user.avatar_data_uri with
+                      | Some src ->
+                          <img src className="w-5 h-5 mr-1 rounded-md" />
+                      | None ->
+                          null )
+                      <span className="self-baseline select-none">
+                        (string ("@" ^ user.handle))
+                      </span>
+                      <ChevronDownIcon
+                        className="w-3 h-3 mt-0.5 text-mana-100 hidden \
+                                   group-aria-[haspopup]:inline"
+                        strokeWidth="3"
+                      />
+                    </Aria.ListBoxItem> )
+                  logged_in_users
+              |> Array.of_list |> array )
+              <Aria.ListBoxItem
+                className="flex flex-row items-center p-1 pl-2 text-mana-100 \
+                           font-normal underline rounded-md \
+                           focus-visible:outline-none \
+                           data-hovered:text-mist-20 data-focused:text-mist-20 \
+                           data-hovered:bg-mana-100 data-focused:bg-mana-100"
+                href=add_account_url>
+                (string "add account")
+              </Aria.ListBoxItem>
+            </Aria.ListBox>
+          </Aria.Popover>
+        </Aria.Select>
+      ))]
+      </ClientOnly>
       (string " and granting it the following permissions:")
     </span>
-    <ul className="w-full text-mist-100 list-disc ml-8 mt-2 space-y-1">
-      ( List.map (fun scope -> <li>(string scope)</li>) scopes
-      |> Array.of_list |> array )
-    </ul>
+    <ScopesTable scopes />
     <div className="w-full flex flex-row items-center justify-between mt-6">
       <input type_="hidden" name="dream.csrf" value=csrf_token />
       <input type_="hidden" name="code" value=code />
