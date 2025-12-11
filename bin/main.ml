@@ -38,8 +38,8 @@ let handlers =
     , "/xrpc/com.atproto.server.createInviteCode"
     , Api.Server.CreateInviteCode.handler )
   ; ( post
-    , "/xrpc/com.atproto.repo.createAccount"
-    , Api.Repo.CreateAccount.handler )
+    , "/xrpc/com.atproto.server.createAccount"
+    , Api.Server.CreateAccount.handler )
   ; ( post
     , "/xrpc/com.atproto.server.createSession"
     , Api.Server.CreateSession.handler )
@@ -85,11 +85,13 @@ let handlers =
 
 let public_loader _root path _request =
   match Public.read path with
-  | None -> Dream.empty `Not_Found
-  | Some asset -> Dream.respond asset
+  | None ->
+      Dream.empty `Not_Found
+  | Some asset ->
+      Dream.respond asset
 
 let static_routes =
-  [Dream.get "/public/**" (Dream.static  ~loader:public_loader "")]
+  [Dream.get "/public/**" (Dream.static ~loader:public_loader "")]
 
 let main =
   let%lwt db = Data_store.connect ~create:true () in
