@@ -16,24 +16,26 @@
  (package (name pg_query)))
 
 (pin ; build broken on macOS for some reason
- (url "git+https://github.com/futurGH/bin_prot.git") ; https://github.com/janestreet/bin_prot pinned to #03c783d
+ (url "git+https://github.com/janestreet/bin_prot.git#03c783d682f67db665dca44a1b34d41cd16e1e3f")
  (package
    (name bin_prot)
    (version v0.17~preview.128.20+135))) ; this is actually v0.16~preview.128.20+135 but core requires >=v0.17
 
 (pin ; these 3 all need to be pinned or they'll conflict
- (url "git+https://github.com/aantron/dream.git#af3c9bf")
+ (url "git+https://github.com/aantron/dream.git#af3c9bff7b4f11777190946e2f3453697bf5a07b")
  (package (name dream)))
 (pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62d")
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
  (package (name ppx_rapper)))
 (pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62d")
+ (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
  (package (name ppx_rapper_lwt)))
 
 (pin ; version on opam requires too high a melange version
- (url "git+https://github.com/melange-community/melange-webapi.git#42daaa4")
- (package (name melange-webapi)))
+ (url "git+https://github.com/melange-community/melange-webapi.git#80c6ededd06cc66b75445d1ed5c855e050b156a0")
+ (package
+   (name melange-webapi)
+   (version v0.21.0)))
 
 (package
  (name pegasus)
