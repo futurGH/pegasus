@@ -58,33 +58,13 @@ let parse_migration_filename filename =
     if Str.string_match regex filename 0 then
       let id = Str.matched_group 1 filename |> int_of_string in
       let name = Str.matched_group 2 filename in
-      Some (id, name, filename)
+      Some (id, name)
     else None
   with _ -> None
 
-let read_migration_files migrations_dir =
-  try
-    let files = Sys.readdir migrations_dir |> Array.to_list in
-    let migrations =
-      files
-      |> List.filter_map (fun filename ->
-          match parse_migration_filename filename with
-          | Some (id, name, _) ->
-              let full_path = Filename.concat migrations_dir filename in
-              Some (id, name, full_path)
-          | None ->
-              None )
-      |> List.sort (fun (id1, _, _) (id2, _, _) -> compare id1 id2)
-    in
-    Lwt.return migrations
-  with Sys_error _ -> Lwt.return []
-
-let run_migration conn (id, name, filepath) =
+let run_migration conn (id, name, sql) =
   let%lwt () = Lwt_io.printlf "running migration %03d: %s" id name in
-  let%lwt sql_content =
-    Lwt_io.with_file ~mode:Lwt_io.Input filepath (fun ic -> Lwt_io.read ic)
-  in
-  let%lwt result = execute_raw Util.Constants.pegasus_db_filepath sql_content in
+  let%lwt result = execute_raw Util.Constants.pegasus_db_filepath sql in
   let%lwt () =
     match result with Ok () -> Lwt.return_unit | Error e -> raise e
   in
@@ -94,18 +74,30 @@ let run_migration conn (id, name, filepath) =
   in
   Lwt_io.printlf "migration %03d applied successfully" id
 
-let run_migrations ?(migrations_dir = "migrations") conn =
+let run_migrations conn =
   let%lwt () = Util.use_pool conn Queries.create_migrations_table in
   let%lwt applied =
     Util.use_pool conn Queries.get_applied_migrations
     >|= List.map (fun m -> m.id)
   in
-  let%lwt available = read_migration_files migrations_dir in
   let pending =
-    List.filter (fun (id, _, _) -> not (List.mem id applied)) available
+    List.filter_map
+      (fun filename ->
+        match parse_migration_filename filename with
+        | Some (id, name) when not (List.mem id applied) -> begin
+          match Migrations_sql.read filename with
+          | Some sql ->
+              Some (id, name, sql)
+          | None ->
+              None
+          end
+        | _ ->
+            None )
+      Migrations_sql.file_list
   in
   match pending with
-  | [] -> Lwt.return_unit
+  | [] ->
+      Lwt.return_unit
   | _ ->
       let%lwt () =
         Lwt_io.printlf "found %d pending migrations" (List.length pending)

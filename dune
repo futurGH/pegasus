@@ -47,3 +47,11 @@
    (source_tree ../public/fonts))
   (action (with-stdout-to %{null}
    (run ocaml-crunch -e woff -e woff2 -e js -e css -m plain ../public -o %{target})))))
+(subdir
+ pegasus/lib/migrations/
+ (rule
+  (target migrations_sql.ml)
+  (deps
+   (source_tree .))
+  (action (with-stdout-to %{null}
+   (run ocaml-crunch -e sql -m plain . -o %{target})))))
