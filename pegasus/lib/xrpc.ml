@@ -139,8 +139,7 @@ let cors_middleware inner_handler req =
   Dream.add_header res "Access-Control-Allow-Origin" "*" ;
   Dream.add_header res "Access-Control-Allow-Methods"
     "GET, POST, PUT, DELETE, OPTIONS" ;
-  Dream.add_header res "Access-Control-Allow-Headers"
-    "Content-Type, Authorization, DPoP" ;
+  Dream.add_header res "Access-Control-Allow-Headers" "*" ;
   Dream.add_header res "Access-Control-Max-Age" "86400" ;
   Lwt.return res
 
