@@ -38,24 +38,37 @@ let parse_body (req : Dream.request)
     body |> Yojson.Safe.from_string |> of_yojson |> Result.get_ok |> Lwt.return
   with _ -> Errors.invalid_request "invalid request body"
 
-let service_proxy (ctx : context) (proxy_header : string) =
+let parse_proxy_header req =
+  match Dream.header req "atproto-proxy" with
+  | Some header -> (
+    match String.split_on_char ':' header with
+    | [did; typ] ->
+        Some (did, typ)
+    | _ ->
+        None )
+  | None ->
+      None
+
+let nsid_regex =
+  Re.Pcre.re
+    {|^[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+\.[a-zA-Z][a-zA-Z0-9]{0,62}?$|}
+  |> Re.compile
+
+let service_proxy ?lxm ?aud (ctx : context) =
   let did = Auth.get_authed_did_exn ctx.auth in
-  let nsid_regex =
-    Re.Pcre.re
-      {|^[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+\.[a-zA-Z][a-zA-Z0-9]{0,62}?$|}
-    |> Re.compile
-  in
   let nsid = (Dream.path [@warning "-3"]) ctx.req |> List.rev |> List.hd in
   if Re.exec_opt nsid_regex nsid = None then
     Errors.invalid_request ("invalid nsid " ^ nsid) ;
   let service_did, service_type =
-    match String.split_on_char '#' proxy_header with
-    | [did; typ] ->
+    match parse_proxy_header ctx.req with
+    | Some (did, typ) ->
         (did, typ)
-    | _ ->
-        Errors.invalid_request ("invalid proxy header " ^ proxy_header)
+    | None ->
+        Errors.invalid_request "invalid proxy header"
   in
-  Auth.assert_rpc_scope ctx.auth ~lxm:nsid ~aud:service_did ;
+  let aud = Option.value aud ~default:service_did in
+  let lxm = Option.value lxm ~default:nsid in
+  Auth.assert_rpc_scope ctx.auth ~aud ~lxm ;
   let fragment = "#" ^ service_type in
   match%lwt Id_resolver.Did.resolve service_did with
   | Ok did_doc -> (
@@ -75,9 +88,7 @@ let service_proxy (ctx : context) (proxy_header : string) =
             Errors.internal_error ~msg:"user not found" ()
       in
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
-      let jwt =
-        Jwt.generate_service_jwt ~did ~aud:service_did ~lxm:nsid ~signing_key
-      in
+      let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
       let uri = host ^ "/" ^ Dream.target ctx.req |> Uri.of_string in
       let headers =
         Util.make_headers
@@ -121,8 +132,8 @@ let service_proxy (ctx : context) (proxy_header : string) =
 
 let service_proxy_handler db req =
   match Dream.header req "atproto-proxy" with
-  | Some header ->
-      handler ~auth:Authorization (fun ctx -> service_proxy ctx header) {req; db}
+  | Some _ ->
+      handler ~auth:Authorization service_proxy {req; db}
   | None ->
       Dream.empty `Not_Found
 

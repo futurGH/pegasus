@@ -81,7 +81,11 @@ let handlers =
     , Api.Actor.GetPreferences.handler )
   ; ( post
     , "/xrpc/com.atproto.actor.putPreferences"
-    , Api.Actor.PutPreferences.handler ) ]
+    , Api.Actor.PutPreferences.handler )
+  ; (* misc *)
+    ( get
+    , "/xrpc/com.atproto.app.bsky.getFeed"
+    , Api.Proxy.AppBskyFeedGetFeed.handler ) ]
 
 let public_loader _root path _request =
   match Public.read path with

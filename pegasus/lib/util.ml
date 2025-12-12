@@ -417,3 +417,26 @@ let render_html ?status ?title (type props)
 let make_data_uri ~mimetype ~data =
   let base64_data = data |> Bytes.to_string |> Base64.encode_string in
   Printf.sprintf "data:%s;base64,%s" mimetype base64_data
+
+let at_uri_regexp =
+  Re.Pcre.re
+    {|^at:\/\/([a-zA-Z0-9._:%-]+)(?:\/([a-zA-Z0-9-.]+)(?:\/([a-zA-Z0-9._~:@!$&%')(*+,;=-]+))?)?(?:#(\/[a-zA-Z0-9._~:@!$&%')(*+,;=\-[\]\/\\]*))?$|}
+  |> Re.compile
+
+type at_uri =
+  {repo: string; collection: string; rkey: string; fragment: string option}
+
+let parse_at_uri uri =
+  match Re.exec_opt at_uri_regexp uri with
+  | None ->
+      None
+  | Some m ->
+      Some
+        { repo= Re.Group.get m 1
+        ; collection= Re.Group.get m 2
+        ; rkey= Re.Group.get m 3
+        ; fragment= (match Re.Group.get m 4 with "" -> None | f -> Some f) }
+
+let make_at_uri ~repo ~collection ~rkey ~fragment =
+  Printf.sprintf "at://%s/%s/%s%s" repo collection rkey
+    (Option.value ~default:"" fragment)
