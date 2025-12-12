@@ -38,7 +38,7 @@ let handler =
         | Ok _ ->
             ()
         | Error e ->
-        Errors.invalid_request ~name:"InvalidHandle" e
+            Errors.invalid_request ~name:"InvalidHandle" e
       in
       let%lwt () =
         match%lwt

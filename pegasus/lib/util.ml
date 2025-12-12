@@ -280,9 +280,12 @@ let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
   List.fold_left
     (fun acc (_, value) ->
       match value with
-      | `BlobRef blob -> blob :: acc
-      | `LexMap map -> (find_blob_refs map) @ acc
-      | _ -> acc )
+      | `BlobRef blob ->
+          blob :: acc
+      | `LexMap map ->
+          find_blob_refs map @ acc
+      | _ ->
+          acc )
     []
     (Mist.Lex.String_map.bindings record)
 
@@ -290,9 +293,7 @@ let validate_handle handle =
   let front =
     String.sub handle 0 (String.length handle - (String.length Env.hostname + 1))
   in
-  if String.contains front '.' then
-    Error
-     "handle can't contain periods"
+  if String.contains front '.' then Error "handle can't contain periods"
   else
     match String.length front with
     | l when l < 3 ->

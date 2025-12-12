@@ -96,7 +96,8 @@ let get_handler =
                             List.find_opt
                               (fun (user : Frontend.OauthAuthorizePage.actor) ->
                                 user.did = did )
-                              logged_in_users |> Option.value ~default:(List.hd logged_in_users)
+                              logged_in_users
+                            |> Option.value ~default:(List.hd logged_in_users)
                           in
                           Util.render_html ~title:("Authorizing " ^ host)
                             (module Frontend.OauthAuthorizePage)
