@@ -97,15 +97,19 @@ let main =
   let%lwt db = Data_store.connect ~create:true () in
   let%lwt () = Data_store.init db in
   Dream.serve ~interface:"0.0.0.0" ~port:8008
-  @@ Dream.logger
-  @@ Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
-  @@ Dream.cookie_sessions
-  @@ Xrpc.service_proxy_middleware db
-  @@ Xrpc.dpop_middleware @@ Xrpc.cors_middleware @@ Dream.router
+  @@ Dream.pipeline
+       [ Dream.logger
+       ; Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
+       ; Dream.cookie_sessions
+       ; Xrpc.dpop_middleware
+       ; Xrpc.cors_middleware ]
+  @@ Dream.router
   @@ List.map
        (fun (fn, path, handler) ->
          fn path (fun req -> handler ({req; db} : Xrpc.init)) )
        handlers
   @ static_routes
+  @ [ Dream.get "/xrpc/**" (Xrpc.service_proxy_handler db)
+    ; Dream.post "/xrpc/**" (Xrpc.service_proxy_handler db) ]
 
 let () = Lwt_main.run main

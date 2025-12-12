@@ -119,12 +119,12 @@ let service_proxy (ctx : context) (proxy_header : string) =
   | Error _ ->
       Errors.internal_error ~msg:"failed to resolve destination service" ()
 
-let service_proxy_middleware db inner_handler req =
+let service_proxy_handler db req =
   match Dream.header req "atproto-proxy" with
   | Some header ->
       handler ~auth:Authorization (fun ctx -> service_proxy ctx header) {req; db}
   | None ->
-      inner_handler req
+      Dream.empty `Not_Found
 
 let dpop_middleware inner_handler req =
   let%lwt res = inner_handler req in
