@@ -1,7 +1,8 @@
 open Cohttp_lwt
 
 let did_regex =
-  Str.regexp {|^did:([a-z]+):([a-zA-Z0-9._:%\-]*[a-zA-Z0-9._\-])$|}
+  Re.Pcre.re {|^did:([a-z]+):([a-zA-Z0-9._:%\-]*[a-zA-Z0-9._\-])$|}
+  |> Re.compile
 
 module Handle = struct
   let dns_client = Dns_client_unix.create ()
@@ -29,16 +30,16 @@ module Handle = struct
       with
       | Ok (_, t) -> (
           let txt = Dns.Rr_map.Txt_set.choose t in
-          match Str.string_match did_regex txt 0 with
-          | true -> (
-              let method_name = Str.matched_group 1 txt in
-              let id = Str.matched_group 2 txt in
+          match Re.exec_opt did_regex txt with
+          | Some groups -> (
+              let method_name = Re.Group.get groups 1 in
+              let id = Re.Group.get groups 2 in
               match method_name with
               | "web" | "plc" ->
                   Lwt.return_ok ("did:" ^ method_name ^ ":" ^ id)
               | _ ->
-                  Lwt.return_error "unsupported method" )
-          | false ->
+                  Lwt.return_error ("unsupported method" ^ method_name) )
+          | None ->
               Lwt.return_error "invalid txt record" )
       | Error (`Msg e) ->
           Lwt.return_error e

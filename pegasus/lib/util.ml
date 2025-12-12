@@ -364,6 +364,16 @@ and handle_redirect ~permanent ~max_redirects request_uri response =
 
 let copy_query req = Dream.all_queries req |> List.map (fun (k, v) -> (k, [v]))
 
+let make_headers headers =
+  List.fold_left
+    (fun headers (k, v) ->
+      match v with
+      | Some value ->
+          Http.Header.add headers k value
+      | None ->
+          headers )
+    (Http.Header.init ()) headers
+
 module type Template = sig
   type props
 

@@ -41,21 +41,19 @@ let parse_body (req : Dream.request)
 let service_proxy (ctx : context) (proxy_header : string) =
   let did = Auth.get_authed_did_exn ctx.auth in
   let nsid_regex =
-    Str.regexp
+    Re.Pcre.re
       {|^[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+\.[a-zA-Z][a-zA-Z0-9]{0,62}?$|}
+    |> Re.compile
   in
-  let nsid =
-    (Dream.path [@warning "-3"]) ctx.req
-    |> List.rev |> List.hd |> String.lowercase_ascii
-  in
-  if not (Str.string_match nsid_regex nsid 0) then
-    Errors.invalid_request "invalid nsid" ;
+  let nsid = (Dream.path [@warning "-3"]) ctx.req |> List.rev |> List.hd in
+  if Re.exec_opt nsid_regex nsid = None then
+    Errors.invalid_request ("invalid nsid " ^ nsid) ;
   let service_did, service_type =
     match String.split_on_char '#' proxy_header with
     | [did; typ] ->
         (did, typ)
     | _ ->
-        Errors.invalid_request "invalid proxy header"
+        Errors.invalid_request ("invalid proxy header " ^ proxy_header)
   in
   Auth.assert_rpc_scope ctx.auth ~lxm:nsid ~aud:service_did ;
   let fragment = "#" ^ service_type in
@@ -66,7 +64,8 @@ let service_proxy (ctx : context) (proxy_header : string) =
         | Some service ->
             service
         | None ->
-            Errors.invalid_request "failed to resolve destination service"
+            Errors.invalid_request
+              ("failed to resolve destination service for " ^ fragment)
       in
       let%lwt signing_multikey =
         match%lwt Data_store.get_actor_by_identifier did ctx.db with
@@ -79,18 +78,21 @@ let service_proxy (ctx : context) (proxy_header : string) =
       let jwt =
         Jwt.generate_service_jwt ~did ~aud:service_did ~lxm:nsid ~signing_key
       in
-      let uri =
-        host ^ "/" ^ String.concat "/" @@ (Dream.path [@warning "-3"]) ctx.req
-        |> Uri.of_string
+      let uri = host ^ "/" ^ Dream.target ctx.req |> Uri.of_string in
+      let headers =
+        Util.make_headers
+          [ ("accept-language", Dream.header ctx.req "accept-language")
+          ; ( "atproto-accept-labelers"
+            , Dream.header ctx.req "atproto-accept-labelers" )
+          ; ("authorization", Some ("Bearer " ^ jwt)) ]
       in
-      let headers = Http.Header.of_list [("Authorization", "Bearer " ^ jwt)] in
       match Dream.method_ ctx.req with
       | `GET -> (
           let%lwt res, body = Util.http_get uri ~headers in
           match res.status with
           | `OK ->
-              let%lwt body = Body.to_string body in
-              Lwt.return @@ Dream.response ~status:`OK body
+              Dream.stream ~status:`OK (fun stream ->
+                  Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
               Dream.error (fun log ->
@@ -104,8 +106,8 @@ let service_proxy (ctx : context) (proxy_header : string) =
           in
           match res.status with
           | `OK ->
-              let%lwt body = Body.to_string body in
-              Lwt.return @@ Dream.response ~status:`OK body
+              Dream.stream ~status:`OK (fun stream ->
+                  Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
               Dream.error (fun log ->
@@ -136,7 +138,9 @@ let dpop_middleware inner_handler req =
 
 let cors_middleware inner_handler req =
   let%lwt res = inner_handler req in
-  Dream.add_header res "Access-Control-Allow-Origin" "*" ;
+  let origin = Dream.header req "Origin" in
+  Dream.add_header res "Access-Control-Allow-Origin"
+    (Option.value origin ~default:"*") ;
   Dream.add_header res "Access-Control-Allow-Methods"
     "GET, POST, PUT, DELETE, OPTIONS" ;
   Dream.add_header res "Access-Control-Allow-Headers" "*" ;
