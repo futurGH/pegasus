@@ -19,7 +19,7 @@ type credentials =
   | DPoP of {proof: Oauth.Dpop.proof}
 
 let verify_bearer_jwt t token expected_scope =
-  match Jwt.verify_jwt token Env.jwt_key with
+  match Jwt.verify_jwt token ~pubkey:Env.jwt_pubkey with
   | Error err ->
       Lwt.return_error err
   | Ok (_, payload) -> (
@@ -260,7 +260,7 @@ module Verifiers = struct
       | Error e ->
           Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
       | Ok proof -> (
-        match Jwt.verify_jwt token Env.jwt_pubkey with
+        match Jwt.verify_jwt token ~pubkey:Env.jwt_pubkey with
         | Error e ->
             Lwt.return_error @@ Errors.auth_required e
         | Ok (_header, claims) -> (

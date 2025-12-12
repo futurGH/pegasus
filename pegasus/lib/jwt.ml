@@ -30,7 +30,7 @@ let extract_signature_components signature =
     let s = Bytes.sub signature 32 32 in
     (r, s)
 
-let sign_jwt payload ?(typ = "JWT") signing_key =
+let sign_jwt ?(typ = "JWT") ~signing_key payload =
   let _, (module Curve : Kleidos.CURVE) = signing_key in
   let alg =
     match Curve.name with
@@ -73,7 +73,7 @@ let decode_jwt jwt =
   | _ ->
       Error "invalid jwt format"
 
-let verify_jwt jwt pubkey =
+let verify_jwt jwt ~pubkey =
   match String.split_on_char '.' jwt with
   | [header_b64; payload_b64; signature_b64] ->
       let signature = Bytes.of_string (b64_decode signature_b64) in
@@ -111,12 +111,12 @@ let generate_jwt did =
       ; exp= refresh_exp
       ; jti }
   in
-  let access = sign_jwt access_payload Env.jwt_key in
-  let refresh = sign_jwt refresh_payload Env.jwt_key in
+  let access = sign_jwt access_payload ~signing_key:Env.jwt_key in
+  let refresh = sign_jwt refresh_payload ~signing_key:Env.jwt_key in
   (access, refresh)
 
 let generate_service_jwt ~did ~aud ~lxm ~signing_key =
   let now_s = int_of_float (Unix.gettimeofday ()) in
   let exp = now_s + Defaults.service_token_exp in
   let payload = service_jwt_to_yojson {iss= did; aud; lxm; exp} in
-  sign_jwt payload signing_key
+  sign_jwt payload ~signing_key

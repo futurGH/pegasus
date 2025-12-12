@@ -93,7 +93,8 @@ let post_handler =
                               ; ("cnf", `Assoc [("jkt", `String proof.jkt)]) ]
                           in
                           let access_token =
-                            Jwt.sign_jwt claims ~typ:"at+jwt" Env.jwt_key
+                            Jwt.sign_jwt claims ~typ:"at+jwt"
+                              ~signing_key:Env.jwt_key
                           in
                           let%lwt () =
                             Queries.insert_oauth_token ctx.db
@@ -164,7 +165,7 @@ let post_handler =
                       ; ("cnf", `Assoc [("jkt", `String proof.jkt)]) ]
                   in
                   let new_access_token =
-                    Jwt.sign_jwt claims ~typ:"at+jwt" Env.jwt_key
+                    Jwt.sign_jwt claims ~typ:"at+jwt" ~signing_key:Env.jwt_key
                   in
                   let%lwt () =
                     Queries.update_oauth_token ctx.db
