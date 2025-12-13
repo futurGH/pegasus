@@ -72,10 +72,16 @@ let service_proxy ?lxm ?aud (ctx : context) =
   let fragment = "#" ^ service_type in
   match%lwt Id_resolver.Did.resolve service_did with
   | Ok did_doc -> (
-      let host =
+      let scheme, host =
         match Id_resolver.Did.Document.get_service did_doc fragment with
-        | Some service ->
-            service
+        | Some service -> (
+            let svc_uri = Uri.of_string service in
+            match (Uri.scheme svc_uri, Uri.host svc_uri) with
+            | Some scheme, Some host when scheme = "http" || scheme = "https" ->
+                (scheme, host)
+            | _ ->
+                Errors.invalid_request ("failed to parse service URL " ^ service)
+            )
         | None ->
             Errors.invalid_request
               ("failed to resolve destination service for " ^ fragment)
@@ -89,7 +95,7 @@ let service_proxy ?lxm ?aud (ctx : context) =
       in
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
-      let uri = host ^ "/" ^ Dream.target ctx.req |> Uri.of_string in
+      let uri = Uri.make ~scheme ~host ~path:(Dream.target ctx.req) () in
       let headers =
         Util.make_headers
           [ ("accept-language", Dream.header ctx.req "accept-language")
