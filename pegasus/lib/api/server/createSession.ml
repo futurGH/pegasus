@@ -17,7 +17,7 @@ type response =
 [@@deriving yojson {strict= false}]
 
 let handler =
-  Xrpc.handler (fun {req; auth; db; _} ->
+  Xrpc.handler (fun {req; db; _} ->
       let%lwt {identifier; password; _} =
         Xrpc.parse_body req request_of_yojson
       in
@@ -25,7 +25,7 @@ let handler =
       match%lwt
         Lwt_result.catch @@ fun () -> Data_store.try_login ~id ~password db
       with
-      | Ok (Some actor) when Auth.verify_auth auth actor.did ->
+      | Ok (Some actor) ->
           let access_jwt, refresh_jwt = Jwt.generate_jwt actor.did in
           let active, status =
             match actor.deactivated_at with
@@ -46,6 +46,6 @@ let handler =
                ; active
                ; status }
       | Ok _ ->
-          Errors.invalid_request "Invalid credentials"
+          Errors.invalid_request "invalid credentials"
       | Error e ->
           Errors.(log_exn e ; exn_to_response e) )
