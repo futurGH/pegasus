@@ -28,12 +28,20 @@ let handler =
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       let%lwt repo = Repository.load did in
       let write : Repository.repo_write =
-        Update
-          { type'= Repository.Write_op.update
-          ; collection= input.collection
-          ; rkey= input.rkey
-          ; value= input.record
-          ; swap_record= Option.map Cid.as_cid input.swap_record }
+        match input.swap_record with
+        | Some swap_record ->
+            Update
+              { type'= Repository.Write_op.update
+              ; collection= input.collection
+              ; rkey= input.rkey
+              ; value= input.record
+              ; swap_record= Some (Cid.as_cid swap_record) }
+        | None ->
+            Create
+              { type'= Repository.Write_op.create
+              ; collection= input.collection
+              ; rkey= Some input.rkey
+              ; value= input.record }
       in
       let%lwt {commit= commit_cid, {rev; _}; results} =
         Repository.apply_writes repo [write]
