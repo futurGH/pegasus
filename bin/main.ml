@@ -75,17 +75,15 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.sync.subscribeRepos"
     , Api.Sync.SubscribeRepos.handler )
-  ; (* preferences *)
-    ( get
-    , "/xrpc/com.atproto.actor.getPreferences"
-    , Api.Actor.GetPreferences.handler )
-  ; ( post
-    , "/xrpc/com.atproto.actor.putPreferences"
-    , Api.Actor.PutPreferences.handler )
   ; (* misc *)
     ( get
-    , "/xrpc/com.atproto.app.bsky.getFeed"
-    , Api.Proxy.AppBskyFeedGetFeed.handler ) ]
+    , "/xrpc/app.bsky.actor.getPreferences"
+    , Api.Proxy.AppBskyActorGetPreferences.handler )
+  ; ( post
+    , "/xrpc/app.bsky.actor.putPreferences"
+    , Api.Proxy.AppBskyActorPutPreferences.handler )
+  ; (get, "/xrpc/app.bsky.feed.getFeed", Api.Proxy.AppBskyFeedGetFeed.handler)
+  ]
 
 let public_loader _root path _request =
   match Public.read path with
