@@ -41,7 +41,7 @@ let parse_body (req : Dream.request)
 let parse_proxy_header req =
   match Dream.header req "atproto-proxy" with
   | Some header -> (
-    match String.split_on_char ':' header with
+    match String.split_on_char '#' header with
     | [did; typ] ->
         Some (did, typ)
     | _ ->
