@@ -89,7 +89,7 @@ let post_handler =
                               ; ("iat", `Int now_sec)
                               ; ("exp", `Int exp_sec)
                               ; ("scope", `String orig_req.scope)
-                              ; ("aud", `String ("https://" ^ Env.hostname))
+                              ; ("aud", `String Env.host_endpoint)
                               ; ("cnf", `Assoc [("jkt", `String proof.jkt)]) ]
                           in
                           let access_token =
@@ -161,7 +161,7 @@ let post_handler =
                       ; ("iat", `Int now_sec)
                       ; ("exp", `Int exp_sec)
                       ; ("scope", `String session.scope)
-                      ; ("aud", `String ("https://" ^ Env.hostname))
+                      ; ("aud", `String Env.host_endpoint)
                       ; ("cnf", `Assoc [("jkt", `String proof.jkt)]) ]
                   in
                   let new_access_token =

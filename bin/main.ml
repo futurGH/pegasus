@@ -56,6 +56,9 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.identity.getRecommendedDidCredentials"
     , Api.Identity.GetRecommendedDidCredentials.handler )
+  ; ( post
+    , "/xrpc/com.atproto.identity.submitPlcOperation"
+    , Api.Identity.SubmitPlcOperation.handler )
   ; (* repo *)
     (post, "/xrpc/com.atproto.repo.applyWrites", Api.Repo.ApplyWrites.handler)
   ; (post, "/xrpc/com.atproto.repo.createRecord", Api.Repo.CreateRecord.handler)

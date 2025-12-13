@@ -6,6 +6,8 @@ let data_dir = Option.value ~default:"./data" @@ Sys.getenv_opt "DATA_DIR"
 
 let hostname = getenv "PDS_HOSTNAME"
 
+let host_endpoint = "https://" ^ hostname
+
 let did =
   Option.value ~default:("did:web:" ^ hostname) @@ Sys.getenv_opt "PDS_DID"
 

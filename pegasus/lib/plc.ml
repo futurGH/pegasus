@@ -17,16 +17,21 @@ type credentials =
   ; services: (string * service) list [@key "services"] }
 [@@deriving yojson {strict= false}]
 
+type unsigned_operation_op =
+  { type': string [@key "type"]
+  ; rotation_keys: string list [@key "rotationKeys"]
+  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; also_known_as: string list [@key "alsoKnownAs"]
+  ; services: (string * service) list
+  ; prev: string option }
+[@@deriving yojson {strict= false}]
+
+type unsigned_tombstone_op = {type': string [@key "type"]; prev: string}
+[@@deriving yojson {strict= false}]
+
 type unsigned_operation =
-  | Operation of
-      { type': string [@key "type"]
-      ; rotation_keys: string list [@key "rotationKeys"]
-      ; verification_methods: (string * string) list
-            [@key "verificationMethods"]
-      ; also_known_as: string list [@key "alsoKnownAs"]
-      ; services: (string * service) list
-      ; prev: string option }
-  | Tombstone of {type': string [@key "type"]; prev: string}
+  | Operation of unsigned_operation_op
+  | Tombstone of unsigned_tombstone_op
 [@@deriving yojson {strict= false}]
 
 let unsigned_operation_to_yojson = function
@@ -77,30 +82,36 @@ let unsigned_operation_of_yojson (json : Yojson.Safe.t) =
   let prev = json |> member "prev" |> to_string_option in
   match type' with
   | "plc_operation" ->
-      Operation
-        { type'
-        ; rotation_keys
-        ; verification_methods
-        ; also_known_as
-        ; services
-        ; prev }
+      Ok
+        (Operation
+           { type'
+           ; rotation_keys
+           ; verification_methods
+           ; also_known_as
+           ; services
+           ; prev } )
   | "plc_tombstone" ->
-      Tombstone {type'; prev= Option.get prev}
+      Ok (Tombstone {type'; prev= Option.get prev})
   | _ ->
-      raise (Invalid_argument "Invalid operation type")
+      Error ("invalid operation type " ^ type')
+
+type signed_operation_op =
+  { type': string [@key "type"]
+  ; rotation_keys: string list [@key "rotationKeys"]
+  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; also_known_as: string list [@key "alsoKnownAs"]
+  ; services: (string * service) list
+  ; prev: string option
+  ; signature: string [@key "sig"] }
+[@@deriving yojson {strict= false}]
+
+type signed_tombstone_op =
+  {type': string [@key "type"]; prev: string; signature: string [@key "sig"]}
+[@@deriving yojson {strict= false}]
 
 type signed_operation =
-  | Operation of
-      { type': string [@key "type"]
-      ; rotation_keys: string list [@key "rotationKeys"]
-      ; verification_methods: (string * string) list
-            [@key "verificationMethods"]
-      ; also_known_as: string list [@key "alsoKnownAs"]
-      ; services: (string * service) list
-      ; prev: string option
-      ; signature: string [@key "sig"] }
-  | Tombstone of
-      {type': string [@key "type"]; prev: string; signature: string [@key "sig"]}
+  | Operation of signed_operation_op
+  | Tombstone of signed_tombstone_op
 [@@deriving yojson {strict= false}]
 
 let signed_operation_to_yojson = function
@@ -276,7 +287,7 @@ let create_did_credentials (pds_rotation_key : Kleidos.key)
   ; services=
       [ ( "atproto_pds"
         , { type'= "AtprotoPersonalDataServer"
-          ; endpoint= "https://" ^ Env.hostname } ) ] }
+          ; endpoint= Env.host_endpoint } ) ] }
 
 let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
     ?(rotation_did_keys : string list option) handle : string * signed_operation

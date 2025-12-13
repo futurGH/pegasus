@@ -4,14 +4,7 @@ let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
       Auth.assert_identity_scope auth ~attr:Oauth.Scopes.Handle ;
       let did = Auth.get_authed_did_exn auth in
-      let%lwt body = Dream.body req in
-      let handle =
-        match Yojson.Safe.from_string body |> request_of_yojson with
-        | Ok {handle} ->
-            handle
-        | Error _ ->
-            Errors.invalid_request "invalid request body"
-      in
+      let%lwt {handle} = Xrpc.parse_body req request_of_yojson in
       match Util.validate_handle handle with
       | Error e ->
           Errors.invalid_request ~name:"InvalidHandle" e

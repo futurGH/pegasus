@@ -158,7 +158,7 @@ let post_handler =
                           let params =
                             [ ("code", code)
                             ; ("state", req.state)
-                            ; ("iss", "https://" ^ Env.hostname) ]
+                            ; ("iss", Env.host_endpoint) ]
                           in
                           let query =
                             String.concat "&"
@@ -187,7 +187,7 @@ let post_handler =
                     [ ("error", "access_denied")
                     ; ("error_description", "Unable to authorize user.")
                     ; ("state", req.state)
-                    ; ("iss", "https://" ^ Env.hostname) ]
+                    ; ("iss", Env.host_endpoint) ]
                   in
                   let query =
                     String.concat "&"
