@@ -10,6 +10,13 @@ type t = {did: string; rotation_key: Kleidos.key; endpoint: string}
 type service = {type': string [@key "type"]; endpoint: string}
 [@@deriving yojson {strict= false}]
 
+type credentials =
+  { rotation_keys: string list [@key "rotationKeys"]
+  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; also_known_as: string list [@key "alsoKnownAs"]
+  ; services: (string * service) list [@key "services"] }
+[@@deriving yojson {strict= false}]
+
 type unsigned_operation =
   | Operation of
       { type': string [@key "type"]
@@ -252,9 +259,9 @@ let did_of_operation operation : string =
   let did = "did:plc:" ^ String.sub hash 0 24 in
   did
 
-let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
-    ?(rotation_did_keys : string list option) handle : string * signed_operation
-    =
+let create_did_credentials (pds_rotation_key : Kleidos.key)
+    (signing_did_key : string) ?(rotation_did_keys : string list option) handle
+    : credentials =
   let recovery_privkey, (module Rec_curve) = pds_rotation_key in
   let recovery_did_key =
     Rec_curve.pubkey_to_did_key
@@ -263,16 +270,29 @@ let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
   let rotation_keys =
     recovery_did_key :: Option.value rotation_did_keys ~default:[]
   in
+  { rotation_keys
+  ; verification_methods= [("atproto", signing_did_key)]
+  ; also_known_as= ["at://" ^ handle]
+  ; services=
+      [ ( "atproto_pds"
+        , { type'= "AtprotoPersonalDataServer"
+          ; endpoint= "https://" ^ Env.hostname } ) ] }
+
+let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
+    ?(rotation_did_keys : string list option) handle : string * signed_operation
+    =
+  let {rotation_keys; verification_methods; also_known_as; services} :
+      credentials =
+    create_did_credentials pds_rotation_key signing_did_key ?rotation_did_keys
+      handle
+  in
   let operation : unsigned_operation =
     Operation
       { type'= "plc_operation"
       ; rotation_keys
-      ; verification_methods= [("atproto", signing_did_key)]
-      ; also_known_as= ["at://" ^ handle]
-      ; services=
-          [ ( "atproto_pds"
-            , { type'= "AtprotoPersonalDataServer"
-              ; endpoint= "https://" ^ Env.hostname } ) ]
+      ; verification_methods
+      ; also_known_as
+      ; services
       ; prev= None }
   in
   let signed = sign_operation pds_rotation_key operation in
