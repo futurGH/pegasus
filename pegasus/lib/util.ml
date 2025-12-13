@@ -129,11 +129,9 @@ module Did_doc_types = struct
 
   let string_or_string_map_of_yojson = function
     | `String c ->
-        Ok (`String_map [(c, "")])
+        Ok (`String c)
     | `Assoc m ->
-        Ok
-          (`String_map
-             (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
+        string_map_of_yojson (`Assoc m) |> Result.map (fun m -> `String_map m)
     | _ ->
         Error "invalid field value"
 
@@ -152,11 +150,9 @@ module Did_doc_types = struct
 
   let string_or_string_map_or_either_list_of_yojson = function
     | `String c ->
-        Ok (`String_map [(c, "")])
+        Ok (`String c)
     | `Assoc m ->
-        Ok
-          (`String_map
-             (List.map (fun (k, v) -> (k, Yojson.Safe.Util.to_string v)) m) )
+        string_map_of_yojson (`Assoc m) |> Result.map (fun m -> `String_map m)
     | `List l ->
         Ok
           (`List
