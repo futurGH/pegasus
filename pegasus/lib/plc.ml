@@ -167,7 +167,7 @@ let signed_operation_of_yojson (json : Yojson.Safe.t) =
 
 type audit_log_operation =
   { signature: string [@key "sig"]
-  ; prev: string option
+  ; prev: string option [@default None]
   ; type': string [@key "type"]
   ; services: (string * service) list
         [@to_yojson

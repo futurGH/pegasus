@@ -94,7 +94,8 @@ module Did = struct
       { id: string
       ; type': string [@key "type"]
       ; controller: string
-      ; public_key_multibase: string option [@key "publicKeyMultibase"] }
+      ; public_key_multibase: string option
+            [@key "publicKeyMultibase"] [@default None] }
     [@@deriving yojson {strict= false}]
 
     type string_or_verification_method =
@@ -118,12 +119,13 @@ module Did = struct
     type t =
       { context: string list [@key "@context"]
       ; id: string
-      ; controller: string_or_strings option
-      ; also_known_as: string list option [@key "alsoKnownAs"]
+      ; controller: string_or_strings option [@default None]
+      ; also_known_as: string list option [@key "alsoKnownAs"] [@default None]
       ; verification_method: verification_method list option
-            [@key "verificationMethod"]
+            [@key "verificationMethod"] [@default None]
       ; authentication: string_or_verification_method list option
-      ; service: service list option }
+            [@default None]
+      ; service: service list option [@default None] }
     [@@deriving yojson {strict= false}]
 
     let get_service_endpoint s =

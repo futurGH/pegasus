@@ -127,7 +127,9 @@ let service_proxy ?lxm ?aud (ctx : context) =
               Errors.internal_error ~msg:"failed to proxy request" () )
       | _ ->
           Errors.invalid_request "unsupported method" )
-  | Error _ ->
+  | Error e ->
+      Dream.error (fun log ->
+          log ~request:ctx.req "error when resolving destination service: %s" e ) ;
       Errors.internal_error ~msg:"failed to resolve destination service" ()
 
 let service_proxy_handler db req =
