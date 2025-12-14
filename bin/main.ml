@@ -53,9 +53,16 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.identity.updateHandle"
     , Api.Identity.UpdateHandle.handler )
-  ; ( get
+  ; (* plc *)
+    ( get
     , "/xrpc/com.atproto.identity.getRecommendedDidCredentials"
     , Api.Identity.GetRecommendedDidCredentials.handler )
+  ; ( post
+    , "/xrpc/com.atproto.identity.requestPlcOperationSignature"
+    , Api.Identity.RequestPlcOperationSignature.handler )
+  ; ( post
+    , "/xrpc/com.atproto.identity.signPlcOperation"
+    , Api.Identity.SignPlcOperation.handler )
   ; ( post
     , "/xrpc/com.atproto.identity.submitPlcOperation"
     , Api.Identity.SubmitPlcOperation.handler )

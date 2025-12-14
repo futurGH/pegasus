@@ -6,11 +6,14 @@ module Types = struct
     ; did: string
     ; handle: string
     ; email: string
+    ; email_confirmed_at: int option
     ; password_hash: string
     ; signing_key: string
     ; preferences: Yojson.Safe.t
     ; created_at: int
-    ; deactivated_at: int option }
+    ; deactivated_at: int option
+    ; auth_code: string option
+    ; auth_code_expires_at: int option }
 
   type invite_code = {code: string; did: string; remaining: int}
 
@@ -45,7 +48,7 @@ module Queries = struct
   let get_actor_by_identifier id =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
               FROM actors WHERE did = %string{id} OR handle = %string{id} OR email = %string{id}
               LIMIT 1
         |sql}
@@ -61,7 +64,7 @@ module Queries = struct
   let list_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
               FROM actors
               WHERE did > %string{cursor}
               AND deactivated_at IS NULL
@@ -97,6 +100,21 @@ module Queries = struct
         {sql| UPDATE invite_codes SET remaining = remaining - 1
               WHERE code = %string{code} AND remaining > 0
               RETURNING @int{remaining}
+        |sql}]
+
+  (* 2fa *)
+  let set_auth_code =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET auth_code = %string{code}, auth_code_expires_at = %int{expires_at}
+              WHERE did = %string{did}
+        |sql}]
+
+  let clear_auth_code =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET auth_code = NULL, auth_code_expires_at = NULL
+              WHERE did = %string{did}
         |sql}]
 
   (* firehose *)
@@ -203,6 +221,13 @@ let create_invite ~code ~did ~remaining conn =
 let get_invite ~code conn = Util.use_pool conn @@ Queries.get_invite ~code
 
 let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
+
+(* 2fa *)
+let set_auth_code ~did ~code ~expires_at conn =
+  Util.use_pool conn @@ Queries.set_auth_code ~did ~code ~expires_at
+
+let clear_auth_code ~did conn =
+  Util.use_pool conn @@ Queries.clear_auth_code ~did
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =

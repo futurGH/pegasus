@@ -83,6 +83,18 @@ module Rapper = struct
 end
 
 module Did_doc_types = struct
+  type string_or_null = string option
+
+  let string_or_null_to_yojson = function Some s -> `String s | None -> `Null
+
+  let string_or_null_of_yojson = function
+    | `String s ->
+        Ok (Some s)
+    | `Null ->
+        Ok None
+    | _ ->
+        Error "invalid field value"
+
   type string_or_strings = [`String of string | `Strings of string list]
 
   let string_or_strings_to_yojson = function

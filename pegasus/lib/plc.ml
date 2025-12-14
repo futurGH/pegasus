@@ -10,20 +10,40 @@ type t = {did: string; rotation_key: Kleidos.key; endpoint: string}
 type service = {type': string [@key "type"]; endpoint: string}
 [@@deriving yojson {strict= false}]
 
+type service_map = (string * service) list [@@deriving yojson {strict= false}]
+
+let service_map_to_yojson map =
+  `Assoc (List.map (fun (k, v) -> (k, service_to_yojson v)) map)
+
+let service_map_of_yojson = function
+  | `Assoc l ->
+      Ok
+        (List.map
+           (fun (k, v) ->
+             ( k
+             , match service_of_yojson v with
+               | Ok s ->
+                   s
+               | Error _ ->
+                   Yojson.json_error ("invalid service " ^ k) ) )
+           l )
+  | _ ->
+      Error "invalid service map"
+
 type credentials =
   { rotation_keys: string list [@key "rotationKeys"]
-  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; verification_methods: string_map [@key "verificationMethods"]
   ; also_known_as: string list [@key "alsoKnownAs"]
-  ; services: (string * service) list [@key "services"] }
+  ; services: service_map }
 [@@deriving yojson {strict= false}]
 
 type unsigned_operation_op =
   { type': string [@key "type"]
   ; rotation_keys: string list [@key "rotationKeys"]
-  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; verification_methods: string_map [@key "verificationMethods"]
   ; also_known_as: string list [@key "alsoKnownAs"]
-  ; services: (string * service) list
-  ; prev: string option }
+  ; services: service_map
+  ; prev: string_or_null }
 [@@deriving yojson {strict= false}]
 
 type unsigned_tombstone_op = {type': string [@key "type"]; prev: string}
@@ -32,76 +52,31 @@ type unsigned_tombstone_op = {type': string [@key "type"]; prev: string}
 type unsigned_operation =
   | Operation of unsigned_operation_op
   | Tombstone of unsigned_tombstone_op
-[@@deriving yojson {strict= false}]
 
 let unsigned_operation_to_yojson = function
-  | Operation
-      {type'; rotation_keys; verification_methods; also_known_as; services; prev}
-    ->
-      `Assoc
-        [ ("type", `String type')
-        ; ("rotationKeys", `List (List.map (fun k -> `String k) rotation_keys))
-        ; ( "verificationMethods"
-          , `Assoc
-              (List.map
-                 (fun ((k, v) : string * string) -> (k, `String v))
-                 verification_methods ) )
-        ; ("alsoKnownAs", `List (List.map (fun k -> `String k) also_known_as))
-        ; ( "services"
-          , `Assoc
-              (List.map
-                 (fun ((k, v) : string * service) ->
-                   ( k
-                   , `Assoc
-                       [ ("type", `String v.type')
-                       ; ("endpoint", `String v.endpoint) ] ) )
-                 services ) )
-        ; ("prev", match prev with Some p -> `String p | None -> `Null) ]
-  | Tombstone {type'; prev} ->
-      `Assoc [("type", `String type'); ("prev", `String prev)]
+  | Operation op ->
+      unsigned_operation_op_to_yojson op
+  | Tombstone op ->
+      unsigned_tombstone_op_to_yojson op
 
 let unsigned_operation_of_yojson (json : Yojson.Safe.t) =
-  let open Yojson.Safe.Util in
-  let type' = json |> member "type" |> to_string in
-  let rotation_keys =
-    json |> member "rotationKeys" |> to_list |> List.map to_string
-  in
-  let verification_methods =
-    json
-    |> member "verificationMethods"
-    |> to_assoc
-    |> List.map (fun (key, value) -> (key, to_string value))
-  in
-  let also_known_as =
-    json |> member "alsoKnownAs" |> to_list |> List.map to_string
-  in
-  let services =
-    json |> member "services" |> to_assoc
-    |> List.map (fun (k, v) -> (k, Result.get_ok @@ service_of_yojson v))
-  in
-  let prev = json |> member "prev" |> to_string_option in
-  match type' with
+  match Yojson.Safe.Util.(json |> member "type" |> to_string) with
   | "plc_operation" ->
-      Ok
-        (Operation
-           { type'
-           ; rotation_keys
-           ; verification_methods
-           ; also_known_as
-           ; services
-           ; prev } )
+      Result.map (fun op -> Operation op)
+      @@ unsigned_operation_op_of_yojson json
   | "plc_tombstone" ->
-      Ok (Tombstone {type'; prev= Option.get prev})
-  | _ ->
-      Error ("invalid operation type " ^ type')
+      Result.map (fun op -> Tombstone op)
+      @@ unsigned_tombstone_op_of_yojson json
+  | typ ->
+      Error ("invalid operation type " ^ typ)
 
 type signed_operation_op =
   { type': string [@key "type"]
   ; rotation_keys: string list [@key "rotationKeys"]
-  ; verification_methods: (string * string) list [@key "verificationMethods"]
+  ; verification_methods: string_map [@key "verificationMethods"]
   ; also_known_as: string list [@key "alsoKnownAs"]
-  ; services: (string * service) list
-  ; prev: string option
+  ; services: service_map
+  ; prev: string_or_null
   ; signature: string [@key "sig"] }
 [@@deriving yojson {strict= false}]
 
@@ -112,98 +87,27 @@ type signed_tombstone_op =
 type signed_operation =
   | Operation of signed_operation_op
   | Tombstone of signed_tombstone_op
-[@@deriving yojson {strict= false}]
 
 let signed_operation_to_yojson = function
-  | Operation
-      { type'
-      ; rotation_keys
-      ; verification_methods
-      ; also_known_as
-      ; services
-      ; prev
-      ; signature } -> (
-    match
-      unsigned_operation_to_yojson
-        (Operation
-           { type'
-           ; rotation_keys
-           ; verification_methods
-           ; also_known_as
-           ; services
-           ; prev } )
-    with
-    | `Assoc fields ->
-        `Assoc (fields @ [("sig", `String signature)])
-    | _ ->
-        failwith "unexpected json structure" )
-  | Tombstone {type'; prev; signature} -> (
-    match unsigned_operation_to_yojson (Tombstone {type'; prev}) with
-    | `Assoc fields ->
-        `Assoc (fields @ [("sig", `String signature)])
-    | _ ->
-        failwith "unexpected json structure" )
+  | Operation op ->
+      signed_operation_op_to_yojson op
+  | Tombstone op ->
+      signed_tombstone_op_to_yojson op
 
 let signed_operation_of_yojson (json : Yojson.Safe.t) =
-  let open Yojson.Safe.Util in
-  let type' = json |> member "type" |> to_string in
-  match type' with
+  match Yojson.Safe.Util.(json |> member "type" |> to_string) with
   | "plc_operation" ->
-      let rotation_keys =
-        json |> member "rotationKeys" |> to_list |> List.map to_string
-      in
-      let verification_methods =
-        json
-        |> member "verificationMethods"
-        |> to_assoc
-        |> List.map (fun (k, v) -> (k, to_string v))
-      in
-      let also_known_as =
-        json |> member "alsoKnownAs" |> to_list |> List.map to_string
-      in
-      let services =
-        json |> member "services" |> to_assoc
-        |> List.map (fun (k, v) -> (k, Result.get_ok @@ service_of_yojson v))
-      in
-      let prev = json |> member "prev" |> to_string_option in
-      let signature = json |> member "sig" |> to_string in
-      Ok
-        (Operation
-           { type'
-           ; rotation_keys
-           ; verification_methods
-           ; also_known_as
-           ; services
-           ; prev
-           ; signature } )
+      Result.map (fun op -> Operation op) (signed_operation_op_of_yojson json)
   | "plc_tombstone" ->
-      let prev = json |> member "prev" |> to_string in
-      let signature = json |> member "sig" |> to_string in
-      Ok (Tombstone {type'; prev; signature})
-  | t ->
-      Error ("unexpected operation type " ^ t)
+      Result.map (fun op -> Tombstone op) (signed_tombstone_op_of_yojson json)
+  | typ ->
+      Error ("unexpected operation type " ^ typ)
 
 type audit_log_operation =
   { signature: string [@key "sig"]
-  ; prev: string option [@default None]
+  ; prev: string_or_null
   ; type': string [@key "type"]
-  ; services: (string * service) list
-        [@to_yojson
-          fun l -> `Assoc (List.map (fun (k, v) -> (k, service_to_yojson v)) l)]
-        [@of_yojson
-          function
-          | `Assoc fields ->
-              Ok
-                (List.filter_map
-                   (fun (k, v) ->
-                     match service_of_yojson v with
-                     | Ok service ->
-                         Some (k, service)
-                     | _ ->
-                         None )
-                   fields )
-          | _ ->
-              Error "Expected object for services"]
+  ; services: service_map
   ; also_known_as: string list [@key "alsoKnownAs"]
   ; rotation_keys: string list [@key "rotationKeys"]
   ; verification_methods: string_map [@key "verificationMethods"] }
@@ -286,8 +190,8 @@ let create_did_credentials (pds_rotation_key : Kleidos.key)
   ; also_known_as= ["at://" ^ handle]
   ; services=
       [ ( "atproto_pds"
-        , { type'= "AtprotoPersonalDataServer"
-          ; endpoint= Env.host_endpoint } ) ] }
+        , {type'= "AtprotoPersonalDataServer"; endpoint= Env.host_endpoint} ) ]
+  }
 
 let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
     ?(rotation_did_keys : string list option) handle : string * signed_operation
