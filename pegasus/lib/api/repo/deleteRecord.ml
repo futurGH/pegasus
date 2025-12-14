@@ -4,11 +4,12 @@ type request =
   ; rkey: string
   ; swap_record: string option [@key "swapRecord"] [@default None]
   ; swap_commit: string option [@key "swapCommit"] [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
-type response = {commit: res_commit option} [@@deriving yojson]
+type response = {commit: res_commit option [@default None]}
+[@@deriving yojson {strict= false}]
 
-and res_commit = {cid: string; rev: string} [@@deriving yojson]
+and res_commit = {cid: string; rev: string} [@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->

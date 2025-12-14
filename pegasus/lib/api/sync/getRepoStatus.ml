@@ -1,4 +1,4 @@
-type query = {did: string} [@@deriving yojson]
+type query = {did: string} [@@deriving yojson {strict= false}]
 
 type response =
   {did: string; active: bool; status: string option; rev: string option}

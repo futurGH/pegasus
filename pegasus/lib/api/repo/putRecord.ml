@@ -6,14 +6,15 @@ type request =
   ; record: Mist.Lex.repo_record
   ; swap_record: string option [@key "swapRecord"] [@default None]
   ; swap_commit: string option [@key "swapCommit"] [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type response =
   { uri: string
   ; cid: string
-  ; commit: res_commit option
-  ; validation_status: string option [@key "validationStatus"] }
-[@@deriving yojson]
+  ; commit: res_commit option [@default None]
+  ; validation_status: string option [@key "validationStatus"] [@default None]
+  }
+[@@deriving yojson {strict= false}]
 
 and res_commit = {cid: string; rev: string} [@@deriving yojson]
 

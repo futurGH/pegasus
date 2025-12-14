@@ -1,4 +1,4 @@
-type query = {did: string} [@@deriving yojson]
+type query = {did: string} [@@deriving yojson {strict= false}]
 
 type response = {cid: string; rev: string} [@@deriving yojson]
 

@@ -4,13 +4,14 @@ type query =
   ; limit: int option [@default None]
   ; cursor: string option [@default None]
   ; reverse: bool option [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
-type response = {cursor: string option; records: response_record list}
-[@@deriving yojson]
+type response =
+  {cursor: string option [@default None]; records: response_record list}
+[@@deriving yojson {strict= false}]
 
 and response_record = {uri: string; cid: string; value: Mist.Lex.repo_record}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

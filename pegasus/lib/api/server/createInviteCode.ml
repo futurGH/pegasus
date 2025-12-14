@@ -3,7 +3,7 @@ type request =
   ; for_account: string option [@key "forAccount"] [@default None] }
 [@@deriving yojson]
 
-type response = {code: string} [@@deriving yojson]
+type response = {code: string} [@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->

@@ -12,8 +12,8 @@ type response =
   ; email: string
   ; email_confirmed: bool [@key "emailConfirmed"]
   ; email_auth_factor: bool [@key "emailAuthFactor"]
-  ; active: bool option
-  ; status: string option }
+  ; active: bool option [@default None]
+  ; status: string option [@default None] }
 [@@deriving yojson {strict= false}]
 
 let handler =

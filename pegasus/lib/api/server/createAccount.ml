@@ -12,7 +12,7 @@ type response =
   ; refresh_jwt: string [@key "refreshJwt"]
   ; handle: string
   ; did: string }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

@@ -1,4 +1,4 @@
-type query = {did: string; cid: string} [@@deriving yojson]
+type query = {did: string; cid: string} [@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

@@ -1,17 +1,17 @@
 type query =
   {cursor: string option [@default None]; limit: int option [@default None]}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
-type response = {cursor: string option; repos: res_repo list}
-[@@deriving yojson]
+type response = {cursor: string option [@default None]; repos: res_repo list}
+[@@deriving yojson {strict= false}]
 
 and res_repo =
   { did: string
   ; head: string
   ; rev: string
-  ; active: bool option
-  ; status: string option }
-[@@deriving yojson]
+  ; active: bool option [@default None]
+  ; status: string option [@default None] }
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

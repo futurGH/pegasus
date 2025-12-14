@@ -3,9 +3,10 @@ type query =
   ; since: string option [@default None]
   ; limit: int option [@default None]
   ; cursor: string option [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
-type response = {cursor: string option; cids: string list} [@@deriving yojson]
+type response = {cursor: string option [@default None]; cids: string list}
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

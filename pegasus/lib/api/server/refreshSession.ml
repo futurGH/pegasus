@@ -3,8 +3,8 @@ type response =
   ; refresh_jwt: string [@key "refreshJwt"]
   ; handle: string
   ; did: string
-  ; active: bool option
-  ; status: string option }
+  ; active: bool option [@default None]
+  ; status: string option [@default None] }
 [@@deriving yojson {strict= false}]
 
 let handler =

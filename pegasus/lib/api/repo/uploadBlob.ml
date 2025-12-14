@@ -1,4 +1,5 @@
-type response = {blob: Mist.Blob_ref.typed_json_ref} [@@deriving yojson]
+type response = {blob: Mist.Blob_ref.typed_json_ref}
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->

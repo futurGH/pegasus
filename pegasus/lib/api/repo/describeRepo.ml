@@ -1,4 +1,4 @@
-type query = {repo: string} [@@deriving yojson]
+type query = {repo: string} [@@deriving yojson {strict= false}]
 
 type response =
   { handle: string
@@ -6,7 +6,7 @@ type response =
   ; did_doc: Id_resolver.Did.Document.t [@key "didDoc"]
   ; collections: string list
   ; handle_is_correct: bool [@key "handleIsCorrect"] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

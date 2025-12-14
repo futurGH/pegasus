@@ -3,10 +3,10 @@ type query =
   ; collection: string
   ; rkey: string
   ; cid: string option [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type response = {uri: string; cid: string; value: Mist.Lex.repo_record}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->

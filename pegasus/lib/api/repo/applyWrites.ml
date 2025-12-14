@@ -3,11 +3,12 @@ type request =
   ; validate: bool option [@default None]
   ; writes: Repository.repo_write list
   ; swap_commit: string option [@key "swapCommit"] [@default None] }
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type response =
-  {commit: res_commit option; results: Repository.apply_writes_result list}
-[@@deriving yojson]
+  { commit: res_commit option [@default None]
+  ; results: Repository.apply_writes_result list }
+[@@deriving yojson {strict= false}]
 
 and res_commit = {cid: string; rev: string} [@@deriving yojson]
 

@@ -1,6 +1,7 @@
 module Mst = Mist.Mst.Make (User_store)
 
-type query = {did: string; collection: string; rkey: string} [@@deriving yojson]
+type query = {did: string; collection: string; rkey: string}
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->
