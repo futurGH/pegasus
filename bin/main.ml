@@ -13,6 +13,7 @@ let handlers =
   ; ( get
     , "/.well-known/oauth-authorization-server"
     , Api.Well_known.oauth_authorization_server )
+  ; (get, "/.well-known/atproto-did", Api.Well_known.atproto_did)
   ; (options, "/xrpc/**", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (* oauth *)
     (options, "/oauth/par", Xrpc.handler (fun _ -> Dream.empty `No_Content))

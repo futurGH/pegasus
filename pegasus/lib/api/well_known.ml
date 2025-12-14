@@ -65,3 +65,22 @@ let oauth_authorization_server =
            ; ( "dpop_signing_alg_values_supported"
              , `List [`String "ES256"; `String "ES256K"] )
            ; ("client_id_metadata_document_supported", `Bool true) ] )
+
+let atproto_did =
+  Xrpc.handler (fun {req; db; _} ->
+      try
+        let handle = Dream.header req "Host" |> Option.get in
+        if not (String.ends_with ~suffix:("." ^ Env.hostname) handle) then
+          failwith "not found"
+        else
+          match%lwt Data_store.get_actor_by_identifier handle db with
+          | Some {did; _} ->
+              Dream.respond
+                ~headers:[("Content-Type", "text/plain; charset=utf-8")]
+                ~status:`OK did
+          | None ->
+              failwith "not found"
+      with _ ->
+        Dream.respond
+          ~headers:[("Content-Type", "text/plain; charset=utf-8")]
+          ~status:`Not_Found "user not found" )
