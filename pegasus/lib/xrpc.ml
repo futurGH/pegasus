@@ -96,12 +96,14 @@ let service_proxy ?lxm ?aud (ctx : context) =
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
       let uri =
-        Uri.make ~scheme ~host ~path:(Dream.target ctx.req)
+        Uri.make ~scheme ~host
+          ~path:(String.concat "/" @@ (Dream.path [@warning "-3"]) ctx.req)
           ~query:(Util.copy_query ctx.req) ()
       in
       let headers =
         Util.make_headers
           [ ("accept-language", Dream.header ctx.req "accept-language")
+          ; ("content-type", Dream.header ctx.req "content-type")
           ; ( "atproto-accept-labelers"
             , Dream.header ctx.req "atproto-accept-labelers" )
           ; ("authorization", Some ("Bearer " ^ jwt)) ]
