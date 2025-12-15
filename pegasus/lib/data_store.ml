@@ -188,7 +188,7 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
   Util.use_pool conn
   @@ Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
        ~created_at:now
-       ~preferences:(Yojson.Safe.from_string "{}")
+       ~preferences:(Yojson.Safe.from_string "[]")
 
 let get_actor_by_identifier id conn =
   Util.use_pool conn @@ Queries.get_actor_by_identifier ~id
