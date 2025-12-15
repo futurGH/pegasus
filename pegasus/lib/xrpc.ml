@@ -27,7 +27,13 @@ let parse_query (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a =
   try
     let queries = Dream.all_queries req in
-    let query_json = `Assoc (List.map (fun (k, v) -> (k, `String v)) queries) in
+    let query_json =
+      `Assoc
+        (List.map
+           (fun (k, v) ->
+             (k, try Yojson.Safe.from_string v with _ -> `String v) )
+           queries )
+    in
     query_json |> of_yojson |> Result.get_ok
   with _ -> Errors.invalid_request "invalid query string"
 
@@ -95,11 +101,9 @@ let service_proxy ?lxm ?aud (ctx : context) =
       in
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
-      let uri =
-        Uri.make ~scheme ~host
-          ~path:(String.concat "/" @@ (Dream.path [@warning "-3"]) ctx.req)
-          ~query:(Util.copy_query ctx.req) ()
-      in
+      let path, _ = Dream.split_target (Dream.target ctx.req) in
+      let query = Util.copy_query ctx.req in
+      let uri = Uri.make ~scheme ~host ~path ~query () in
       let headers =
         Util.make_headers
           [ ("accept-language", Dream.header ctx.req "accept-language")
@@ -111,9 +115,12 @@ let service_proxy ?lxm ?aud (ctx : context) =
       match Dream.method_ ctx.req with
       | `GET -> (
           let%lwt res, body = Util.http_get uri ~headers in
+          let res_headers =
+            Cohttp.Response.headers res |> Cohttp.Header.to_list
+          in
           match res.status with
           | `OK ->
-              Dream.stream ~status:`OK (fun stream ->
+              Dream.stream ~status:`OK ~headers:res_headers (fun stream ->
                   Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
@@ -126,9 +133,12 @@ let service_proxy ?lxm ?aud (ctx : context) =
           let%lwt res, body =
             Client.post uri ~headers ~body:(Body.of_string req_body)
           in
+          let res_headers =
+            Cohttp.Response.headers res |> Cohttp.Header.to_list
+          in
           match res.status with
           | `OK ->
-              Dream.stream ~status:`OK (fun stream ->
+              Dream.stream ~status:`OK ~headers:res_headers (fun stream ->
                   Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
@@ -154,7 +164,7 @@ let dpop_middleware inner_handler req =
   let%lwt res = inner_handler req in
   match Dream.header req "DPoP" with
   | Some _ ->
-      Dream.add_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
+      Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
       Dream.add_header res "Access-Control-Expose-Headers" "DPoP-Nonce" ;
       Lwt.return res
   | None ->
@@ -163,12 +173,12 @@ let dpop_middleware inner_handler req =
 let cors_middleware inner_handler req =
   let%lwt res = inner_handler req in
   let origin = Dream.header req "Origin" in
-  Dream.add_header res "Access-Control-Allow-Origin"
+  Dream.set_header res "Access-Control-Allow-Origin"
     (Option.value origin ~default:"*") ;
-  Dream.add_header res "Access-Control-Allow-Methods"
+  Dream.set_header res "Access-Control-Allow-Methods"
     "GET, POST, PUT, DELETE, OPTIONS" ;
-  Dream.add_header res "Access-Control-Allow-Headers" "*" ;
-  Dream.add_header res "Access-Control-Max-Age" "86400" ;
+  Dream.set_header res "Access-Control-Allow-Headers" "*" ;
+  Dream.set_header res "Access-Control-Max-Age" "86400" ;
   Lwt.return res
 
 let resolve_repo_did ctx repo =

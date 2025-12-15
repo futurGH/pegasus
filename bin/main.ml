@@ -110,6 +110,7 @@ let static_routes =
   [Dream.get "/public/**" (Dream.static ~loader:public_loader "")]
 
 let main =
+  Printexc.record_backtrace true ;
   let%lwt db = Data_store.connect ~create:true () in
   let%lwt () = Data_store.init db in
   Dream.serve ~interface:"0.0.0.0" ~port:8008

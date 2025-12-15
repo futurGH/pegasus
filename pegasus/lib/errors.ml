@@ -36,7 +36,11 @@ let exn_to_response exn =
   | AuthError (error, message) ->
       format_response error message `Unauthorized
   | UseDpopNonceError ->
-      Dream.json ~status:`Bad_Request {|{ "error": "use_dpop_nonce" }|}
+      Dream.json ~status:`Bad_Request
+        ~headers:
+          [ ("WWW-Authenticate", {|DPoP error="use_dpop_nonce"|})
+          ; ("Access-Control-Expose-Headers", "WWW-Authenticate") ]
+        {|{ "error": "use_dpop_nonce" }|}
   | _ ->
       format_response "InternalServerError" "Internal server error"
         `Internal_Server_Error

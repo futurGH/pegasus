@@ -339,17 +339,12 @@ and follow_redirect ~max_redirects request_uri (response, body) =
     if status <> `OK then Cohttp_lwt.Body.drain_body body else Lwt.return_unit
   in
   match status with
-  | `OK ->
-      Lwt.return (response, body)
   | `Permanent_redirect | `Moved_permanently ->
       handle_redirect ~permanent:true ~max_redirects request_uri response
   | `Found | `Temporary_redirect ->
       handle_redirect ~permanent:false ~max_redirects request_uri response
-  | `Not_found | `Gone ->
-      failwith "not found"
-  | status ->
-      Printf.ksprintf failwith "unhandled status: %s"
-        (Cohttp.Code.string_of_status status)
+  | _ ->
+      Lwt.return (response, body)
 
 and handle_redirect ~permanent ~max_redirects request_uri response =
   if max_redirects <= 0 then failwith "too many redirects"
@@ -438,12 +433,14 @@ let parse_at_uri uri =
   match Re.exec_opt at_uri_regexp uri with
   | None ->
       None
-  | Some m ->
+  | Some m -> (
+    try
       Some
         { repo= Re.Group.get m 1
         ; collection= Re.Group.get m 2
         ; rkey= Re.Group.get m 3
-        ; fragment= (match Re.Group.get m 4 with "" -> None | f -> Some f) }
+        ; fragment= Re.Group.get_opt m 4 }
+    with _ -> None )
 
 let make_at_uri ~repo ~collection ~rkey ~fragment =
   Printf.sprintf "at://%s/%s/%s%s" repo collection rkey
