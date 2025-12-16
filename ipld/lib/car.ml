@@ -95,10 +95,10 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
   let q : bytes option Lwt_mvar.t = Lwt_mvar.create_empty () in
   let () =
     Lwt.async (fun () ->
-        let%lwt () =
-          Lwt_seq.iter_s (fun chunk -> Lwt_mvar.put q (Some chunk)) stream
-        in
-        Lwt_mvar.put q None )
+        Lwt.finalize
+          (fun () ->
+            Lwt_seq.iter_s (fun chunk -> Lwt_mvar.put q (Some chunk)) stream )
+          (fun () -> Lwt_mvar.put q None) )
   in
   let buf = ref Bytes.empty in
   let pos = ref 0 in

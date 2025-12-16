@@ -536,6 +536,7 @@ let export_car t : Car.stream Lwt.t =
   Lwt.return @@ Car.blocks_to_stream root all_blocks
 
 let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
+  let open Util.Syntax in
   let%lwt roots, blocks_seq = Car.read_car_stream stream in
   let root =
     match roots with [root] -> root | _ -> failwith "invalid number of roots"
@@ -584,14 +585,14 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
       Util.use_pool t.db.db (fun conn ->
           Util.transact conn (fun () ->
               (* store commit *)
-              let%lwt _ = User_store.put_commit t.db commit in
+              let$! _ = User_store.Queries.put_commit root commit_bytes conn in
               (* store mst nodes *)
               let%lwt () =
                 Lwt_list.iter_s
                   (fun cid ->
                     match Block_map.get cid all_blocks with
                     | Some block ->
-                        let%lwt _ = User_store.put_block t.db cid block in
+                        let$! _ = User_store.Queries.put_block cid block conn in
                         Lwt.return_unit
                     | None ->
                         Lwt.return_unit )
@@ -603,8 +604,11 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                   (fun (path, cid) ->
                     match Block_map.get cid all_blocks with
                     | Some data ->
-                        User_store.put_record_raw t.db ~path ~cid ~data
-                          ~since:(Tid.now ())
+                        let$! _ =
+                          User_store.Queries.put_record ~path ~cid ~data
+                            ~since:(Tid.now ()) conn
+                        in
+                        Lwt.return_unit
                     | None ->
                         failwith ("missing record block: " ^ Cid.to_string cid) )
                   leaves
