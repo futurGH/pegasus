@@ -598,6 +598,10 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                         Lwt.return_unit )
                   mst_node_cids
               in
+              (* delete existing records *)
+              let$! () =
+                [%rapper execute {sql| DELETE FROM records |sql}] () conn
+              in
               (* store records *)
               let%lwt () =
                 Lwt_list.iter_s
