@@ -496,7 +496,7 @@ struct
           match Util.at_index index seq with
           | Some (Leaf (k, _, _)) when k = key ->
               Lwt.return Block_map.empty
-          | Some (Leaf (k, v_right, _)) -> (
+          | Some (Leaf (_k, v_right, _)) -> (
               let prev =
                 if index - 1 >= 0 then Util.at_index (index - 1) seq else None
               in

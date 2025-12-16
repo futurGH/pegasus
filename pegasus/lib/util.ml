@@ -191,6 +191,7 @@ let _init_connection conn =
           PRAGMA journal_mode=WAL;
           PRAGMA foreign_keys=ON;
           PRAGMA synchronous=NORMAL;
+          PRAGMA busy_timeout=5000;
         |sql}
         syntax_off]
       () conn
@@ -231,7 +232,6 @@ let use_pool pool (f : Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t)
     : 'a Lwt.t =
   match%lwt Caqti_lwt_unix.Pool.use f pool with
   | Ok res ->
-      let%lwt () = Caqti_lwt_unix.Pool.drain pool in
       Lwt.return res
   | Error e ->
       raise (Caqti_error.Exn e)
