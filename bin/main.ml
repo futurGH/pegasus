@@ -75,6 +75,7 @@ let handlers =
   ; (get, "/xrpc/com.atproto.repo.listRecords", Api.Repo.ListRecords.handler)
   ; (post, "/xrpc/com.atproto.repo.deleteRecord", Api.Repo.DeleteRecord.handler)
   ; (post, "/xrpc/com.atproto.repo.uploadBlob", Api.Repo.UploadBlob.handler)
+  ; (post, "/xrpc/com.atproto.repo.importRepo", Api.Repo.ImportRepo.handler)
   ; (* sync *)
     (get, "/xrpc/com.atproto.sync.getRepo", Api.Sync.GetRepo.handler)
   ; (get, "/xrpc/com.atproto.sync.getRepoStatus", Api.Sync.GetRepoStatus.handler)
