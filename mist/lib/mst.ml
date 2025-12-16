@@ -88,8 +88,6 @@ module type Intf = sig
 
   val proof_for_key : t -> Cid.t -> string -> Block_map.t Lwt.t
 
-  val get_covering_proof : t -> string -> Storage.Block_map.t Lwt.t
-
   val leaf_count : t -> int Lwt.t
 
   val layer : t -> int Lwt.t
@@ -496,16 +494,46 @@ struct
         let index = find_gte_leaf_index key seq in
         let%lwt blocks =
           match Util.at_index index seq with
-          | Some (Leaf (k, v, _)) when k = key -> (
-            (* include the found leaf block to prove existence *)
-            match%lwt
-              Store.get_bytes t.blockstore v
-            with
-            | Some leaf_bytes ->
-                Lwt.return (Block_map.set v leaf_bytes Block_map.empty)
-            | None ->
-                Lwt.return Block_map.empty )
-          | _ -> (
+          | Some (Leaf (k, _, _)) when k = key ->
+              Lwt.return Block_map.empty
+          | Some (Leaf (k, v_right, _)) -> (
+              let prev =
+                if index - 1 >= 0 then Util.at_index (index - 1) seq else None
+              in
+              match prev with
+              | Some (Tree c) ->
+                  proof_for_key t c key
+              | _ ->
+                  (* include bounding neighbor leaf blocks to prove nonexistence *)
+                  let left_leaf =
+                    match prev with
+                    | Some (Leaf (_, v_left, _)) ->
+                        Some v_left
+                    | _ ->
+                        None
+                  in
+                  let%lwt bm =
+                    match left_leaf with
+                    | Some cid_left -> (
+                      match%lwt Store.get_bytes t.blockstore cid_left with
+                      | Some b ->
+                          Lwt.return (Block_map.set cid_left b Block_map.empty)
+                      | None ->
+                          Lwt.return Block_map.empty )
+                    | None ->
+                        Lwt.return Block_map.empty
+                  in
+                  let%lwt bm =
+                    match%lwt Store.get_bytes t.blockstore v_right with
+                    | Some b ->
+                        Lwt.return (Block_map.set v_right b bm)
+                    | None ->
+                        Lwt.return bm
+                  in
+                  Lwt.return bm )
+          | Some (Tree c) ->
+              proof_for_key t c key
+          | None -> (
               let prev =
                 if index - 1 >= 0 then Util.at_index (index - 1) seq else None
               in
@@ -553,91 +581,6 @@ struct
                   Lwt.return bm )
         in
         Lwt.return (Block_map.set cid bytes blocks)
-
-  (* returns all mst nodes needed to prove the value of a given key's left sibling *)
-  let rec proof_for_left_sibling t cid key : Block_map.t Lwt.t =
-    match%lwt Store.get_bytes t.blockstore cid with
-    | None ->
-        Lwt.return Block_map.empty
-    | Some bytes ->
-        let raw = decode_block_raw bytes in
-        let keys = node_entry_keys raw in
-        let seq = interleave_raw raw keys in
-        let index = find_gte_leaf_index key seq in
-        let%lwt blocks =
-          let prev =
-            if index - 1 >= 0 then Util.at_index (index - 1) seq else None
-          in
-          match prev with
-          | Some (Tree c) ->
-              proof_for_left_sibling t c key
-          | Some (Leaf (_, v_left, _)) -> (
-            match%lwt Store.get_bytes t.blockstore v_left with
-            | Some b ->
-                Lwt.return (Block_map.set v_left b Block_map.empty)
-            | None ->
-                Lwt.return Block_map.empty )
-          | _ ->
-              Lwt.return Block_map.empty
-        in
-        Lwt.return (Block_map.set cid bytes blocks)
-
-  (* returns all mst nodes needed to prove the value of a given key's right sibling *)
-  let rec proof_for_right_sibling t cid key : Block_map.t Lwt.t =
-    match%lwt Store.get_bytes t.blockstore cid with
-    | None ->
-        Lwt.return Block_map.empty
-    | Some bytes ->
-        let raw = decode_block_raw bytes in
-        let keys = node_entry_keys raw in
-        let seq = interleave_raw raw keys in
-        let index = find_gte_leaf_index key seq in
-        let found =
-          match Util.at_index index seq with
-          | None ->
-              if index - 1 >= 0 then Util.at_index (index - 1) seq else None
-          | some ->
-              some
-        in
-        let%lwt blocks =
-          match found with
-          | Some (Tree c) ->
-              proof_for_right_sibling t c key
-          | Some (Leaf (k, _, _)) -> (
-              let neighbor =
-                if k = key then Util.at_index (index + 1) seq
-                else if index - 1 >= 0 then Util.at_index (index - 1) seq
-                else None
-              in
-              match neighbor with
-              | Some (Tree c) ->
-                  proof_for_right_sibling t c key
-              | Some (Leaf (_, v_right, _)) -> (
-                match%lwt Store.get_bytes t.blockstore v_right with
-                | Some b ->
-                    Lwt.return (Block_map.set v_right b Block_map.empty)
-                | None ->
-                    Lwt.return Block_map.empty )
-              | _ ->
-                  Lwt.return Block_map.empty )
-          | None ->
-              Lwt.return Block_map.empty
-        in
-        Lwt.return (Block_map.set cid bytes blocks)
-
-  (* a covering proof is all mst nodes needed to prove the value of a given leaf
-    and its siblings to its immediate right and left (if applicable) *)
-  let get_covering_proof t key : Block_map.t Lwt.t =
-    let%lwt proofs =
-      Lwt.all
-        [ proof_for_key t t.root key
-        ; proof_for_left_sibling t t.root key
-        ; proof_for_right_sibling t t.root key ]
-    in
-    Lwt.return
-      (List.fold_left
-         (fun acc proof -> Block_map.merge acc proof)
-         Block_map.empty proofs )
 
   (* collects all node blocks (cid, bytes) and all leaf cids reachable from root
      only traverses nodes; doesn't fetch leaf blocks

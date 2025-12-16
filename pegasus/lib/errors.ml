@@ -4,10 +4,15 @@ exception InternalServerError of (string * string)
 
 exception AuthError of (string * string)
 
+exception NotFoundError of (string * string)
+
 exception UseDpopNonceError
 
 let is_xrpc_error = function
-  | InvalidRequestError _ | InternalServerError _ | AuthError _ ->
+  | InvalidRequestError _
+  | InternalServerError _
+  | AuthError _
+  | NotFoundError _ ->
       true
   | _ ->
       false
@@ -16,10 +21,12 @@ let invalid_request ?(name = "InvalidRequest") msg =
   raise (InvalidRequestError (name, msg))
 
 let internal_error ?(name = "InternalServerError")
-    ?(msg = "Internal server error") () =
+    ?(msg = "internal server error") () =
   raise (InternalServerError (name, msg))
 
 let auth_required ?(name = "AuthRequired") msg = raise (AuthError (name, msg))
+
+let not_found ?(name = "NotFound") msg = raise (NotFoundError (name, msg))
 
 let use_dpop_nonce () = raise UseDpopNonceError
 
@@ -35,6 +42,8 @@ let exn_to_response exn =
       format_response error message `Internal_Server_Error
   | AuthError (error, message) ->
       format_response error message `Unauthorized
+  | NotFoundError (error, message) ->
+      format_response error message `Not_Found
   | UseDpopNonceError ->
       Dream.json ~status:`Bad_Request
         ~headers:

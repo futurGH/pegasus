@@ -80,7 +80,4 @@ let atproto_did =
                 ~status:`OK did
           | None ->
               failwith "not found"
-      with _ ->
-        Dream.respond
-          ~headers:[("Content-Type", "text/plain; charset=utf-8")]
-          ~status:`Not_Found "user not found" )
+      with _ -> Errors.not_found "user not found" )
