@@ -319,17 +319,20 @@ let get_bytes t cid : Blob.t option Lwt.t =
   >|= function Some {data; _} -> Some data | None -> None
 
 let get_blocks t cids : Block_map.with_missing Lwt.t =
-  let%lwt blocks = Util.use_pool t.db @@ Queries.get_blocks cids in
-  Lwt.return
-    (List.fold_left
-       (fun (acc : Block_map.with_missing) cid ->
-         match List.find_opt (fun (b : block) -> b.cid = cid) blocks with
-         | Some {data; _} ->
-             {acc with blocks= Block_map.set cid data acc.blocks}
-         | None ->
-             {acc with missing= cid :: acc.missing} )
-       {blocks= Block_map.empty; missing= []}
-       cids )
+  if List.is_empty cids then
+    Lwt.return ({blocks= Block_map.empty; missing= []} : Block_map.with_missing)
+  else
+    let%lwt blocks = Util.use_pool t.db @@ Queries.get_blocks cids in
+    Lwt.return
+      (List.fold_left
+         (fun (acc : Block_map.with_missing) cid ->
+           match List.find_opt (fun (b : block) -> b.cid = cid) blocks with
+           | Some {data; _} ->
+               {acc with blocks= Block_map.set cid data acc.blocks}
+           | None ->
+               {acc with missing= cid :: acc.missing} )
+         {blocks= Block_map.empty; missing= []}
+         cids )
 
 let has t cid : bool Lwt.t =
   Util.use_pool t.db @@ Queries.has_block cid
@@ -438,7 +441,10 @@ let put_blob t cid mimetype data : int Lwt.t =
       (Util.Constants.user_blobs_location t.did)
       (Cid.to_string cid)
   in
-  let () = Util.mkfile_p file ~perm:0o644 in
+  let _ =
+    Core_unix.openfile ~mode:[O_CREAT; O_WRONLY] file
+    |> Core_unix.single_write ~buf:data
+  in
   let _ = Out_channel.with_open_bin file Out_channel.output_bytes data in
   Util.use_pool t.db @@ Queries.put_blob cid mimetype
 
@@ -449,9 +455,12 @@ let put_blob_ref t path cid : unit Lwt.t =
   Util.use_pool t.db @@ Queries.put_blob_ref path cid
 
 let put_blob_refs t path cids : (unit, exn) Lwt_result.t =
-  Lwt_result.map (fun _ -> ())
-  @@ Util.multi_query t.db
-       (List.map (fun cid -> Queries.put_blob_ref cid path) cids)
+  if List.is_empty cids then Lwt.return_ok ()
+  else
+    Lwt_result.map (fun _ -> ())
+    @@ Util.multi_query t.db
+         (List.map (fun cid -> Queries.put_blob_ref cid path) cids)
 
 let clear_blob_refs t path cids : unit Lwt.t =
-  Util.use_pool t.db @@ Queries.clear_blob_refs path cids
+  if List.is_empty cids then Lwt.return_unit
+  else Util.use_pool t.db @@ Queries.clear_blob_refs path cids
