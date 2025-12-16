@@ -188,13 +188,7 @@ module Verifiers = struct
 
   type verifier = ctx -> (credentials, exn) Lwt_result.t
 
-  let unauthenticated : verifier =
-   fun {req; _} ->
-    match Dream.header req "authorization" with
-    | Some _ ->
-        Lwt.return_error @@ Errors.auth_required "invalid authorization header"
-    | None ->
-        Lwt.return_ok Unauthenticated
+  let unauthenticated : verifier = fun _ -> Lwt.return_ok Unauthenticated
 
   let admin : verifier =
    fun {req; _} ->
