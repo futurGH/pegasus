@@ -125,6 +125,10 @@ module Queries = struct
 
   let clear_mst = [%rapper execute {sql| DELETE FROM mst |sql}] ()
 
+  (* mst misc *)
+  let count_blocks =
+    [%rapper get_one {sql| SELECT @int{COUNT(*)} FROM mst |sql}]
+
   (* repo commit *)
   let get_commit =
     [%rapper
@@ -186,6 +190,9 @@ module Queries = struct
               AND (since < %string{cursor} OR %string{cursor} = '')
               ORDER BY since DESC LIMIT %int{limit}
         |sql}]
+
+  let count_records =
+    [%rapper get_one {sql| SELECT @int{COUNT(*)} FROM records |sql}]
 
   let list_records_reverse =
     [%rapper
@@ -257,6 +264,17 @@ module Queries = struct
             ) > %string{since}
           ORDER BY cid
           LIMIT %int{limit}
+        |sql}]
+
+  let count_blobs =
+    [%rapper get_one {sql| SELECT @int{COUNT(*)} FROM blobs |sql}]
+
+  let count_referenced_blobs =
+    [%rapper
+      get_one
+        {sql| SELECT @int{COUNT(*)} FROM blobs WHERE cid IN (
+                SELECT blob_id FROM blobs_records
+              )
         |sql}]
 
   let put_blob cid mimetype =
@@ -383,6 +401,10 @@ let clear_mst t : unit Lwt.t =
   let%lwt () = Util.use_pool t.db Queries.clear_mst in
   Lwt.return_unit
 
+(* mst misc *)
+
+let count_blocks t : int Lwt.t = Util.use_pool t.db @@ Queries.count_blocks ()
+
 (* repo commit *)
 
 let get_commit t : (Cid.t * signed_commit) option Lwt.t =
@@ -423,6 +445,8 @@ let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
   Util.use_pool t.db @@ fn ~collection ~limit ~cursor
   >|= List.map (fun (path, cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
+
+let count_records t : int Lwt.t = Util.use_pool t.db @@ Queries.count_records ()
 
 let put_record t record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in
@@ -472,6 +496,11 @@ let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
       Queries.list_blobs_since ~limit ~cursor ~since
   | None ->
       Queries.list_blobs ~limit ~cursor
+
+let count_blobs t : int Lwt.t = Util.use_pool t.db @@ Queries.count_blobs ()
+
+let count_referenced_blobs t : int Lwt.t =
+  Util.use_pool t.db @@ Queries.count_referenced_blobs ()
 
 let put_blob t cid mimetype data : int Lwt.t =
   let file =

@@ -51,6 +51,9 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.deleteSession"
     , Api.Server.DeleteSession.handler )
+  ; ( get
+    , "/xrpc/com.atproto.server.checkAccountStatus"
+    , Api.Server.CheckAccountStatus.handler )
   ; ( post
     , "/xrpc/com.atproto.identity.updateHandle"
     , Api.Identity.UpdateHandle.handler )
