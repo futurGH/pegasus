@@ -5,6 +5,10 @@ module Block_map = Mist.Storage.Block_map
 module Lex = Mist.Lex
 module Tid = Mist.Tid
 
+let delete_blob_file ~did cid =
+  let file = Filename.concat (Util.Constants.user_blobs_location did) cid in
+  if Sys.file_exists file then Sys.remove file
+
 module Types = struct
   open struct
     let cid_link_of_yojson = function
@@ -167,6 +171,13 @@ module Queries = struct
       get_opt
         {sql| SELECT @CID{cid}, @Blob{data}, @string{since} FROM records WHERE path = %string{path} |sql}]
 
+  let get_records_by_cids cids =
+    [%rapper
+      get_many
+        {sql| SELECT @CID{cid}, @Blob{data} FROM records WHERE cid IN (%list{%CID{cids}}) |sql}
+        record_out]
+      ~cids
+
   let list_records =
     [%rapper
       get_many
@@ -193,6 +204,10 @@ module Queries = struct
               ON CONFLICT (path) DO UPDATE SET cid = excluded.cid, data = excluded.data, since = excluded.since
         |sql}]
 
+  let delete_record path =
+    [%rapper execute {sql| DELETE FROM records WHERE path = %string{path} |sql}]
+      ~path
+
   (* blob storage *)
   let create_blobs_tables conn =
     let$! () =
@@ -206,29 +221,14 @@ module Queries = struct
           |sql}]
         () conn
     in
-    let$! () =
-      [%rapper
-        execute
-          {sql| CREATE TABLE IF NOT EXISTS blobs_records (
+    [%rapper
+      execute
+        {sql| CREATE TABLE IF NOT EXISTS blobs_records (
                   blob_id INTEGER NOT NULL REFERENCES blobs(id) ON DELETE CASCADE,
                   record_path TEXT NOT NULL REFERENCES records(path) ON DELETE CASCADE,
                   PRIMARY KEY (blob_id, record_path)
                 )
           |sql}]
-        () conn
-    in
-    [%rapper
-      execute
-        {sql| CREATE TRIGGER IF NOT EXISTS cleanup_orphaned_blobs
-                AFTER DELETE ON blobs_records
-                BEGIN
-                  DELETE FROM blobs
-                  WHERE id NOT IN (
-                    SELECT DISTINCT blob_id FROM blobs_records
-                  );
-                END
-        |sql}
-        syntax_off]
       () conn
 
   let get_blob =
@@ -269,15 +269,22 @@ module Queries = struct
         |sql}]
       ~cid ~mimetype
 
-  let get_records_by_cids cids =
+  let delete_blob cid =
+    [%rapper execute {sql| DELETE FROM blobs WHERE cid = %CID{cid} |sql}] ~cid
+
+  let delete_orphaned_blobs_by_record_path path =
     [%rapper
       get_many
-        {sql| SELECT @CID{cid}, @Blob{data} FROM records WHERE cid IN (%list{%CID{cids}}) |sql}
-        record_out]
-      ~cids
-
-  let delete_record path =
-    [%rapper execute {sql| DELETE FROM records WHERE path = %string{path} |sql}]
+        {sql| DELETE FROM blobs
+              WHERE id IN (
+                  SELECT blob_id FROM blobs_records WHERE record_path = %string{path}
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM blobs_records
+                  WHERE blob_id = blobs.id AND record_path != %string{path}
+              )
+              RETURNING @string{cid}
+        |sql}]
       ~path
 
   let list_blob_refs path =
@@ -429,7 +436,15 @@ let put_record_raw t ~path ~cid ~data ~since : unit Lwt.t =
   Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
 
 let delete_record t path : unit Lwt.t =
-  Util.use_pool t.db @@ Queries.delete_record path
+  Util.use_pool t.db (fun conn ->
+      Util.transact conn (fun () ->
+          let del = Queries.delete_record path conn in
+          let$! () = del in
+          let$! deleted_blobs =
+            Queries.delete_orphaned_blobs_by_record_path path conn
+          in
+          let () = List.iter (delete_blob_file ~did:t.did) deleted_blobs in
+          del ) )
 
 (* blobs *)
 
@@ -467,6 +482,13 @@ let put_blob t cid mimetype data : int Lwt.t =
   Core_unix.mkdir_p (Filename.dirname file) ~perm:0o755 ;
   Out_channel.with_open_bin file (fun oc -> Out_channel.output_bytes oc data) ;
   Util.use_pool t.db @@ Queries.put_blob cid mimetype
+
+let delete_blob t cid : unit Lwt.t =
+  delete_blob_file ~did:t.did (Cid.to_string cid) ;
+  Util.use_pool t.db @@ Queries.delete_blob cid
+
+let delete_orphaned_blobs_by_record_path t path : string list Lwt.t =
+  Util.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
 
 let list_blob_refs t path : Cid.t list Lwt.t =
   Util.use_pool t.db @@ Queries.list_blob_refs path

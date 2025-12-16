@@ -328,7 +328,10 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                       |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
                     in
                     if not (List.is_empty refs) then
-                      let%lwt () = User_store.clear_blob_refs t.db path refs in
+                      let%lwt _ =
+                        User_store.delete_orphaned_blobs_by_record_path t.db
+                          path
+                      in
                       Lwt.return_unit
                     else Lwt.return_unit
                 | None ->
@@ -348,6 +351,17 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             commit_ops :=
               !commit_ops
               @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
+            let refs =
+              Util.find_blob_refs value
+              |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
+            in
+            let%lwt () =
+              match%lwt User_store.put_blob_refs t.db path refs with
+              | Ok () ->
+                  Lwt.return ()
+              | Error err ->
+                  raise err
+            in
             Lwt.return
               (Update
                  { type'= "com.atproto.repo.applyWrites#updateResult"
@@ -375,7 +389,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                     |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
                   in
                   if not (List.is_empty refs) then
-                    let%lwt () = User_store.clear_blob_refs t.db path refs in
+                    let%lwt _ =
+                      User_store.delete_orphaned_blobs_by_record_path t.db path
+                    in
                     Lwt.return_unit
                   else Lwt.return_unit
               | None ->
@@ -617,10 +633,7 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                         failwith ("missing record block: " ^ Cid.to_string cid) )
                   leaves
               in
-              Lwt.return_ok () )
-          (* use_pool expects Caqti_error.t as exn type, so handle errors via try/with *)
-          |> Lwt_result.get_exn
-          |> Lwt_result.ok )
+              Lwt.return_ok () ) )
     in
     (* clear cached block_map so it's rebuilt on next access *)
     t.block_map <- None ;
