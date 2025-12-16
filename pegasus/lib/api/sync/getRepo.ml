@@ -8,6 +8,9 @@ let handler =
       Dream.stream
         ~headers:[("Content-Type", "application/vnd.ipld.car")]
         (fun res_stream ->
-          Lwt_seq.iter_s
-            (fun chunk -> Dream.write res_stream (Bytes.to_string chunk))
-            car_stream ) )
+          let%lwt () =
+            Lwt_seq.iter_s
+              (fun chunk -> Dream.write res_stream (Bytes.to_string chunk))
+              car_stream
+          in
+          Dream.close res_stream ) )

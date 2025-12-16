@@ -31,6 +31,61 @@ let encode_node_raw node : Dag_cbor.value =
        [ ("l", match node.l with Some l -> `Link l | None -> `Null)
        ; ("e", `Array (Array.of_list (List.map encode_entry_raw node.e))) ] )
 
+(* decodes a node from cbor bytes *)
+let decode_block_raw b : node_raw =
+  match Dag_cbor.decode b with
+  | `Map node ->
+      if not (String_map.mem "e" node) then
+        raise (Invalid_argument "mst node missing 'e'") ;
+      let l =
+        if String_map.mem "l" node then
+          match String_map.find "l" node with `Link l -> Some l | _ -> None
+        else None
+      in
+      let e_array =
+        match String_map.find "e" node with `Array e -> e | _ -> [||]
+      in
+      let e =
+        Array.to_list
+        @@ Array.map
+             (fun (entry : Dag_cbor.value) ->
+               match entry with
+               | `Map entry ->
+                   { p=
+                       ( entry |> String_map.find "p"
+                       |> function
+                       | `Integer p ->
+                           Int64.to_int p
+                       | _ ->
+                           raise (Invalid_argument "mst entry missing 'p'") )
+                   ; k=
+                       ( entry |> String_map.find "k"
+                       |> function
+                       | `Bytes k ->
+                           k
+                       | _ ->
+                           raise (Invalid_argument "mst entry missing 'k'") )
+                   ; v=
+                       ( entry |> String_map.find "v"
+                       |> function
+                       | `Link v ->
+                           v
+                       | _ ->
+                           raise (Invalid_argument "mst entry missing 'v'") )
+                   ; t=
+                       ( entry |> String_map.find "t"
+                       |> function `Link t -> Some t | _ -> None ) }
+               | _ ->
+                   raise (Invalid_argument "non-map mst entry") )
+             e_array
+      in
+      {l; e}
+  | _ ->
+      raise (Invalid_argument "invalid block")
+
+(* items yielded by ordered stream; either an mst node block or a record cid *)
+type ordered_item = Node of Cid.t * bytes | Leaf of Cid.t
+
 type node =
   { layer: int
   ; mutable left: node option Lwt.t Lazy.t
@@ -84,6 +139,8 @@ module type Intf = sig
 
   val to_blocks_stream : t -> (Cid.t * bytes) Lwt_seq.t
 
+  val to_ordered_stream : t -> ordered_item Lwt_seq.t
+
   val serialize : t -> node -> (Cid.t * bytes, exn) Lwt_result.t
 
   val proof_for_key : t -> Cid.t -> string -> Block_map.t Lwt.t
@@ -125,58 +182,6 @@ struct
   type t = {blockstore: bs; root: Cid.t}
 
   let create blockstore root = {blockstore; root}
-
-  (* decodes a node retrieved from the blockstore *)
-  let decode_block_raw b : node_raw =
-    match Dag_cbor.decode b with
-    | `Map node ->
-        if not (String_map.mem "e" node) then
-          raise (Invalid_argument "mst node missing 'e'") ;
-        let l =
-          if String_map.mem "l" node then
-            match String_map.find "l" node with `Link l -> Some l | _ -> None
-          else None
-        in
-        let e_array =
-          match String_map.find "e" node with `Array e -> e | _ -> [||]
-        in
-        let e =
-          Array.to_list
-          @@ Array.map
-               (fun (entry : Dag_cbor.value) ->
-                 match entry with
-                 | `Map entry ->
-                     { p=
-                         ( entry |> String_map.find "p"
-                         |> function
-                         | `Integer p ->
-                             Int64.to_int p
-                         | _ ->
-                             raise (Invalid_argument "mst entry missing 'p'") )
-                     ; k=
-                         ( entry |> String_map.find "k"
-                         |> function
-                         | `Bytes k ->
-                             k
-                         | _ ->
-                             raise (Invalid_argument "mst entry missing 'k'") )
-                     ; v=
-                         ( entry |> String_map.find "v"
-                         |> function
-                         | `Link v ->
-                             v
-                         | _ ->
-                             raise (Invalid_argument "mst entry missing 'v'") )
-                     ; t=
-                         ( entry |> String_map.find "t"
-                         |> function `Link t -> Some t | _ -> None ) }
-                 | _ ->
-                     raise (Invalid_argument "non-map mst entry") )
-               e_array
-        in
-        {l; e}
-    | _ ->
-        raise (Invalid_argument "invalid block")
 
   (* retrieves a raw node by cid *)
   let retrieve_node_raw t cid : node_raw option Lwt.t =
@@ -281,61 +286,26 @@ struct
     in
     Lwt.return !map
 
-  (* returns all mst entries in order for a car stream *)
+  (* returns all non-leaf mst node blocks in order for a car stream
+     leaf cids can be obtained via collect_nodes_and_leaves or leaves_of_root *)
   let to_blocks_stream t : (Cid.t * bytes) Lwt_seq.t =
-    let module M = struct
-      type stage =
-        (* currently walking nodes *)
-        | Nodes of
-            { next: Cid.t list (* next cids to fetch *)
-            ; fetched: (Cid.t * bytes) list (* fetched cids and their bytes *)
-            ; leaves_seen: Cid.Set.t (* seen leaf cids for dedupe *)
-            ; leaves_rev: Cid.t list (* reversed encounter order of leaves *) }
-        (* done walking nodes, streaming accumulated leaves *)
-        | Leaves of (Cid.t * bytes) list
-        | Done
-    end in
-    let open M in
-    let init_state =
-      Nodes
-        {next= [t.root]; fetched= []; leaves_seen= Cid.Set.empty; leaves_rev= []}
-    in
-    let rec step = function
-      | Done ->
-          Lwt.return_none
+    (* (next cids to fetch list, fetched (cid * bytes) list) *)
+    let init_state = ([t.root], []) in
+    let rec step (next, fetched) =
+      match fetched with
       (* node has been fetched, can now be yielded *)
-      | Nodes ({fetched= (cid, bytes) :: rest; _} as s) ->
-          Lwt.return_some ((cid, bytes), Nodes {s with fetched= rest})
+      | (cid, bytes) :: rest ->
+          Lwt.return_some ((cid, bytes), (next, rest))
       (* need to fetch next nodes *)
-      | Nodes {next; fetched= []; leaves_seen; leaves_rev} ->
-          if List.is_empty next then (
-            (* finished traversing nodes, time to switch to leaves *)
-            let leaves_list = List.rev leaves_rev in
-            let%lwt leaves_bm = Store.get_blocks t.blockstore leaves_list in
-            if leaves_bm.missing <> [] then failwith "missing mst leaf blocks" ;
-            let leaves_nodes =
-              List.map
-                (fun cid ->
-                  let bytes =
-                    Block_map.get cid leaves_bm.blocks |> Option.get
-                  in
-                  (cid, bytes) )
-                leaves_list
-            in
-            match leaves_nodes with
-            | [] ->
-                (* with Done, we don't care about the first pair element *)
-                Lwt.return_some (Obj.magic (), Done)
-            | _ ->
-                (* it's leafin time *)
-                step (Leaves leaves_nodes) )
+      | [] ->
+          if List.is_empty next then Lwt.return_none
           else
             (* go ahead and fetch the next nodes *)
             let%lwt bm = Store.get_blocks t.blockstore next in
             if bm.missing <> [] then failwith "missing mst nodes" ;
-            let fetched, next', leaves_seen', leaves_rev' =
+            let fetched', next' =
               List.fold_left
-                (fun (acc, nxt, seen, rev) cid ->
+                (fun (acc, nxt) cid ->
                   let bytes =
                     (* we should be safe to do this since we just got the cids from the blockmap *)
                     Block_map.get cid bm.blocks |> Option.get
@@ -354,34 +324,48 @@ struct
                           nxt )
                       node.e
                   in
-                  let seen', rev' =
-                    (* add each entry in this node to the seen set and record encounter order *)
-                    List.fold_left
-                      (fun (s, r) e ->
-                        if Cid.Set.mem e.v s then (s, r)
-                        else (Cid.Set.add e.v s, e.v :: r) )
-                      (seen, rev) node.e
-                  in
-                  (* prepending is O(1) per prepend + one O(n) to reverse, vs. O(n) per append = O(n^2) total *)
-                  ((cid, bytes) :: acc, nxt', seen', rev') )
-                ([], [], leaves_seen, leaves_rev)
-                next
+                  (* prepending then reversing is O(2n), appending each time is O(n^2) *)
+                  ((cid, bytes) :: acc, nxt') )
+                ([], []) next
             in
-            step
-              (Nodes
-                 { next= List.rev next'
-                 ; fetched= List.rev fetched
-                 ; leaves_seen= leaves_seen'
-                 ; leaves_rev= leaves_rev' } )
-      (* if we're onto yielding leaves, do that *)
-      | Leaves ((cid, bytes) :: rest) ->
-          let next = if rest = [] then Done else Leaves rest in
-          Lwt.return_some ((cid, bytes), next)
-      (* once we're out of leaves, we're done *)
-      | Leaves [] ->
-          Lwt.return_some (Obj.magic (), Done)
+            step (List.rev next', List.rev fetched')
     in
     Lwt_seq.unfold_lwt step init_state
+
+  (* depth-first pre-order as per sync 1.1, yields cid references in place of leaf nodes
+     for each node: node block, left subtree, then for each entry: record, right subtree *)
+  let to_ordered_stream t : ordered_item Lwt_seq.t =
+    (* queue items: `Node cid to visit, `Leaf cid to yield *)
+    let rec step queue =
+      match queue with
+      | [] ->
+          Lwt.return_none
+      | `Node cid :: rest -> (
+          let%lwt bytes_opt = Store.get_bytes t.blockstore cid in
+          match bytes_opt with
+          | None ->
+              step rest
+          | Some bytes ->
+              let node = decode_block_raw bytes in
+              (* queue items: left subtree, then for each entry: record then right subtree *)
+              let left_queue =
+                match node.l with Some l -> [`Node l] | None -> []
+              in
+              let entries_queue =
+                List.concat_map
+                  (fun (e : entry_raw) ->
+                    let right_queue =
+                      match e.t with Some r -> [`Node r] | None -> []
+                    in
+                    `Leaf e.v :: right_queue )
+                  node.e
+              in
+              let new_queue = left_queue @ entries_queue @ rest in
+              Lwt.return_some ((Node (cid, bytes) : ordered_item), new_queue) )
+      | `Leaf cid :: rest ->
+          Lwt.return_some ((Leaf cid : ordered_item), rest)
+    in
+    Lwt_seq.unfold_lwt step [`Node t.root]
 
   (* produces a cid and cbor-encoded bytes for a given tree *)
   let serialize t node : (Cid.t * bytes, exn) Lwt_result.t =
@@ -620,7 +604,7 @@ struct
     in
     bfs [t.root] Cid.Set.empty [] Cid.Set.empty
 
-  (* list of all leaves belonging to a node, ordered by key *)
+  (* list of all leaves belonging to a node and its children, ordered by key *)
   let rec leaves_of_node n : (string * Cid.t) list Lwt.t =
     let%lwt left_leaves =
       n.left >>? function Some l -> leaves_of_node l | None -> Lwt.return []
@@ -642,7 +626,7 @@ struct
     in
     Lwt.return leaves
 
-  (* little helper *)
+  (* list of all leaves in the mst *)
   let leaves_of_root t : (string * Cid.t) list Lwt.t =
     match%lwt retrieve_node t t.root with
     | None ->

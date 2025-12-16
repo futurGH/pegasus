@@ -269,6 +269,17 @@ module Queries = struct
         |sql}]
       ~cid ~mimetype
 
+  let get_records_by_cids cids =
+    [%rapper
+      get_many
+        {sql| SELECT @CID{cid}, @Blob{data} FROM records WHERE cid IN (%list{%CID{cids}}) |sql}
+        record_out]
+      ~cids
+
+  let delete_record path =
+    [%rapper execute {sql| DELETE FROM records WHERE path = %string{path} |sql}]
+      ~path
+
   let list_blob_refs path =
     [%rapper
       get_many
@@ -391,6 +402,12 @@ let get_record t path : record option Lwt.t =
   >|= Option.map (fun (cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
 
+let get_records_by_cids t cids : (Cid.t * Blob.t) list Lwt.t =
+  if List.is_empty cids then Lwt.return []
+  else
+    Util.use_pool t.db @@ Queries.get_records_by_cids cids
+    >|= List.map (fun ({cid; data} : block) -> (cid, data))
+
 let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
     record list Lwt.t =
   let fn =
@@ -407,6 +424,12 @@ let put_record t record path : (Cid.t * bytes) Lwt.t =
     Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
   in
   Lwt.return (cid, data)
+
+let put_record_raw t ~path ~cid ~data ~since : unit Lwt.t =
+  Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
+
+let delete_record t path : unit Lwt.t =
+  Util.use_pool t.db @@ Queries.delete_record path
 
 (* blobs *)
 

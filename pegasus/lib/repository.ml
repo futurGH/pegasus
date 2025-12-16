@@ -2,6 +2,7 @@ open User_store.Types
 module Block_map = User_store.Block_map
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
+module Mem_mst = Mist.Mst.Make (Mist.Storage.Memory_blockstore)
 module String_map = Lex.String_map
 module Tid = Mist.Tid
 
@@ -471,37 +472,150 @@ let export_car t : Car.stream Lwt.t =
         failwith ("failed to retrieve commit for " ^ t.did)
   in
   let mst : Mst.t = {blockstore= t.db; root= commit.data} in
-  let mst_blocks = Mst.to_blocks_stream mst in
   let commit_block =
     commit |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
   in
   if Cid.create Dcbor commit_block <> root then
     failwith "commit does not match stored cid" ;
-  Lwt.return
-  @@ Car.blocks_to_stream root (Lwt_seq.cons (root, commit_block) mst_blocks)
+  (* the idea is to read ahead to collect record cids to reduce db calls to fetch records *)
+  let batch_size = 100 in
+  let ordered_stream = Mst.to_ordered_stream mst in
+  (* read up to n items from stream, returning (items, remaining_stream) *)
+  let rec read_ahead n stream acc =
+    if n = 0 then Lwt.return (List.rev acc, stream)
+    else
+      match%lwt stream () with
+      | Lwt_seq.Nil ->
+          Lwt.return (List.rev acc, Lwt_seq.empty)
+      | Lwt_seq.Cons (item, rest) ->
+          read_ahead (n - 1) rest (item :: acc)
+  in
+  let leaf_cids_of items =
+    List.filter_map (function Mist.Mst.Leaf cid -> Some cid | _ -> None) items
+  in
+  (* state: (buffer of items to yield, cache of fetched records, remaining stream) *)
+  let blocks_stream : (Cid.t * bytes) Lwt_seq.t =
+    let rec step (buffer, cache, stream) =
+      match (buffer : Mist.Mst.ordered_item list) with
+      | [] -> (
+          (* buffer empty, try to read more *)
+          let%lwt items, stream' = read_ahead batch_size stream [] in
+          match items with
+          | [] ->
+              Lwt.return_none
+          | _ ->
+              (* batch fetch all leaf records in this chunk *)
+              let leaf_cids = leaf_cids_of items in
+              let%lwt records = User_store.get_records_by_cids t.db leaf_cids in
+              let cache' =
+                List.fold_left
+                  (fun acc (cid, data) -> Block_map.set cid data acc)
+                  cache records
+              in
+              step (items, cache', stream') )
+      | Node (cid, data) :: rest ->
+          Lwt.return_some ((cid, data), (rest, cache, stream))
+      | Leaf cid :: rest -> (
+        match Block_map.get cid cache with
+        | Some data ->
+            Lwt.return_some ((cid, data), (rest, cache, stream))
+        | None -> (
+          (* not in cache -> fetch individually *)
+          match%lwt
+            User_store.get_records_by_cids t.db [cid]
+          with
+          | (cid, data) :: _ ->
+              Lwt.return_some ((cid, data), (rest, cache, stream))
+          | [] ->
+              (* record not found, skip *)
+              step (rest, cache, stream) ) )
+    in
+    Lwt_seq.unfold_lwt step ([], Block_map.empty, ordered_stream)
+  in
+  let all_blocks = Lwt_seq.cons (root, commit_block) blocks_stream in
+  Lwt.return @@ Car.blocks_to_stream root all_blocks
 
-let import_car (did : string) (stream : Car.stream) : t Lwt.t =
-  let%lwt t = load did in
-  let%lwt roots, blocks = Car.read_car_stream stream in
+let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
+  let%lwt roots, blocks_seq = Car.read_car_stream stream in
   let root =
     match roots with [root] -> root | _ -> failwith "invalid number of roots"
   in
-  let%lwt () =
-    Lwt_seq.iter_s
-      (fun (cid, block) ->
-        if cid = root then (
-          let commit =
-            block |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
-            |> Result.get_ok
-          in
-          if commit.did <> did then failwith "did does not match commit did" ;
-          let%lwt _ = Lwt_result.get_exn @@ User_store.put_commit t.db commit in
-          Lwt.return_unit )
-        else
-          let%lwt _ =
-            Lwt_result.get_exn @@ User_store.put_block t.db cid block
-          in
-          Lwt.return_unit )
-      blocks
-  in
-  Lwt.return t
+  try%lwt
+    (* collect all blocks into a map *)
+    let%lwt all_blocks =
+      Lwt_seq.fold_left_s
+        (fun acc (cid, block) -> Lwt.return (Block_map.set cid block acc))
+        Block_map.empty blocks_seq
+    in
+    (* parse commit block *)
+    let commit_bytes =
+      match Block_map.get root all_blocks with
+      | Some b ->
+          b
+      | None ->
+          failwith "commit block not found in CAR"
+    in
+    let commit =
+      match
+        commit_bytes |> Dag_cbor.decode_to_yojson |> signed_commit_of_yojson
+      with
+      | Ok c ->
+          c
+      | Error e ->
+          failwith ("invalid commit: " ^ e)
+    in
+    if commit.did <> t.did then failwith "did does not match commit did" ;
+    (* create in-memory mst to walk *)
+    let mem_bs = Mist.Storage.Memory_blockstore.create ~blocks:all_blocks () in
+    let mem_mst : Mem_mst.t = {blockstore= mem_bs; root= commit.data} in
+    let%lwt leaves = Mem_mst.leaves_of_root mem_mst in
+    let leaf_cids =
+      List.fold_left
+        (fun acc (_, cid) -> Cid.Set.add cid acc)
+        Cid.Set.empty leaves
+    in
+    (* get mst nodes by filtering out leaves and commit from all blocks *)
+    let mst_node_cids =
+      Block_map.keys all_blocks
+      |> List.filter (fun cid ->
+          (not (Cid.equal cid root)) && not (Cid.Set.mem cid leaf_cids) )
+    in
+    let%lwt _ =
+      Util.use_pool t.db.db (fun conn ->
+          Util.transact conn (fun () ->
+              (* store commit *)
+              let%lwt _ = User_store.put_commit t.db commit in
+              (* store mst nodes *)
+              let%lwt () =
+                Lwt_list.iter_s
+                  (fun cid ->
+                    match Block_map.get cid all_blocks with
+                    | Some block ->
+                        let%lwt _ = User_store.put_block t.db cid block in
+                        Lwt.return_unit
+                    | None ->
+                        Lwt.return_unit )
+                  mst_node_cids
+              in
+              (* store records *)
+              let%lwt () =
+                Lwt_list.iter_s
+                  (fun (path, cid) ->
+                    match Block_map.get cid all_blocks with
+                    | Some data ->
+                        User_store.put_record_raw t.db ~path ~cid ~data
+                          ~since:(Tid.now ())
+                    | None ->
+                        failwith ("missing record block: " ^ Cid.to_string cid) )
+                  leaves
+              in
+              Lwt.return_ok () )
+          (* use_pool expects Caqti_error.t as exn type, so handle errors via try/with *)
+          |> Lwt_result.get_exn
+          |> Lwt_result.ok )
+    in
+    (* clear cached block_map so it's rebuilt on next access *)
+    t.block_map <- None ;
+    t.commit <- Some (root, commit) ;
+    Lwt.return_ok t
+  with exn -> Lwt.return_error exn

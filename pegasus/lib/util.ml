@@ -236,6 +236,30 @@ let use_pool pool (f : Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t)
   | Error e ->
       raise (Caqti_error.Exn e)
 
+let transact conn fn : (unit, exn) Lwt_result.t =
+  let module C = (val conn : Caqti_lwt.CONNECTION) in
+  match%lwt C.start () with
+  | Ok () -> (
+    match%lwt fn () with
+    | Ok () -> (
+      match%lwt C.commit () with
+      | Ok () ->
+          Lwt.return_ok ()
+      | Error e -> (
+        match%lwt C.rollback () with
+        | Ok () ->
+            Lwt.return_error (Caqti_error.Exn e)
+        | Error e ->
+            Lwt.return_error (Caqti_error.Exn e) ) )
+    | Error e -> (
+      match%lwt C.rollback () with
+      | Ok () ->
+          Lwt.return_error e
+      | Error e ->
+          Lwt.return_error (Caqti_error.Exn e) ) )
+  | Error e ->
+      Lwt.return_error (Caqti_error.Exn e)
+
 (* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
 let multi_query pool
     (queries : (Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t) list)
