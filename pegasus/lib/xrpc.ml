@@ -114,7 +114,11 @@ let service_proxy ?lxm ?aud (ctx : context) =
       in
       match Dream.method_ ctx.req with
       | `GET -> (
-          let%lwt res, body = Util.http_get uri ~headers in
+          let%lwt res, body =
+            try%lwt Lwt_unix.with_timeout 15.0 (fun () -> Util.http_get uri ~headers)
+            with Lwt_unix.Timeout ->
+              Errors.internal_error ~msg:"proxy request timed out" ()
+          in
           let res_headers =
             Cohttp.Response.headers res |> Cohttp.Header.to_list
           in
@@ -131,7 +135,11 @@ let service_proxy ?lxm ?aud (ctx : context) =
       | `POST -> (
           let%lwt req_body = Dream.body ctx.req in
           let%lwt res, body =
-            Client.post uri ~headers ~body:(Body.of_string req_body)
+            try%lwt
+              Lwt_unix.with_timeout 15.0 (fun () ->
+                  Client.post uri ~headers ~body:(Body.of_string req_body) )
+            with Lwt_unix.Timeout ->
+              Errors.internal_error ~msg:"proxy request timed out" ()
           in
           let res_headers =
             Cohttp.Response.headers res |> Cohttp.Header.to_list
