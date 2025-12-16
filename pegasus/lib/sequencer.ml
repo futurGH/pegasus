@@ -600,11 +600,16 @@ module Live = struct
         (* try backfill from buffer first *)
         let ring = Bus.ring_after cursor in
         let ring_covers =
-          match List.rev ring with
+          match ring with
           | [] ->
               false
-          | last :: _ ->
-              last.seq >= cutoff
+          | first :: _ -> (
+            match List.rev ring with
+            | [] ->
+                false
+            | last :: _ ->
+                (* ring covers if it goes from <= cursor all the way to >= cutoff *)
+                first.seq <= cursor && last.seq >= cutoff )
         in
         ( if ring_covers then
             Lwt_list.iter_s (fun (it : Bus.item) -> send it.bytes) ring
