@@ -200,7 +200,7 @@ module Queries = struct
         execute
           {sql| CREATE TABLE IF NOT EXISTS blobs (
                 id INTEGER PRIMARY KEY,
-                cid TEXT NOT NULL,
+                cid TEXT NOT NULL UNIQUE,
                 mimetype TEXT NOT NULL
               )
           |sql}]
@@ -441,11 +441,8 @@ let put_blob t cid mimetype data : int Lwt.t =
       (Util.Constants.user_blobs_location t.did)
       (Cid.to_string cid)
   in
-  let _ =
-    Core_unix.openfile ~mode:[O_CREAT; O_WRONLY] file
-    |> Core_unix.single_write ~buf:data
-  in
-  let _ = Out_channel.with_open_bin file Out_channel.output_bytes data in
+  Core_unix.mkdir_p (Filename.dirname file) ~perm:0o755 ;
+  Out_channel.with_open_bin file (fun oc -> Out_channel.output_bytes oc data) ;
   Util.use_pool t.db @@ Queries.put_blob cid mimetype
 
 let list_blob_refs t path : Cid.t list Lwt.t =
