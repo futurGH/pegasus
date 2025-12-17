@@ -115,7 +115,8 @@ let service_proxy ?lxm ?aud (ctx : context) =
       match Dream.method_ ctx.req with
       | `GET -> (
           let%lwt res, body =
-            try%lwt Lwt_unix.with_timeout 15.0 (fun () -> Util.http_get uri ~headers)
+            try%lwt
+              Lwt_unix.with_timeout 15.0 (fun () -> Util.http_get uri ~headers)
             with Lwt_unix.Timeout ->
               Errors.internal_error ~msg:"proxy request timed out" ()
           in
@@ -202,7 +203,7 @@ let resolve_repo_did_authed ctx repo =
   let%lwt input_did = resolve_repo_did ctx repo in
   let did =
     match ctx.auth with
-    | Access {did} when did = input_did ->
+    | (Access {did} | OAuth {did; _}) when did = input_did ->
         did
     | Admin ->
         input_did
