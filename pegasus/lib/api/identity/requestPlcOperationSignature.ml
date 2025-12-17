@@ -3,7 +3,10 @@ let handler =
       let did = Auth.get_authed_did_exn auth in
       let code =
         "plc-"
-        ^ Uuidm.to_string (Uuidm.v4_gen (Random.State.make_self_init ()) ())
+        ^ String.sub
+            Digestif.SHA256.(
+              digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex )
+            0 8
       in
       let expires_at = Util.now_ms () + (60 * 60 * 1000) in
       let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
