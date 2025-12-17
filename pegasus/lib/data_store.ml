@@ -123,6 +123,23 @@ module Queries = struct
               WHERE did = %string{did}
         |sql}]
 
+  let get_actor_by_auth_code code =
+    [%rapper
+      get_opt
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
+              FROM actors WHERE auth_code = %string{code}
+              LIMIT 1
+        |sql}
+        record_out]
+      code
+
+  let update_password =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET password_hash = %string{password_hash}, auth_code = NULL, auth_code_expires_at = NULL
+              WHERE did = %string{did}
+        |sql}]
+
   (* firehose *)
   let firehose_insert =
     [%rapper
@@ -236,6 +253,13 @@ let set_auth_code ~did ~code ~expires_at conn =
 
 let clear_auth_code ~did conn =
   Util.use_pool conn @@ Queries.clear_auth_code ~did
+
+let get_actor_by_auth_code ~code conn =
+  Util.use_pool conn @@ Queries.get_actor_by_auth_code ~code
+
+let update_password ~did ~password conn =
+  let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
+  Util.use_pool conn @@ Queries.update_password ~did ~password_hash
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =

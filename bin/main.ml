@@ -57,6 +57,18 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.activateAccount"
     , Api.Server.ActivateAccount.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.requestEmailConfirmation"
+    , Api.Server.RequestEmailConfirmation.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.requestEmailUpdate"
+    , Api.Server.RequestEmailUpdate.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.requestPasswordReset"
+    , Api.Server.RequestPasswordReset.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.resetPassword"
+    , Api.Server.ResetPassword.handler )
   ; ( get
     , "/xrpc/com.atproto.repo.listMissingBlobs"
     , Api.Repo.ListMissingBlobs.handler )
