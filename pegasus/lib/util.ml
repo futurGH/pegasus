@@ -207,8 +207,9 @@ let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
     Uri.add_query_params' db_uri
       [("create", string_of_bool create); ("write", string_of_bool write)]
   in
+  let pool_config = Caqti_pool_config.create ~max_size:16 ~max_idle_size:4 () in
   match
-    Caqti_lwt_unix.connect_pool
+    Caqti_lwt_unix.connect_pool ~pool_config
       ~post_connect:(fun conn -> Lwt_result.ok @@ _init_connection conn)
       uri
   with
@@ -228,9 +229,11 @@ let with_connection db_uri f =
   | Error e ->
       raise (Caqti_error.Exn e)
 
-let use_pool pool (f : Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t)
-    : 'a Lwt.t =
-  match%lwt Caqti_lwt_unix.Pool.use f pool with
+let use_pool ?(timeout = 60.0) pool
+    (f : Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t) : 'a Lwt.t =
+  match%lwt
+    Lwt_unix.with_timeout timeout (fun () -> Caqti_lwt_unix.Pool.use f pool)
+  with
   | Ok res ->
       Lwt.return res
   | Error e ->
