@@ -54,6 +54,9 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.server.checkAccountStatus"
     , Api.Server.CheckAccountStatus.handler )
+  ; ( get
+    , "/xrpc/com.atproto.repo.listMissingBlobs"
+    , Api.Repo.ListMissingBlobs.handler )
   ; ( post
     , "/xrpc/com.atproto.identity.updateHandle"
     , Api.Identity.UpdateHandle.handler )

@@ -59,9 +59,9 @@ module Types = struct
 
   type record = {path: string; cid: Cid.t; value: Lex.repo_record; since: Tid.t}
 
-  type blob = {id: int; cid: Cid.t; mimetype: string}
+  type blob = {cid: Cid.t; mimetype: string}
 
-  type blob_with_contents = {id: int; cid: Cid.t; mimetype: string; data: Blob.t}
+  type blob_with_contents = {cid: Cid.t; mimetype: string; data: Blob.t}
 end
 
 open Types
@@ -221,27 +221,33 @@ module Queries = struct
       [%rapper
         execute
           {sql| CREATE TABLE IF NOT EXISTS blobs (
-                id INTEGER PRIMARY KEY,
-                cid TEXT NOT NULL UNIQUE,
+                cid TEXT PRIMARY KEY,
                 mimetype TEXT NOT NULL
               )
           |sql}]
         () conn
     in
-    [%rapper
-      execute
-        {sql| CREATE TABLE IF NOT EXISTS blobs_records (
-                  blob_id INTEGER NOT NULL REFERENCES blobs(id) ON DELETE CASCADE,
-                  record_path TEXT NOT NULL REFERENCES records(path) ON DELETE CASCADE,
-                  PRIMARY KEY (blob_id, record_path)
+    let$! () =
+      [%rapper
+        execute
+          (* no `references` on blob_cid because blobs may be uploaded later *)
+          {sql| CREATE TABLE IF NOT EXISTS blobs_records (
+                  record_path TEXT NOT NULL REFERENCES records(path),
+                  blob_cid TEXT NOT NULL,
+                  PRIMARY KEY (record_path, blob_cid)
                 )
           |sql}]
+        () conn
+    in
+    [%rapper
+      execute
+        {sql| CREATE INDEX IF NOT EXISTS blobs_records_blob_cid_idx ON blobs_records (blob_cid) |sql}]
       () conn
 
   let get_blob =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @CID{cid}, @string{mimetype} FROM blobs WHERE cid = %CID{cid} |sql}
+        {sql| SELECT @CID{cid}, @string{mimetype} FROM blobs WHERE cid = %CID{cid} |sql}
         record_out]
 
   let list_blobs =
@@ -260,8 +266,22 @@ module Queries = struct
               SELECT MIN(records.since)
               FROM blobs_records
               JOIN records ON records.path = blobs_records.record_path
-              WHERE blobs_records.blob_id = blobs.id
+              WHERE blobs_records.blob_cid = blobs.cid
             ) > %string{since}
+          ORDER BY cid
+          LIMIT %int{limit}
+        |sql}]
+
+  let list_missing_blobs =
+    [%rapper
+      get_many
+        {sql|
+          SELECT @string{record_path}, @CID{blob_cid}
+          FROM blobs_records
+          WHERE NOT EXISTS (
+            SELECT 1 FROM blobs WHERE cid = blobs_records.blob_cid
+          )
+          AND cid > %string{cursor}
           ORDER BY cid
           LIMIT %int{limit}
         |sql}]
@@ -273,7 +293,7 @@ module Queries = struct
     [%rapper
       get_one
         {sql| SELECT @int{COUNT(*)} FROM blobs WHERE cid IN (
-                SELECT blob_id FROM blobs_records
+                SELECT blob_cid FROM blobs_records
               )
         |sql}]
 
@@ -283,7 +303,7 @@ module Queries = struct
         {sql| INSERT INTO blobs (cid, mimetype)
               VALUES (%CID{cid}, %string{mimetype})
               ON CONFLICT (cid) DO UPDATE SET mimetype = excluded.mimetype
-              RETURNING @int{id}
+              RETURNING @CID{cid}
         |sql}]
       ~cid ~mimetype
 
@@ -294,14 +314,14 @@ module Queries = struct
     [%rapper
       get_many
         {sql| DELETE FROM blobs
-              WHERE id IN (
-                  SELECT blob_id FROM blobs_records WHERE record_path = %string{path}
+              WHERE cid IN (
+                  SELECT blob_cid FROM blobs_records WHERE record_path = %string{path}
               )
               AND NOT EXISTS (
                   SELECT 1 FROM blobs_records
-                  WHERE blob_id = blobs.id AND record_path != %string{path}
+                  WHERE blob_cid = blobs.cid AND record_path != %string{path}
               )
-              RETURNING @string{cid}
+              RETURNING @CID{cid}
         |sql}]
       ~path
 
@@ -314,8 +334,8 @@ module Queries = struct
   let put_blob_ref cid path =
     [%rapper
       execute
-        {sql| INSERT INTO blobs_records (blob_id, record_path) VALUES (
-                (SELECT id FROM blobs WHERE cid = %CID{cid} LIMIT 1),
+        {sql| INSERT INTO blobs_records (blob_cid, record_path) VALUES (
+                %CID{cid},
                 %string{path}
               )
               ON CONFLICT DO NOTHING
@@ -327,8 +347,8 @@ module Queries = struct
       execute
         {sql| DELETE FROM blobs_records
               WHERE record_path LIKE %string{path}
-              AND blob_id IN (
-                SELECT id FROM blobs WHERE cid IN (%list{%CID{cids}})
+              AND blob_cid IN (
+                SELECT cid FROM blobs WHERE cid IN (%list{%CID{cids}})
               )
         |sql}]
       ~path ~cids
@@ -467,7 +487,11 @@ let delete_record t path : unit Lwt.t =
           let$! deleted_blobs =
             Queries.delete_orphaned_blobs_by_record_path path conn
           in
-          let () = List.iter (delete_blob_file ~did:t.did) deleted_blobs in
+          let () =
+            List.iter
+              (fun cid -> delete_blob_file ~did:t.did (Cid.to_string cid))
+              deleted_blobs
+          in
           del ) )
 
 (* blobs *)
@@ -477,7 +501,7 @@ let get_blob t cid : blob_with_contents option Lwt.t =
   | None ->
       Lwt.return_none
   | Some blob ->
-      let {id; cid; mimetype} : blob = blob in
+      let {cid; mimetype} : blob = blob in
       let file =
         Filename.concat
           (Util.Constants.user_blobs_location t.did)
@@ -486,7 +510,7 @@ let get_blob t cid : blob_with_contents option Lwt.t =
       let data =
         In_channel.with_open_bin file In_channel.input_all |> Bytes.of_string
       in
-      Lwt.return_some {id; cid; mimetype; data}
+      Lwt.return_some {cid; mimetype; data}
 
 let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
   Util.use_pool t.db
@@ -497,12 +521,16 @@ let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
   | None ->
       Queries.list_blobs ~limit ~cursor
 
+let list_missing_blobs ?(limit = 500) ?(cursor = "") t :
+    (string * Cid.t) list Lwt.t =
+  Util.use_pool t.db @@ Queries.list_missing_blobs ~limit ~cursor
+
 let count_blobs t : int Lwt.t = Util.use_pool t.db @@ Queries.count_blobs ()
 
 let count_referenced_blobs t : int Lwt.t =
   Util.use_pool t.db @@ Queries.count_referenced_blobs ()
 
-let put_blob t cid mimetype data : int Lwt.t =
+let put_blob t cid mimetype data : Cid.t Lwt.t =
   let file =
     Filename.concat
       (Util.Constants.user_blobs_location t.did)
@@ -516,7 +544,7 @@ let delete_blob t cid : unit Lwt.t =
   delete_blob_file ~did:t.did (Cid.to_string cid) ;
   Util.use_pool t.db @@ Queries.delete_blob cid
 
-let delete_orphaned_blobs_by_record_path t path : string list Lwt.t =
+let delete_orphaned_blobs_by_record_path t path : Cid.t list Lwt.t =
   Util.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
 
 let list_blob_refs t path : Cid.t list Lwt.t =
