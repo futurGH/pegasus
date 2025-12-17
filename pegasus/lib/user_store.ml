@@ -281,8 +281,8 @@ module Queries = struct
           WHERE NOT EXISTS (
             SELECT 1 FROM blobs WHERE cid = blobs_records.blob_cid
           )
-          AND cid > %string{cursor}
-          ORDER BY cid
+          AND blob_cid > %string{cursor}
+          ORDER BY blob_cid
           LIMIT %int{limit}
         |sql}]
 
