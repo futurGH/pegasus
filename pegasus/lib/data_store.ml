@@ -18,6 +18,12 @@ module Types = struct
   type invite_code = {code: string; did: string; remaining: int}
 
   type firehose_event = {seq: int; time: int; t: string; data: bytes}
+
+  type reserved_key =
+    { key_did: string
+    ; did: string option
+    ; private_key: string
+    ; created_at: int }
 end
 
 open Types
@@ -59,6 +65,18 @@ module Queries = struct
     [%rapper
       execute
         {sql| UPDATE actors SET deactivated_at = NULL WHERE did = %string{did}
+        |sql}]
+
+  let deactivate_actor =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET deactivated_at = %int{deactivated_at} WHERE did = %string{did}
+        |sql}]
+
+  let delete_actor =
+    [%rapper
+      execute
+        {sql| DELETE FROM actors WHERE did = %string{did}
         |sql}]
 
   let update_actor_handle =
@@ -106,6 +124,44 @@ module Queries = struct
         {sql| UPDATE invite_codes SET remaining = remaining - 1
               WHERE code = %string{code} AND remaining > 0
               RETURNING @int{remaining}
+        |sql}]
+
+  (* reserved keys *)
+  let create_reserved_key =
+    [%rapper
+      execute
+        {sql| INSERT INTO reserved_keys (key_did, did, private_key, created_at)
+              VALUES (%string{key_did}, %string?{did}, %string{private_key}, %int{created_at})
+        |sql}]
+
+  let get_reserved_key_by_did did =
+    [%rapper
+      get_opt
+        {sql| SELECT @string{key_did}, @string?{did}, @string{private_key}, @int{created_at}
+              FROM reserved_keys WHERE did = %string{did}
+        |sql}
+        record_out]
+      did
+
+  let get_reserved_key key_did =
+    [%rapper
+      get_opt
+        {sql| SELECT @string{key_did}, @string?{did}, @string{private_key}, @int{created_at}
+              FROM reserved_keys WHERE key_did = %string{key_did}
+        |sql}
+        record_out]
+      key_did
+
+  let delete_reserved_key =
+    [%rapper
+      execute
+        {sql| DELETE FROM reserved_keys WHERE key_did = %string{key_did}
+        |sql}]
+
+  let delete_reserved_keys_by_did =
+    [%rapper
+      execute
+        {sql| DELETE FROM reserved_keys WHERE did = %string{did}
         |sql}]
 
   (* 2fa *)
@@ -218,6 +274,12 @@ let get_actor_by_identifier id conn =
 
 let activate_actor did conn = Util.use_pool conn @@ Queries.activate_actor ~did
 
+let deactivate_actor did conn =
+  let deactivated_at = Util.now_ms () in
+  Util.use_pool conn @@ Queries.deactivate_actor ~did ~deactivated_at
+
+let delete_actor did conn = Util.use_pool conn @@ Queries.delete_actor ~did
+
 let update_actor_handle ~did ~handle conn =
   Util.use_pool conn @@ Queries.update_actor_handle ~did ~handle
 
@@ -246,6 +308,24 @@ let create_invite ~code ~did ~remaining conn =
 let get_invite ~code conn = Util.use_pool conn @@ Queries.get_invite ~code
 
 let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
+
+(* reserved keys *)
+let create_reserved_key ~key_did ~did ~private_key conn =
+  let created_at = Util.now_ms () in
+  Util.use_pool conn
+  @@ Queries.create_reserved_key ~key_did ~did ~private_key ~created_at
+
+let get_reserved_key_by_did ~did conn =
+  Util.use_pool conn @@ Queries.get_reserved_key_by_did ~did
+
+let get_reserved_key ~key_did conn =
+  Util.use_pool conn @@ Queries.get_reserved_key ~key_did
+
+let delete_reserved_key ~key_did conn =
+  Util.use_pool conn @@ Queries.delete_reserved_key ~key_did
+
+let delete_reserved_keys_by_did ~did conn =
+  Util.use_pool conn @@ Queries.delete_reserved_keys_by_did ~did
 
 (* 2fa *)
 let set_auth_code ~did ~code ~expires_at conn =

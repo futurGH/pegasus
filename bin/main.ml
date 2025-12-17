@@ -69,6 +69,18 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.resetPassword"
     , Api.Server.ResetPassword.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.reserveSigningKey"
+    , Api.Server.ReserveSigningKey.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.requestAccountDelete"
+    , Api.Server.RequestAccountDelete.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.deleteAccount"
+    , Api.Server.DeleteAccount.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.deactivateAccount"
+    , Api.Server.DeactivateAccount.handler )
   ; ( get
     , "/xrpc/com.atproto.repo.listMissingBlobs"
     , Api.Repo.ListMissingBlobs.handler )

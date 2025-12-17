@@ -243,21 +243,35 @@ let transact conn fn : (unit, 'e) Lwt_result.t =
   let module C = (val conn : Caqti_lwt.CONNECTION) in
   match%lwt C.start () with
   | Ok () -> (
-    match%lwt fn () with
-    | Ok _ -> (
-      match%lwt C.commit () with
-      | Ok () ->
-          Lwt.return_ok ()
+    try%lwt
+      match%lwt fn () with
+      | Ok _ -> (
+        match%lwt C.commit () with
+        | Ok () ->
+            Lwt.return_ok ()
+        | Error e -> (
+          match%lwt C.rollback () with
+          | Ok () ->
+              Lwt.return_error e
+          | Error e ->
+              Lwt.return_error e ) )
       | Error e -> (
         match%lwt C.rollback () with
         | Ok () ->
             Lwt.return_error e
         | Error e ->
-            Lwt.return_error e ) )
-    | Error e -> (
+            Lwt.return_error e )
+    with e -> (
       match%lwt C.rollback () with
       | Ok () ->
-          Lwt.return_error e
+          Lwt.return_error
+            ( match e with
+            | Caqti_error.Exn e ->
+                e
+            | e ->
+                Caqti_error.request_failed ~query:"unknown"
+                  ~uri:(Uri.of_string "//unknown")
+                  (Caqti_error.Msg (Printexc.to_string e)) )
       | Error e ->
           Lwt.return_error e ) )
   | Error e ->
