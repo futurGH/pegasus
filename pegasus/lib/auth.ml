@@ -302,6 +302,22 @@ module Verifiers = struct
               Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
         ) )
 
+  let session : verifier =
+   fun {req; db} ->
+    match%lwt Session.Raw.get_current_did req with
+    | Some did -> (
+      match%lwt Data_store.get_actor_by_identifier did db with
+      | Some {deactivated_at= None; _} ->
+          Lwt.return_ok (Access {did})
+      | Some {deactivated_at= Some _; _} ->
+          Lwt.return_error
+          @@ Errors.auth_required ~name:"AccountDeactivated"
+               "account is deactivated"
+      | None ->
+          Lwt.return_error @@ Errors.auth_required "invalid session" )
+    | None ->
+        Lwt.return_error @@ Errors.auth_required "no active session"
+
   let refresh : verifier =
    fun {req; db} ->
     match parse_bearer req with
@@ -334,10 +350,14 @@ module Verifiers = struct
         bearer ctx
     | Some ("DPoP" :: _) ->
         oauth ctx
-    | _ ->
-        Lwt.return_error
-        @@ Errors.auth_required ~name:"InvalidToken"
-             "unexpected authorization type"
+    | _ -> (
+      match%lwt session ctx with
+      | Ok creds ->
+          Lwt.return_ok creds
+      | Error _ ->
+          Lwt.return_error
+          @@ Errors.auth_required ~name:"InvalidToken"
+               "unexpected authorization type" )
 
   let any : verifier =
    fun ctx -> try authorization ctx with _ -> unauthenticated ctx
@@ -349,6 +369,7 @@ module Verifiers = struct
     | DPoP
     | OAuth
     | Refresh
+    | Session
     | Authorization
     | Any
 
@@ -365,6 +386,8 @@ module Verifiers = struct
         oauth
     | Refresh ->
         refresh
+    | Session ->
+        session
     | Authorization ->
         authorization
     | Any ->
