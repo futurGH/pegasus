@@ -45,8 +45,7 @@ let handler =
                         ~default:latest.operation.services
                   ; prev= Some latest.cid }
               in
-              let signing_key = Kleidos.parse_multikey_str actor.signing_key in
-              let signed_op = Plc.sign_operation signing_key unsigned_op in
+              let signed_op = Plc.sign_operation Env.rotation_key unsigned_op in
               let%lwt () = Data_store.clear_auth_code ~did db in
               let res = {operation= signed_op} in
               res |> response_to_yojson |> Yojson.Safe.to_string

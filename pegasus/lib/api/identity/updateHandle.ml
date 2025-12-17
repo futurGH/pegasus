@@ -32,15 +32,8 @@ let handler =
                       | false ->
                           ("at://" ^ handle) :: latest.operation.also_known_as
                     in
-                    let%lwt signing_key =
-                      match%lwt Data_store.get_actor_by_identifier did db with
-                      | Some {signing_key; _} ->
-                          Lwt.return @@ Kleidos.parse_multikey_str signing_key
-                      | _ ->
-                          Errors.internal_error ()
-                    in
                     let signed =
-                      Plc.sign_operation signing_key
+                      Plc.sign_operation Env.rotation_key
                         (Operation
                            { type'= "plc_operation"
                            ; prev= Some latest.cid
