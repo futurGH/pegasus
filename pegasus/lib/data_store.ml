@@ -196,6 +196,20 @@ module Queries = struct
               WHERE did = %string{did}
         |sql}]
 
+  let update_email =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET email = %string{email}, email_confirmed_at = NULL, auth_code = NULL, auth_code_expires_at = NULL
+              WHERE did = %string{did}
+        |sql}]
+
+  let confirm_email =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET email_confirmed_at = %int{confirmed_at}, auth_code = NULL, auth_code_expires_at = NULL
+              WHERE did = %string{did}
+        |sql}]
+
   (* firehose *)
   let firehose_insert =
     [%rapper
@@ -340,6 +354,13 @@ let get_actor_by_auth_code ~code conn =
 let update_password ~did ~password conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
   Util.use_pool conn @@ Queries.update_password ~did ~password_hash
+
+let update_email ~did ~email conn =
+  Util.use_pool conn @@ Queries.update_email ~did ~email
+
+let confirm_email ~did conn =
+  let confirmed_at = Util.now_ms () in
+  Util.use_pool conn @@ Queries.confirm_email ~did ~confirmed_at
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =

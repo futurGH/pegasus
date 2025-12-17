@@ -39,6 +39,9 @@ let handlers =
     , "/xrpc/com.atproto.server.createInviteCode"
     , Api.Server.CreateInviteCode.handler )
   ; ( post
+    , "/xrpc/com.atproto.server.createInviteCodes"
+    , Api.Server.CreateInviteCodes.handler )
+  ; ( post
     , "/xrpc/com.atproto.server.createAccount"
     , Api.Server.CreateAccount.handler )
   ; ( post
@@ -64,6 +67,9 @@ let handlers =
     , "/xrpc/com.atproto.server.requestEmailUpdate"
     , Api.Server.RequestEmailUpdate.handler )
   ; ( post
+    , "/xrpc/com.atproto.server.confirmEmail"
+    , Api.Server.ConfirmEmail.handler )
+  ; ( post
     , "/xrpc/com.atproto.server.requestPasswordReset"
     , Api.Server.RequestPasswordReset.handler )
   ; ( post
@@ -87,6 +93,9 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.identity.updateHandle"
     , Api.Identity.UpdateHandle.handler )
+  ; ( post
+    , "/xrpc/com.atproto.server.updateEmail"
+    , Api.Server.UpdateEmail.handler )
   ; (* plc *)
     ( get
     , "/xrpc/com.atproto.identity.getRecommendedDidCredentials"
