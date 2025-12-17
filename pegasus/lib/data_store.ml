@@ -55,6 +55,12 @@ module Queries = struct
         record_out]
       id
 
+  let activate_actor =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET deactivated_at = NULL WHERE did = %string{did}
+        |sql}]
+
   let update_actor_handle =
     [%rapper
       execute
@@ -192,6 +198,8 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
 
 let get_actor_by_identifier id conn =
   Util.use_pool conn @@ Queries.get_actor_by_identifier ~id
+
+let activate_actor did conn = Util.use_pool conn @@ Queries.activate_actor ~did
 
 let update_actor_handle ~did ~handle conn =
   Util.use_pool conn @@ Queries.update_actor_handle ~did ~handle
