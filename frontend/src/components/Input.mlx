@@ -4,8 +4,8 @@ open React
 let req_marker = " *"
 
 let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
-    ?(sr_only = false) ?value ?placeholder ?(required = false)
-    ?(disabled = false) ?trailing () =
+    ?(sr_only = false) ?value ?placeholder ?autoComplete ?(required = false)
+    ?(disabled = false) ?trailing ?(show_optional_indicator = true) () =
   let id = Option.value id ~default:name in
   let placeholder = if label <> None && sr_only then label else placeholder in
   let input =
@@ -14,6 +14,7 @@ let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
       type_
       name
       ?placeholder
+      ?autoComplete
       required
       disabled
       ?value
@@ -27,13 +28,13 @@ let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
         <div
           className=( "flex justify-between text-sm"
                     ^ if sr_only then " sr-only" else "" )>
-          <label htmlFor=id className="text-mist-100">
+          <label htmlFor=id className="text-mist-100 mb-1">
             (string label)
             ( if required then
                 <span className="text-phoenix-100">(string req_marker)</span>
               else null )
           </label>
-          ( if required then null
+          ( if required || not show_optional_indicator then null
             else <span className="text-mist-80">(string "optional")</span> )
         </div>
     | None ->

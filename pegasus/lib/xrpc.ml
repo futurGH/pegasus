@@ -9,19 +9,24 @@ type handler = context -> Dream.response Lwt.t
 
 let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
   let open Errors in
-  let auth = Auth.Verifiers.of_t auth in
-  try%lwt
-    match%lwt auth init with
-    | Ok creds -> (
-      try%lwt hdlr {req= init.req; db= init.db; auth= creds}
-      with e ->
+  try
+    let auth = Auth.Verifiers.of_t auth in
+    try%lwt
+      match%lwt auth init with
+      | Ok creds -> (
+        try%lwt hdlr {req= init.req; db= init.db; auth= creds}
+        with e ->
+          if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+          exn_to_response e )
+      | Error e ->
+          exn_to_response e
+    with
+    | Redirect r ->
+        Dream.redirect init.req r
+    | e ->
         if not (is_xrpc_error e) then log_exn ~req:init.req e ;
-        exn_to_response e )
-    | Error e ->
         exn_to_response e
-  with e ->
-    if not (is_xrpc_error e) then log_exn ~req:init.req e ;
-    exn_to_response e
+  with Redirect r -> Dream.redirect init.req r
 
 let parse_query (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a =

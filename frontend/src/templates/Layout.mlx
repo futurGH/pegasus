@@ -5,6 +5,27 @@ let[@react.component] make ?(title = "Pegasus") ?(children = null) () =
     <head>
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <link
+        rel="preload"
+        href="/public/fonts/FragmentLight.woff2"
+        as_="font"
+        type_="font/woff2"
+        crossOrigin="anonymous"
+      />
+      <link
+        rel="preload"
+        href="/public/fonts/FragmentRegular.woff2"
+        as_="font"
+        type_="font/woff2"
+        crossOrigin="anonymous"
+      />
+      <link
+        rel="preload"
+        href="https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2"
+        as_="font"
+        type_="font/woff2"
+        crossOrigin="anonymous"
+      />
       <link rel="stylesheet" href="/public/index.css" />
       <title>(string title)</title>
     </head>

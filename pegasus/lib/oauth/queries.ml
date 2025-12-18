@@ -140,3 +140,51 @@ let get_oauth_tokens_by_did conn did =
       |sql}
          record_out]
        ~did
+
+let get_distinct_clients_by_did conn did =
+  Util.use_pool conn
+  @@ [%rapper
+       get_many
+         {sql|
+        SELECT DISTINCT @string{client_id}, MAX(@int{last_refreshed_at}) as last_refreshed_at
+        FROM oauth_tokens
+        WHERE did = %string{did}
+        GROUP BY client_id
+        ORDER BY last_refreshed_at DESC
+      |sql}]
+       ~did
+
+let get_distinct_devices_by_did conn did =
+  Util.use_pool conn
+  @@ [%rapper
+       get_many
+         {sql|
+        SELECT @string{last_ip}, @string?{last_user_agent},
+               MAX(@int{last_refreshed_at}) as last_refreshed_at
+        FROM oauth_tokens
+        WHERE did = %string{did}
+        GROUP BY last_ip, last_user_agent
+        ORDER BY last_refreshed_at DESC
+      |sql}]
+       ~did
+
+let delete_oauth_tokens_by_client conn ~did ~client_id =
+  Util.use_pool conn
+  @@ [%rapper
+       execute
+         {sql|
+        DELETE FROM oauth_tokens
+        WHERE did = %string{did} AND client_id = %string{client_id}
+      |sql}]
+       ~did ~client_id
+
+let delete_oauth_tokens_by_device conn ~did ~last_ip ~last_user_agent =
+  Util.use_pool conn
+  @@ [%rapper
+       execute
+         {sql|
+        DELETE FROM oauth_tokens
+        WHERE did = %string{did} AND last_ip = %string{last_ip}
+          AND (last_user_agent = %string?{last_user_agent} OR (last_user_agent IS NULL AND %string?{last_user_agent} IS NULL))
+      |sql}]
+       ~did ~last_ip ~last_user_agent

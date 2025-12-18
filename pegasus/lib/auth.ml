@@ -309,6 +309,11 @@ module Verifiers = struct
       match%lwt Data_store.get_actor_by_identifier did db with
       | Some {deactivated_at= None; _} ->
           Lwt.return_ok (Access {did})
+      | Some {deactivated_at= Some _; _} when Dream.target req = "/account" ->
+          Lwt.return_ok (Access {did})
+      | Some {deactivated_at= Some _; _}
+        when String.starts_with ~prefix:"/account" (Dream.target req) ->
+          raise (Errors.Redirect "/account")
       | Some {deactivated_at= Some _; _} ->
           Lwt.return_error
           @@ Errors.auth_required ~name:"AccountDeactivated"

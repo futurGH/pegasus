@@ -14,6 +14,8 @@ type route = {path: string; template: (module Template)}
 
 let routes =
   [ {path= "/oauth/authorize"; template= (module OauthAuthorizePage)}
+  ; {path= "/account"; template= (module AccountPage)}
+  ; {path= "/account/permissions"; template= (module AccountPermissionsPage)}
   ; {path= "/account/login"; template= (module LoginPage)} ]
 
 let find_by_path path_to_find =

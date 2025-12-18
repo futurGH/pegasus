@@ -5,6 +5,33 @@ module Button = struct
 end
 [@@platform js]
 
+module Dialog = struct
+  external make :
+    children:React.element -> ?className:string -> ?role:string -> React.element
+    = "Dialog"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module DialogTrigger = struct
+  external make :
+       children:React.element
+    -> ?isOpen:bool
+    -> ?defaultOpen:bool
+    -> ?onOpenChange:(bool -> unit)
+    -> React.element = "DialogTrigger"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Heading = struct
+  external make :
+    children:React.element -> ?slot:string -> ?className:string -> React.element
+    = "Heading"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
 module ListBox = struct
   external make : children:React.element -> ?className:string -> React.element
     = "ListBox"
@@ -23,12 +50,42 @@ module ListBoxItem = struct
 end
 [@@platform js]
 
+module Modal = struct
+  external make :
+       children:React.element
+    -> ?className:string
+    -> ?isDismissable:bool
+    -> ?isOpen:bool
+    -> ?onOpenChange:(bool -> unit)
+    -> React.element = "Modal"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module ModalOverlay = struct
+  external make :
+       children:React.element
+    -> ?className:string
+    -> ?isDismissable:bool
+    -> ?isOpen:bool
+    -> ?onOpenChange:(bool -> unit)
+    -> React.element = "ModalOverlay"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
 module Popover = struct
   external make :
        children:React.element
     -> ?className:string
     -> ?style:ReactDOM.Style.t
     -> React.element = "Popover"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Pressable = struct
+  external make : children:React.element -> React.element = "Pressable"
   [@@mel.module "react-aria-components"] [@@react.component]
 end
 [@@platform js]
@@ -40,6 +97,7 @@ module Select = struct
     -> ?name:string
     -> ?value:string
     -> ?defaultValue:string
+    -> ?placeholder:string
     -> ?onChange:(string -> unit)
     -> React.element = "Select"
   [@@mel.module "react-aria-components"] [@@react.component]

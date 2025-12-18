@@ -140,7 +140,7 @@ let list_logged_in_actors req db =
       Lwt_list.filter_map_s
         (fun did ->
           match%lwt Data_store.get_actor_by_identifier did db with
-          | Some {deactivated_at= None; handle; _} -> (
+          | Some {handle; _} -> (
               let actor : Frontend.OauthAuthorizePage.actor =
                 {did; handle; avatar_data_uri= None}
               in
@@ -164,8 +164,6 @@ let list_logged_in_actors req db =
                     Lwt.return_some actor )
               | None ->
                   Lwt.return_some actor )
-          | Some {deactivated_at= Some _; _} ->
-              Lwt.return_none
-          | None ->
+          | _ ->
               Lwt.return_none )
         dids

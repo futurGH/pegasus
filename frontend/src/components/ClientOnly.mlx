@@ -1,8 +1,9 @@
 open React
 
-let[@react.component] make ~(children : unit -> React.element) () =
+let[@react.component] make ~(children : unit -> React.element)
+    ?(fallback = null) () =
   let is_mounted, set_mounted = useState (fun () -> false) in
   useEffect (fun () ->
       let () = set_mounted (fun _ -> true) in
       None ) ;
-  if is_mounted then children () else null
+  if is_mounted then children () else fallback

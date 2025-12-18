@@ -6,6 +6,8 @@ exception AuthError of (string * string)
 
 exception NotFoundError of (string * string)
 
+exception Redirect of string
+
 exception UseDpopNonceError
 
 let is_xrpc_error = function

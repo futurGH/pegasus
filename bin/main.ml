@@ -23,7 +23,11 @@ let handlers =
   ; (options, "/oauth/token", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (post, "/oauth/token", Api.Oauth_.Token.post_handler)
   ; (* account *)
-    (get, "/account/login", Api.Account_.Login.get_handler)
+    (get, "/account", Api.Account_.Index.get_handler)
+  ; (post, "/account", Api.Account_.Index.post_handler)
+  ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
+  ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
+  ; (get, "/account/login", Api.Account_.Login.get_handler)
   ; (post, "/account/login", Api.Account_.Login.post_handler)
   ; (get, "/account/logout", Api.Account_.Logout.handler)
   ; (* unauthed *)
@@ -147,7 +151,9 @@ let public_loader _root path _request =
   | None ->
       Dream.empty `Not_Found
   | Some asset ->
-      Dream.respond asset
+      Dream.respond
+        ~headers:[("Cache-Control", "public, max-age=31536000")]
+        asset
 
 let static_routes =
   [Dream.get "/public/**" (Dream.static ~loader:public_loader "")]
@@ -161,6 +167,7 @@ let main =
        [ Dream.logger
        ; Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
        ; Dream.cookie_sessions
+       ; Dream.livereload
        ; Xrpc.dpop_middleware
        ; Xrpc.cors_middleware ]
   @@ Dream.router

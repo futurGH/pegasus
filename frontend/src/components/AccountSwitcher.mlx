@@ -1,0 +1,93 @@
+[@@@ocaml.warning "-26-27-33"]
+
+open Melange_json.Primitives
+open React
+module Aria = ReactAria
+
+type actor =
+  {did: string; handle: string; avatar_data_uri: string option [@default None]}
+[@@deriving json]
+
+let fallback handle =
+  <button className="flex px-2 py-1.5 -mx-2 rounded-lg">
+    <span className="text-mana-100 font-serif flex items-center gap-x-2">
+      <div className="w-5 h-5 mr-1 rounded-md bg-mist-20" />
+      <span className="self-baseline">(string ("@" ^ handle))</span>
+      <ChevronDownIcon
+        className="w-3 h-3 mt-0.5 text-mana-100"
+        strokeWidth="3"
+      />
+    </span>
+  </button>
+
+let[@react.component] make ~current_user ~logged_in_users ~add_account_url
+    ?(name = "did") ?(inline = false) ?onChange () =
+  let button_class =
+    if inline then
+      "group inline-flex flex-row items-center px-1.5 py-1 -mx-0.75 -my-1 \
+       rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
+       active:bg-mist-20/40"
+    else
+      "group flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 rounded-lg \
+       focus-visible:outline-none hover:bg-mist-20/40 active:bg-mist-20/40"
+  in
+  let value_class =
+    if inline then "text-mana-100 font-serif inline-flex items-center gap-x-1"
+    else "text-mana-100 font-serif flex items-center gap-x-1"
+  in
+  <ClientOnly fallback=(fallback current_user.handle)>
+  [%browser_only
+    (fun () ->
+      <Aria.Select name className="inline" defaultValue=current_user.did placeholder="select account" ?onChange>
+        <Aria.Button className=button_class>
+          <Aria.SelectValue className=value_class />
+        </Aria.Button>
+        <Aria.Popover
+          style=
+            (ReactDOM.Style.make
+               ~minWidth:"calc(var(--trigger-width) + var(--spacing) * 3)" () )
+          className="focus-visible:outline-none">
+          <Aria.ListBox
+            className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \
+                       bg-mist-20 font-light">
+            ( List.map
+                (fun (user : actor) ->
+                  <Aria.ListBoxItem
+                    className="flex flex-row items-center py-1.5 px-2 gap-x-1 \
+                               font-serif text-mist-100 rounded-md \
+                               focus-visible:outline-none \
+                               data-hovered:text-mist-20 \
+                               data-focused:text-mist-20 \
+                               data-hovered:bg-mana-100 \
+                               data-focused:bg-mana-100"
+                    key=user.did
+                    id=user.did>
+                    ( match user.avatar_data_uri with
+                    | Some src ->
+                        <img src className="w-5 h-5 mr-1 rounded-md" />
+                    | None ->
+                        null )
+                    <span className="self-baseline select-none">
+                      (string ("@" ^ user.handle))
+                    </span>
+                    <ChevronDownIcon
+                      className="w-3 h-3 mt-0.5 text-mana-100 hidden \
+                                 group-aria-[haspopup]:inline"
+                      strokeWidth="3"
+                    />
+                  </Aria.ListBoxItem> )
+                logged_in_users
+            |> Array.of_list |> array )
+            <Aria.ListBoxItem
+              className="flex flex-row items-center p-1 pl-2 text-mana-100 \
+                         font-normal underline rounded-md \
+                         focus-visible:outline-none \
+                         data-hovered:text-mist-20 data-focused:text-mist-20 \
+                         data-hovered:bg-mana-100 data-focused:bg-mana-100"
+              href=add_account_url>
+              (string "add account")
+            </Aria.ListBoxItem>
+          </Aria.ListBox>
+        </Aria.Popover>
+      </Aria.Select> )]
+  </ClientOnly>

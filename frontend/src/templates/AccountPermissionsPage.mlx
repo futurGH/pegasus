@@ -1,0 +1,192 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type actor = AccountSwitcher.actor =
+  {did: string; handle: string; avatar_data_uri: string option [@default None]}
+[@@deriving json]
+
+type authorized_app =
+  { client_id: string
+  ; client_name: string option [@default None]
+  ; client_host: string }
+[@@deriving json]
+
+type device =
+  { last_ip: string
+  ; last_user_agent: string option [@default None]
+  ; last_refreshed_at: int
+  ; is_current: bool }
+[@@deriving json]
+
+type props =
+  { current_user: actor
+  ; logged_in_users: actor list
+  ; csrf_token: string
+  ; authorized_apps: authorized_app list
+  ; devices: device list }
+[@@deriving json]
+
+let parse_user_agent ua =
+  let ua = Option.value ua ~default:"Unknown" in
+  let os =
+    if String.length ua > 0 then
+      if
+        Js.String.includes ~search:"Mac" ua
+        || Js.String.includes ~search:"Macintosh" ua
+      then "macOS"
+      else if Js.String.includes ~search:"Windows" ua then "Windows"
+      else if Js.String.includes ~search:"Linux" ua then "Linux"
+      else if Js.String.includes ~search:"Android" ua then "Android"
+      else if
+        Js.String.includes ~search:"iPhone" ua
+        || Js.String.includes ~search:"iPad" ua
+      then "iOS"
+      else "Unknown OS"
+    else "Unknown OS"
+  in
+  let browser =
+    if String.length ua > 0 then
+      if
+        Js.String.includes ~search:"Chrome" ua
+        && not (Js.String.includes ~search:"Edg" ua)
+      then "Chrome"
+      else if Js.String.includes ~search:"Firefox" ua then "Firefox"
+      else if
+        Js.String.includes ~search:"Safari" ua
+        && not (Js.String.includes ~search:"Chrome" ua)
+      then "Safari"
+      else if Js.String.includes ~search:"Edg" ua then "Edge"
+      else "Unknown Browser"
+    else "Unknown Browser"
+  in
+  os ^ " · " ^ browser
+
+let format_date timestamp_ms =
+  let date = Js.Date.fromFloat (float_of_int timestamp_ms) in
+  let month = Js.Date.getMonth date |> int_of_float in
+  let day = Js.Date.getDate date |> int_of_float in
+  let year = Js.Date.getFullYear date |> int_of_float in
+  Printf.sprintf "%d/%d/%d" year (month + 1) day
+
+let[@react.component] make
+    ~props:
+      ({current_user; logged_in_users; csrf_token; authorized_apps; devices} :
+        props ) () =
+  <div className="w-auto h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
+    <AccountSidebar
+      current_user logged_in_users active_page=AccountSidebar.Permissions
+    />
+    <main className="flex-1 w-full max-w-md">
+      <section>
+        <h1 className="text-2xl font-serif text-mana-200 mb-1">
+          (string "authorized applications")
+        </h1>
+        <p className="text-mist-100 mb-4">
+          (string "These applications have access to your account or identity.")
+        </p>
+        ( if List.length authorized_apps = 0 then
+            <p className="text-mist-80 italic">
+              (string "No applications authorized.")
+            </p>
+          else
+            <ul className="space-y-2">
+              ( List.map
+                  (fun (app : authorized_app) ->
+                    <li key=app.client_id className="flex items-center gap-x-2">
+                      <span className="font-serif text-mana-100">
+                        (string
+                           (Option.value app.client_name
+                              ~default:app.client_host ) )
+                      </span>
+                      ( match app.client_name with
+                      | Some _ ->
+                          <span className="text-mist-80">
+                            (string ("(" ^ app.client_host ^ ")"))
+                          </span>
+                      | None ->
+                          null )
+                      <span className="text-mist-80">(string "-")</span>
+                      <form className="inline">
+                        <input type_="hidden" name="dream.csrf" value=csrf_token
+                        />
+                        <input
+                          type_="hidden" name="client_id" value=app.client_id
+                        />
+                        <button
+                          type_="submit"
+                          formMethod="post"
+                          name="action"
+                          value="revoke_app"
+                          className="text-mist-100 underline \
+                                     hover:text-mana-100">
+                          (string "revoke access")
+                        </button>
+                      </form>
+                    </li> )
+                  authorized_apps
+              |> Array.of_list |> array )
+            </ul> )
+      </section>
+      <section className="mt-8">
+        <h2 className="text-xl font-serif text-mana-200 mb-1">
+          (string "my devices")
+        </h2>
+        <p className="text-mist-100 mb-4">
+          (string "Your account can be accessed from any of these devices.")
+        </p>
+        ( if List.length devices = 0 then
+            <p className="text-mist-80 italic">(string "No devices found.")</p>
+          else
+            <ul className="space-y-3">
+              ( List.mapi
+                  (fun i (device : device) ->
+                    let key = device.last_ip ^ "-" ^ string_of_int i in
+                    <li key className="flex flex-col">
+                      <div className="flex items-center gap-x-2">
+                        <span className="font-serif text-mana-100">
+                          (string (parse_user_agent device.last_user_agent))
+                        </span>
+                        ( if device.is_current then
+                            <span className="text-mist-80">
+                              (string "(this device)")
+                            </span>
+                          else null )
+                        <span className="text-mist-80">(string "-")</span>
+                        <form className="inline">
+                          <input
+                            type_="hidden" name="dream.csrf" value=csrf_token
+                          />
+                          <input
+                            type_="hidden" name="last_ip" value=device.last_ip
+                          />
+                          <input
+                            type_="hidden"
+                            name="last_user_agent"
+                            value=(Option.value device.last_user_agent
+                                     ~default:"" )
+                          />
+                          <button
+                            type_="submit"
+                            formMethod="post"
+                            name="action"
+                            value="sign_out_device"
+                            className="text-mist-100 underline \
+                                       hover:text-mana-100">
+                            (string "sign out")
+                          </button>
+                        </form>
+                      </div>
+                      <span className="text-sm text-mist-80">
+                        (string
+                           ( format_date device.last_refreshed_at
+                           ^ " from " ^ device.last_ip ) )
+                      </span>
+                    </li> )
+                  devices
+              |> Array.of_list |> array )
+            </ul> )
+      </section>
+    </main>
+  </div>

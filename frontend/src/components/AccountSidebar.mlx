@@ -1,0 +1,37 @@
+[@@@ocaml.warning "-26-27"]
+
+open React
+
+type actor = AccountSwitcher.actor
+
+type active_page = Account | Permissions
+
+let pages =
+  [ (Account, "Account", "/account")
+  ; (Permissions, "Permissions", "/account/permissions") ]
+
+let[@react.component] make ~current_user ~logged_in_users ~active_page () =
+  let selected_class = "text-mana-100 font-medium" in
+  let unselected_class = "text-mist-100 hover:text-mana-100" in
+  let permissions_class =
+    match active_page with
+    | Account ->
+        "text-mist-100 hover:text-mana-100"
+    | Permissions ->
+        "text-mana-100 font-medium"
+  in
+  <aside className="flex flex-col gap-y-2 min-w-48 max-w-3xs">
+    <AccountSwitcher
+      current_user logged_in_users add_account_url="/account/login"
+    />
+    <nav className="flex flex-col gap-y-1 mt-2">
+      ( List.map
+          (fun (key, label, href) ->
+            let className =
+              if key = active_page then selected_class else unselected_class
+            in
+            <a href className key=label>(string label)</a> )
+          pages
+      |> Array.of_list |> array )
+    </nav>
+  </aside>

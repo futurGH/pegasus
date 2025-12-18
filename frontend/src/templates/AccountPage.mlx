@@ -1,0 +1,426 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type actor = AccountSwitcher.actor =
+  {did: string; handle: string; avatar_data_uri: string option [@default None]}
+[@@deriving json]
+
+type props =
+  { current_user: actor
+  ; logged_in_users: actor list
+  ; csrf_token: string
+  ; handle: string
+  ; email: string
+  ; deactivated: bool [@default false]
+  ; email_change_pending: bool [@default false]
+  ; pending_email: string option [@default None]
+  ; email_error: string option [@default None]
+  ; delete_pending: bool [@default false]
+  ; error: string option [@default None]
+  ; success: string option [@default None]
+  ; delete_error: string option [@default None] }
+[@@deriving json]
+
+let[@react.component] make
+    ~props:
+      ({ current_user
+       ; logged_in_users
+       ; csrf_token
+       ; handle
+       ; email
+       ; deactivated
+       ; email_change_pending
+       ; pending_email
+       ; email_error
+       ; delete_pending
+       ; error
+       ; success
+       ; delete_error } :
+        props ) () =
+  let emailModalOpen, setEmailModalOpen =
+    useState (fun () -> email_change_pending)
+  in
+  let deleteModalOpen, setDeleteModalOpen =
+    useState (fun () -> delete_pending)
+  in
+  <div className="w-auto h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
+    <AccountSidebar
+      current_user logged_in_users active_page=AccountSidebar.Account
+    />
+    <main className="flex-1 w-full max-w-md">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "my account")
+      </h1>
+      ( if deactivated then
+          <div>
+            <p className="text-mist-100 mb-4">
+              (string
+                 "Your account is currently deactivated. Reactivate it to \
+                  regain access." )
+            </p>
+            ( match error with
+            | Some error ->
+                <span
+                  className="inline-flex items-center text-phoenix-100 text-sm \
+                             mb-4">
+                  <CircleAlertIcon className="w-4 h-4 mr-2" /> (string error)
+                </span>
+            | None ->
+                null )
+            <form>
+              <input type_="hidden" name="dream.csrf" value=csrf_token />
+              <Button
+                type_="submit"
+                formMethod="post"
+                name="action"
+                value="reactivate">
+                (string "reactivate account")
+              </Button>
+            </form>
+          </div>
+        else
+          <div>
+            <p className="text-mist-100 mb-4">
+              (string "Manage your identity.")
+            </p>
+            <form className="flex flex-col gap-y-3">
+              <input type_="hidden" name="dream.csrf" value=csrf_token />
+              <ClientOnly fallback=(
+              	<Input
+                    name="email"
+                    label="Email"
+                    placeholder=email
+                    show_optional_indicator=false
+                    disabled=true
+                    trailing=(
+                        <button
+                          type_="button"
+                          className="p-1 hover:text-mana-100 cursor-pointer"
+                          ariaLabel="Change email">
+                          <PencilLineIcon className="w-4 h-4" />
+                        </button>
+                    ) />
+              )>
+              [%browser_only
+	            (fun () ->
+	                let module Aria = ReactAria in
+	                <Aria.DialogTrigger defaultOpen=email_change_pending>
+	                <Input
+	                    name="email"
+	                    label="Email"
+	                    placeholder=email
+	                    show_optional_indicator=false
+	                    disabled=true
+	                    trailing=(
+	                    <Aria.Pressable>
+	                        <button
+	                        type_="button"
+	                        className="p-1 hover:text-mana-100 cursor-pointer"
+	                        ariaLabel="Change email"
+	                        onClick=(fun _ -> setEmailModalOpen (fun _ -> true))>
+	                        <PencilLineIcon className="w-4 h-4" />
+	                        </button>
+	                    </Aria.Pressable>
+	                    )
+	                />
+	                <Aria.ModalOverlay
+	                    className="fixed inset-0 z-50 bg-feather-100/80 \
+	                                flex items-center justify-center"
+	                    isDismissable=(not email_change_pending)
+	                    isOpen=emailModalOpen
+	                    onOpenChange=(fun o -> setEmailModalOpen (fun _ -> o))
+	                    >
+	                    <Aria.Modal
+	                    className="bg-feather-100 border border-mist-40 rounded-xl \
+	                                p-6 w-full max-w-sm shadow-xl">
+	                    <Aria.Dialog className="outline-none">
+	                        <Aria.Heading
+	                        slot="title"
+	                        className="text-lg font-serif text-mana-200 mb-2">
+	                        (string "change email")
+	                        </Aria.Heading>
+	                        ( if email_change_pending then
+	                            <form className="flex flex-col gap-y-3">
+	                            <input
+	                                type_="hidden"
+	                                name="dream.csrf"
+	                                value=csrf_token
+	                            />
+	                            <p className="text-mist-100">
+	                                (string
+	                                    ( "Enter the verification code sent to "
+	                                    ^ Option.value pending_email
+	                                        ~default:"your new email"
+	                                    ^ "." ) )
+	                            </p>
+	                            <Input
+	                                name="token"
+	                                label="Verification code"
+	                                placeholder="email-..."
+	                                show_optional_indicator=false
+	                            />
+	                            ( match email_error with
+	                            | Some err ->
+	                                <span
+	                                    className="inline-flex items-center \
+	                                                text-phoenix-100 text-sm">
+	                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
+	                                    (string err)
+	                                </span>
+	                            | None ->
+	                                null )
+	                            <div className="flex flex-row gap-x-3 mt-2">
+	                                <Button
+	                                type_="submit"
+	                                formMethod="post"
+	                                name="action"
+	                                value="confirm_email_change">
+	                                (string "verify")
+	                                </Button>
+	                                <Button
+	                                kind=`Secondary
+	                                type_="submit"
+	                                formMethod="post"
+	                                name="action"
+	                                value="cancel_email_change">
+	                                (string "cancel")
+	                                </Button>
+	                            </div>
+	                            </form>
+	                        else
+	                            <form className="flex flex-col gap-y-3">
+	                            <input
+	                                type_="hidden"
+	                                name="dream.csrf"
+	                                value=csrf_token
+	                            />
+	                            <Input
+	                                name="new_email"
+	                                label="New email address"
+	                                type_="email"
+	                                show_optional_indicator=false
+	                            />
+	                            ( match email_error with
+	                            | Some err ->
+	                                <span
+	                                    className="inline-flex items-center \
+	                                                text-phoenix-100 text-sm">
+	                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
+	                                    (string err)
+	                                </span>
+	                            | None ->
+	                                null )
+	                            <div className="flex flex-row gap-x-3 mt-2">
+	                                <Button
+	                                type_="submit"
+	                                formMethod="post"
+	                                name="action"
+	                                value="request_email_change">
+	                                (string "send code")
+	                                </Button>
+	                                <Button kind=`Tertiary
+	                                className="text-mist-100 hover:text-mana-100"
+	                                onClick=(fun _ -> setEmailModalOpen (fun _ -> false))>
+	                                (string "cancel")
+	                                </Button>
+	                            </div>
+	                            </form> )
+	                    </Aria.Dialog>
+	                    </Aria.Modal>
+	                </Aria.ModalOverlay>
+	                </Aria.DialogTrigger> )]
+              </ClientOnly>
+              <Input
+                name="handle"
+                label="Handle"
+                placeholder=handle
+                show_optional_indicator=false
+              />
+              <Input
+                name="password"
+                type_="password"
+                label="Password"
+                placeholder="********"
+                autoComplete="current-password"
+                show_optional_indicator=false
+              />
+              ( match error with
+              | Some error ->
+                  <span
+                    className="inline-flex items-center text-phoenix-100 \
+                               text-sm">
+                    <CircleAlertIcon className="w-4 h-4 mr-2" /> (string error)
+                  </span>
+              | None ->
+                  null )
+              ( match success with
+              | Some success ->
+                  <span
+                    className="inline-flex items-center text-mana-100 text-sm">
+                    (string success)
+                  </span>
+              | None ->
+                  null )
+              <Button
+                type_="submit"
+                formMethod="post"
+                name="action"
+                value="save"
+                className="mt-2">
+                (string "save changes")
+              </Button>
+            </form>
+            <section className="mt-8">
+              <h2 className="text-xl font-serif text-mana-200 mb-1">
+                (string "download repository")
+              </h2>
+              <p className="text-mist-100 mb-3">
+                (string
+                   "Export your data to back up or transfer to another PDS." )
+              </p>
+              <a
+                href=("/xrpc/com.atproto.sync.getRepo?did=" ^ current_user.did)
+                download=("repo-" ^ current_user.handle ^ ".car")>
+                <Button kind=`Primary className="max-w-1/2">
+                  (string "download")
+                </Button>
+              </a>
+            </section>
+            <section className="mt-8">
+              <h2 className="text-xl font-serif text-mana-200 mb-1">
+                (string "danger zone")
+              </h2>
+              <p className="text-mist-100 mb-3">
+                (string
+                   "Deactivating your account will temporarily render your \
+                    data inaccessible until you reactivate it." )
+                <br />
+                (string
+                   "Deleting your account will permanently remove all your \
+                    data." )
+              </p>
+              <div className="flex flex-row gap-x-3 mt-2">
+                <form>
+                  <input type_="hidden" name="dream.csrf" value=csrf_token />
+                  <Button
+                    kind=`Danger_secondary
+                    type_="submit"
+                    formMethod="post"
+                    name="action"
+                    value="deactivate"
+                    className="flex-1">
+                    (string "deactivate account")
+                  </Button>
+                </form>
+                <ClientOnly fallback=(
+                  <Button kind=`Danger className="flex-1">(string "delete account")</Button>
+                )>
+                [%browser_only
+                    (fun () ->
+                        let module Aria = ReactAria in
+                        <Aria.DialogTrigger defaultOpen=delete_pending>
+                        <Aria.Pressable>
+                            <Button kind=`Danger className="flex-1" onClick=(fun _ -> setDeleteModalOpen (fun _ -> true))>
+                              (string "delete account")
+                            </Button>
+                        </Aria.Pressable>
+                        <Aria.ModalOverlay
+                            className="fixed inset-0 z-50 bg-feather-100/80 \
+                                        flex items-center justify-center"
+                            isDismissable=(not delete_pending)
+                            isOpen=deleteModalOpen onOpenChange=(fun o -> setDeleteModalOpen (fun _ -> o))>
+                            <Aria.Modal
+                            className="bg-feather-100 border border-mist-40 rounded-xl \
+                                        p-6 w-full max-w-sm shadow-xl">
+                            <Aria.Dialog className="outline-none">
+                                <Aria.Heading
+                                slot="title"
+                                className="text-lg font-serif text-mana-200 mb-2">
+                                  (string "delete account")
+                                </Aria.Heading>
+                                ( if delete_pending then
+                                    <form className="flex flex-col gap-y-3">
+                                    <input
+                                        type_="hidden"
+                                        name="dream.csrf"
+                                        value=csrf_token
+                                    />
+                                    <p className="text-mist-100 text-sm">
+                                        (string
+                                            "Enter the confirmation code sent to your email." )
+                                    </p>
+                                    <Input
+                                        name="token"
+                                        label="Confirmation code"
+                                        placeholder="del-..."
+                                        show_optional_indicator=false
+                                    />
+                                    ( match delete_error with
+                                    | Some err ->
+                                        <span
+                                            className="inline-flex items-center \
+                                                        text-phoenix-100 text-sm">
+                                            <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                            (string err)
+                                        </span>
+                                    | None ->
+                                        null )
+                                    <div className="flex flex-row gap-x-3 mt-2">
+                                        <Button
+                                        kind=`Danger
+                                        type_="submit"
+                                        formMethod="post"
+                                        name="action"
+                                        value="confirm_delete">
+                                          (string "confirm")
+                                        </Button>
+                                        <Button
+                                        kind=`Secondary
+                                        type_="submit"
+                                        formMethod="post"
+                                        name="action"
+                                        value="cancel_delete">
+                                          (string "cancel")
+                                        </Button>
+                                    </div>
+                                    </form>
+                                else
+                                    <form className="flex flex-col gap-y-3">
+                                    <input
+                                        type_="hidden"
+                                        name="dream.csrf"
+                                        value=csrf_token
+                                    />
+                                    <p className="text-mist-100">
+                                        (string
+                                            "This action is irreversible. A confirmation \
+                                            code will be sent to your email." )
+                                    </p>
+                                    <div className="flex flex-row gap-x-3 mt-2">
+                                        <Button
+                                        kind=`Danger
+                                        type_="submit"
+                                        formMethod="post"
+                                        name="action"
+                                        value="request_delete">
+                                        (string "send code")
+                                        </Button>
+                                        <Button kind=`Tertiary
+                                        onClick=(fun _ -> setDeleteModalOpen (fun _ -> false))
+                                        className="text-mist-100 hover:text-mana-100">
+                                        (string "cancel")
+                                        </Button>
+                                    </div>
+                                    </form> )
+                            </Aria.Dialog>
+                            </Aria.Modal>
+                        </Aria.ModalOverlay>
+                        </Aria.DialogTrigger> )]
+                </ClientOnly>
+              </div>
+            </section>
+          </div> )
+    </main>
+  </div>
