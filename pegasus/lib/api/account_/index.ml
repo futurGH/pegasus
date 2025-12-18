@@ -5,21 +5,23 @@ let has_valid_delete_code (actor : Data_store.Types.actor) =
   | _ ->
       false
 
-let parse_email_change_code (actor : Data_store.Types.actor) =
+let parse_email_change_code code =
+  if String.starts_with ~prefix:"eml-" code then
+    let rest =
+      String.sub code 4 (String.length code - 4)
+      |> Base64.decode_exn ~alphabet:Base64.uri_safe_alphabet ~pad:false
+    in
+    match String.split_on_char ':' rest with
+    | [token; new_email] ->
+        Some (token, new_email)
+    | _ ->
+        None
+  else None
+
+let validate_actor_email_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at) with
   | Some code, Some expires_at when expires_at > Util.now_ms () ->
-      if String.starts_with ~prefix:"eml-" code then
-        let rest = String.sub code 6 (String.length code - 6) in
-        match String.index_opt rest ':' with
-        | Some idx ->
-            let token = String.sub rest 0 idx in
-            let new_email =
-              String.sub rest (idx + 1) (String.length rest - idx - 1)
-            in
-            Some (token, new_email)
-        | None ->
-            None
-      else None
+      parse_email_change_code code
   | _ ->
       None
 
@@ -41,7 +43,7 @@ let get_handler =
               in
               let csrf_token = Dream.csrf_token ctx.req in
               let deactivated = actor.deactivated_at <> None in
-              let email_change_info = parse_email_change_code actor in
+              let email_change_info = validate_actor_email_code actor in
               let email_change_pending = Option.is_some email_change_info in
               let pending_email = Option.map snd email_change_info in
               let delete_pending = has_valid_delete_code actor in
@@ -85,7 +87,7 @@ let post_handler =
                 in
                 let actor = Option.get actor_opt in
                 let deactivated = actor.deactivated_at <> None in
-                let email_change_info = parse_email_change_code actor in
+                let email_change_info = validate_actor_email_code actor in
                 let email_change_pending = Option.is_some email_change_info in
                 let pending_email = Option.map snd email_change_info in
                 let delete_pending = has_valid_delete_code actor in
@@ -173,8 +175,17 @@ let post_handler =
                       let%lwt () =
                         Data_store.set_auth_code ~did ~code ~expires_at ctx.db
                       in
-                      (* TODO: send email with code *)
-                      Dream.log "delete account code for %s: %s" did code ;
+                      let%lwt () =
+                        Util.send_email_or_log ~recipients:[To actor.email]
+                          ~subject:"Account deletion confirmation"
+                          ~body:
+                            (Plain
+                               (Printf.sprintf
+                                  "Confirm that you would like to delete the \
+                                   account %s (%s) by entering the following \
+                                   code: %s"
+                                  actor.handle did code ) )
+                      in
                       render_page ()
                   | Some "confirm_delete" -> (
                       let token =
@@ -219,7 +230,13 @@ let post_handler =
                               ()
                         | None ->
                             let token = Mist.Tid.now () in
-                            let code = "eml-" ^ token ^ ":" ^ new_email in
+                            let code = token ^ ":" ^ new_email in
+                            let code =
+                              Base64.encode_exn
+                                ~alphabet:Base64.uri_safe_alphabet ~pad:false
+                                code
+                            in
+                            let code = "eml-" ^ code in
                             let expires_at =
                               Util.now_ms () + (15 * 60 * 1000)
                             in
@@ -227,18 +244,28 @@ let post_handler =
                               Data_store.set_auth_code ~did ~code ~expires_at
                                 ctx.db
                             in
-                            (* TODO: send email with code *)
-                            Dream.log "email change code for %s: %s" actor.email
-                              code ;
+                            let%lwt () =
+                              Util.send_email_or_log
+                                ~recipients:[To actor.email]
+                                ~subject:"Email change confirmation"
+                                ~body:
+                                  (Plain
+                                     (Printf.sprintf
+                                        "Confirm that you would like to update \
+                                         the email address for @%s (%s) from \
+                                         %s to %s by entering the following \
+                                         code: %s"
+                                        actor.handle did actor.email new_email
+                                        code ) )
+                            in
                             render_page () )
                   | Some "confirm_email_change" -> (
                       let token =
                         List.assoc_opt "token" fields
                         |> Option.value ~default:"" |> String.trim
                       in
-                      match parse_email_change_code actor with
-                      | Some (stored_token, new_email) when stored_token = token
-                        ->
+                      match validate_actor_email_code actor with
+                      | Some (_, new_email) when Some token = actor.auth_code ->
                           let%lwt () =
                             Data_store.update_email ~did ~email:new_email ctx.db
                           in

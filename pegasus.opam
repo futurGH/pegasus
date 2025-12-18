@@ -18,6 +18,8 @@ depends: [
   "cohttp-lwt-unix" {>= "6.1.1"}
   "dns-client" {>= "10.2.0"}
   "dream"
+  "emile" {>= "1.1"}
+  "letters" {>= "0.4.0"}
   "re" {>= "1.13.2"}
   "safepass" {>= "3.1"}
   "server-reason-react"

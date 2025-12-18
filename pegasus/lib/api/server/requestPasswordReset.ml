@@ -37,5 +37,13 @@ let handler =
           let%lwt () =
             Data_store.set_auth_code ~did:actor.did ~code ~expires_at db
           in
-          Dream.log "password reset code for %s: %s" actor.did code ;
+          let%lwt () =
+            Util.send_email_or_log ~recipients:[To actor.email]
+              ~subject:(Printf.sprintf "Password reset for %s" actor.handle)
+              ~body:
+                (Plain
+                   (Printf.sprintf
+                      "Reset your password using the following token: %s" code )
+                )
+          in
           Dream.empty `OK )

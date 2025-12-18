@@ -4,7 +4,7 @@ let handler =
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->
           Errors.internal_error ~msg:"actor not found" ()
-      | Some _actor ->
+      | Some actor ->
           let code =
             "del-"
             ^ String.sub
@@ -15,5 +15,14 @@ let handler =
           in
           let expires_at = Util.now_ms () + (15 * 60 * 1000) in
           let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
-          Dream.log "account deletion code for %s: %s" did code ;
+          let%lwt () =
+            Util.send_email_or_log ~recipients:[To actor.email]
+              ~subject:
+                (Printf.sprintf "Account deletion request for %s" actor.handle)
+              ~body:
+                (Plain
+                   (Printf.sprintf
+                      "Delete your account using the following token: %s" code )
+                )
+          in
           Dream.empty `OK )

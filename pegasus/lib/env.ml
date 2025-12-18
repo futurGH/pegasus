@@ -37,3 +37,47 @@ let dpop_nonce_secret =
             ( Base64.(encode ~alphabet:uri_safe_alphabet ~pad:false) secret
             |> Result.get_ok ) ) ;
       Bytes.of_string secret
+
+let smtp_config, smtp_sender =
+  begin
+    let with_starttls =
+      Option.value ~default:"false" @@ Sys.getenv_opt "SMTP_STARTTLS" = "true"
+    in
+    match
+      ( Option.map Uri.of_string (Sys.getenv_opt "SMTP_AUTH_URI")
+      , Sys.getenv_opt "SMTP_SENDER" )
+    with
+    | Some uri, Some sender -> (
+      match
+        ( Uri.scheme uri
+        , Uri.user uri
+        , Uri.password uri
+        , Uri.host uri
+        , Uri.port uri )
+      with
+      | Some scheme, Some username, Some password, Some hostname, port
+        when scheme = "smtp" || scheme = "smtps" -> (
+        match Emile.of_string sender with
+        | Ok _ ->
+            ( Some
+                Letters.Config.(
+                  create ~username ~password ~hostname ~with_starttls ()
+                  |> set_port port )
+            , Some sender )
+        | Error _ ->
+            failwith
+              "SMTP_SENDER should be a valid mailbox, e.g. `e@mail.com` or \
+               `Name <e@mail.com>`" )
+      | _ ->
+          failwith
+            "SMTP_AUTH_URI must be a valid smtp:// or smtps:// URI with \
+             username, password, and hostname" )
+    | Some _, None ->
+        failwith
+          "SMTP_SENDER must be set alongside SMTP_AUTH_URI; it should look \
+           like `e@mail.com` or `Name <e@mail.com>`"
+    | None, Some _ ->
+        failwith "SMTP_AUTH_URI must be set alongside SMTP_SENDER"
+    | None, None ->
+        (None, None)
+  end

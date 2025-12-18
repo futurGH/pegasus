@@ -90,6 +90,7 @@ let[@react.component] make
               <ClientOnly fallback=(
               	<Input
                     name="email"
+                    type_="email"
                     label="Email"
                     placeholder=email
                     show_optional_indicator=false
@@ -109,6 +110,7 @@ let[@react.component] make
 	                <Aria.DialogTrigger defaultOpen=email_change_pending>
 	                <Input
 	                    name="email"
+						type_="email"
 	                    label="Email"
 	                    placeholder=email
 	                    show_optional_indicator=false
@@ -158,7 +160,7 @@ let[@react.component] make
 	                            <Input
 	                                name="token"
 	                                label="Verification code"
-	                                placeholder="email-..."
+	                                placeholder="eml-..."
 	                                show_optional_indicator=false
 	                            />
 	                            ( match email_error with

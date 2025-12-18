@@ -486,3 +486,28 @@ let parse_at_uri uri =
 let make_at_uri ~repo ~collection ~rkey ~fragment =
   Printf.sprintf "at://%s/%s/%s%s" repo collection rkey
     (Option.value ~default:"" fragment)
+
+let send_email_or_log ~(recipients : Letters.recipient list) ~subject
+    ~(body : Letters.body) =
+  let log_email () =
+    match body with
+    | Plain text | Html text | Mixed (text, _, _) ->
+        let to_addr =
+          List.find_map
+            (fun (r : Letters.recipient) ->
+              match r with To addr -> Some addr | _ -> None )
+            recipients
+          |> Option.get
+        in
+        Dream.log "email to %s: %s" to_addr text
+  in
+  match (Env.smtp_config, Env.smtp_sender) with
+  | Some config, Some sender -> (
+    match Letters.create_email ~from:sender ~recipients ~subject ~body () with
+    | Error e ->
+        failwith (Printf.sprintf "failed to construct email: %s" e)
+    | Ok message -> (
+      try%lwt Letters.send ~config ~sender ~recipients ~message
+      with _ -> Lwt.return (log_email ()) ) )
+  | _ ->
+      Lwt.return (log_email ())

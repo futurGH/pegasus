@@ -10,9 +10,11 @@
   core_unix
   dns-client.unix
   dream
+  emile
   frontend
   ipld
   kleidos
+  letters
   lwt
   lwt.unix
   mist

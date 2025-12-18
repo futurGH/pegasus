@@ -22,5 +22,14 @@ let handler =
             in
             let expires_at = Util.now_ms () + (10 * 60 * 1000) in
             let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
-            Dream.log "email confirmation code for %s: %s" did code ;
+            let%lwt () =
+              Util.send_email_or_log ~recipients:[To actor.email]
+                ~subject:(Printf.sprintf "Confirm email for %s" actor.handle)
+                ~body:
+                  (Plain
+                     (Printf.sprintf
+                        "Confirm your email address using the following token: \
+                         %s"
+                        code ) )
+            in
             Dream.empty `OK ) )

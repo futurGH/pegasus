@@ -12,7 +12,7 @@ let handler =
       | Some actor ->
           let token_required = Option.is_some actor.email_confirmed_at in
           let%lwt () =
-            if token_required then (
+            if token_required then
               let code =
                 "eml-"
                 ^ String.sub
@@ -23,8 +23,17 @@ let handler =
               in
               let expires_at = Util.now_ms () + (10 * 60 * 1000) in
               let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
-              Dream.log "email update code for %s: %s" did code ;
-              Lwt.return_unit )
+              let%lwt () =
+                Util.send_email_or_log ~recipients:[To actor.email]
+                  ~subject:(Printf.sprintf "Email update for %s" actor.handle)
+                  ~body:
+                    (Plain
+                       (Printf.sprintf
+                          "Confirm your email address using the following \
+                           token: %s"
+                          code ) )
+              in
+              Lwt.return_unit
             else Lwt.return_unit
           in
           Dream.json @@ Yojson.Safe.to_string

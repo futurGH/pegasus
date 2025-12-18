@@ -21,9 +21,12 @@
    (name bin_prot)
    (version v0.17~preview.128.20+135))) ; this is actually v0.16~preview.128.20+135 but core requires >=v0.17
 
-(pin ; these 3 all need to be pinned or they'll conflict
- (url "git+https://github.com/aantron/dream.git#af3c9bff7b4f11777190946e2f3453697bf5a07b")
+(pin ; these 4 all need to be pinned or they'll conflict
+ (url "git+https://github.com/lthms/dream.git#h2-0-13") ; unmerged patch that prevents conflict with letters
  (package (name dream)))
+ (pin
+  (url "git+https://github.com/lthms/dream.git#h2-0-13") ; unmerged patch that prevents conflict with letters
+  (package (name dream-httpaf)))
 (pin
  (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
  (package (name ppx_rapper)))
@@ -53,6 +56,8 @@
   (cohttp-lwt-unix (>= 6.1.1))
   (dns-client (>= 10.2.0))
   dream
+  (emile (>= 1.1))
+  (letters (>= 0.4.0))
   (re (>= 1.13.2))
   (safepass (>= 3.1))
   server-reason-react
