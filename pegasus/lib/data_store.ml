@@ -13,7 +13,8 @@ module Types = struct
     ; created_at: int
     ; deactivated_at: int option
     ; auth_code: string option
-    ; auth_code_expires_at: int option }
+    ; auth_code_expires_at: int option
+    ; pending_email: string option }
 
   type invite_code = {code: string; did: string; remaining: int}
 
@@ -51,7 +52,7 @@ module Queries = struct
   let get_actor_by_identifier id =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
               FROM actors WHERE did = %string{id} OR handle = %string{id} OR email = %string{id}
               LIMIT 1
         |sql}
@@ -84,7 +85,7 @@ module Queries = struct
   let list_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
               FROM actors
               WHERE did > %string{cursor}
               AND deactivated_at IS NULL
@@ -168,17 +169,24 @@ module Queries = struct
               WHERE did = %string{did}
         |sql}]
 
+  let set_pending_email =
+    [%rapper
+      execute
+        {sql| UPDATE actors SET auth_code = %string{code}, auth_code_expires_at = %int{expires_at}, pending_email = %string{pending_email}
+              WHERE did = %string{did}
+        |sql}]
+
   let clear_auth_code =
     [%rapper
       execute
-        {sql| UPDATE actors SET auth_code = NULL, auth_code_expires_at = NULL
+        {sql| UPDATE actors SET auth_code = NULL, auth_code_expires_at = NULL, pending_email = NULL
               WHERE did = %string{did}
         |sql}]
 
   let get_actor_by_auth_code code =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
               FROM actors WHERE auth_code = %string{code}
               LIMIT 1
         |sql}
@@ -195,7 +203,7 @@ module Queries = struct
   let update_email =
     [%rapper
       execute
-        {sql| UPDATE actors SET email = %string{email}, email_confirmed_at = NULL, auth_code = NULL, auth_code_expires_at = NULL
+        {sql| UPDATE actors SET email = %string{email}, email_confirmed_at = NULL, auth_code = NULL, auth_code_expires_at = NULL, pending_email = NULL
               WHERE did = %string{did}
         |sql}]
 
@@ -340,6 +348,10 @@ let delete_reserved_keys_by_did ~did conn =
 (* 2fa *)
 let set_auth_code ~did ~code ~expires_at conn =
   Util.use_pool conn @@ Queries.set_auth_code ~did ~code ~expires_at
+
+let set_pending_email ~did ~code ~expires_at ~pending_email conn =
+  Util.use_pool conn
+  @@ Queries.set_pending_email ~did ~code ~expires_at ~pending_email
 
 let clear_auth_code ~did conn =
   Util.use_pool conn @@ Queries.clear_auth_code ~did

@@ -1,5 +1,23 @@
 type request = {email: string} [@@deriving yojson {strict= false}]
 
+let request_password_reset (actor : Data_store.Types.actor) db =
+  let did = actor.did in
+  let code =
+    "pwd-"
+    ^ String.sub
+        Digestif.SHA256.(
+          digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex )
+        0 8
+  in
+  let expires_at = Util.now_ms () + (10 * 60 * 1000) in
+  let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
+  Util.send_email_or_log ~recipients:[To actor.email]
+    ~subject:(Printf.sprintf "Password reset for %s" actor.handle)
+    ~body:
+      (Plain
+         (Printf.sprintf "Reset your password using the following token: %s"
+            code ) )
+
 let handler =
   Xrpc.handler (fun {req; auth; db; _} ->
       let%lwt actor_opt =
@@ -25,25 +43,5 @@ let handler =
           (* always return success to prevent email enumeration *)
           Dream.empty `OK
       | Some actor ->
-          let code =
-            "pwd-"
-            ^ String.sub
-                Digestif.SHA256.(
-                  digest_string (actor.did ^ Int.to_string @@ Util.now_ms ())
-                  |> to_hex )
-                0 8
-          in
-          let expires_at = Util.now_ms () + (10 * 60 * 1000) in
-          let%lwt () =
-            Data_store.set_auth_code ~did:actor.did ~code ~expires_at db
-          in
-          let%lwt () =
-            Util.send_email_or_log ~recipients:[To actor.email]
-              ~subject:(Printf.sprintf "Password reset for %s" actor.handle)
-              ~body:
-                (Plain
-                   (Printf.sprintf
-                      "Reset your password using the following token: %s" code )
-                )
-          in
+          let%lwt () = request_password_reset actor db in
           Dream.empty `OK )

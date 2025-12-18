@@ -8,6 +8,30 @@ let rec rm_rf path =
     Sys.rmdir path )
   else Sys.remove path
 
+let delete_account ~did db =
+  let%lwt () =
+    try%lwt
+      Util.use_pool db (fun conn ->
+          Util.transact conn (fun () ->
+              let open Util.Syntax in
+              let$! () =
+                Data_store.Queries.delete_reserved_keys_by_did ~did conn
+              in
+              let$! () = Data_store.Queries.delete_actor ~did conn in
+              let user_db_file = Util.Constants.user_db_filepath did in
+              let user_blobs_dir = Util.Constants.user_blobs_location did in
+              ( if Sys.file_exists user_db_file then
+                  try Sys.remove user_db_file with _ -> () ) ;
+              ( if Sys.file_exists user_blobs_dir then
+                  try rm_rf user_blobs_dir with _ -> () ) ;
+              Lwt.return_ok () ) )
+    with e ->
+      Errors.(
+        log_exn e ;
+        internal_error ~msg:"failed to delete account" () )
+  in
+  Sequencer.sequence_account db ~did ~active:false ~status:`Deleted ()
+
 let handler =
   Xrpc.handler (fun {req; db; _} ->
       let%lwt {did; password; token} = Xrpc.parse_body req request_of_yojson in
@@ -23,38 +47,7 @@ let handler =
             when String.starts_with ~prefix:"del-" auth_code
                  && token = auth_code
                  && Util.now_ms () < auth_expires_at ->
-              let%lwt () =
-                try%lwt
-                  Util.use_pool db (fun conn ->
-                      Util.transact conn (fun () ->
-                          let open Util.Syntax in
-                          let$! () =
-                            Data_store.Queries.delete_reserved_keys_by_did ~did
-                              conn
-                          in
-                          let$! () =
-                            Data_store.Queries.delete_actor ~did conn
-                          in
-                          let user_db_file =
-                            Util.Constants.user_db_filepath did
-                          in
-                          let user_blobs_dir =
-                            Util.Constants.user_blobs_location did
-                          in
-                          ( if Sys.file_exists user_db_file then
-                              try Sys.remove user_db_file with _ -> () ) ;
-                          ( if Sys.file_exists user_blobs_dir then
-                              try rm_rf user_blobs_dir with _ -> () ) ;
-                          Lwt.return_ok () ) )
-                with e ->
-                  Errors.(
-                    log_exn e ;
-                    internal_error ~msg:"failed to delete account" () )
-              in
-              let%lwt _ =
-                Sequencer.sequence_account db ~did ~active:false
-                  ~status:`Deleted ()
-              in
+              let%lwt _ = delete_account ~did db in
               Dream.empty `OK
           | None, _ | _, None ->
               Errors.invalid_request ~name:"InvalidToken" "token is invalid"
