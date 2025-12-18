@@ -67,9 +67,20 @@
 (subdir
  pegasus/lib/migrations/
  (rule
-  (target migrations_sql.ml)
+  (target data_store_migrations_sql.ml)
   (deps
-   (source_tree .))
+   (source_tree ./data_store))
+  (action
+   (with-stdout-to
+    %{null}
+    (run ocaml-crunch -e sql -m plain . -o %{target})))))
+
+(subdir
+ pegasus/lib/migrations/
+ (rule
+  (target user_store_migrations_sql.ml)
+  (deps
+   (source_tree ./user_store))
   (action
    (with-stdout-to
     %{null}

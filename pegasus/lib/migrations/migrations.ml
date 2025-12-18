@@ -62,9 +62,9 @@ let parse_migration_filename filename =
     else None
   with _ -> None
 
-let run_migration conn (id, name, sql) =
+let run_migration conn path (id, name, sql) =
   let%lwt () = Lwt_io.printlf "running migration %03d: %s" id name in
-  let%lwt result = execute_raw Util.Constants.pegasus_db_filepath sql in
+  let%lwt result = execute_raw path sql in
   let%lwt () =
     match result with Ok () -> Lwt.return_unit | Error e -> raise e
   in
@@ -74,7 +74,7 @@ let run_migration conn (id, name, sql) =
   in
   Lwt_io.printlf "migration %03d applied successfully" id
 
-let run_migrations conn =
+let run_ds_migrations conn =
   let%lwt () = Util.use_pool conn Queries.create_migrations_table in
   let%lwt applied =
     Util.use_pool conn Queries.get_applied_migrations
@@ -85,7 +85,7 @@ let run_migrations conn =
       (fun filename ->
         match parse_migration_filename filename with
         | Some (id, name) when not (List.mem id applied) -> begin
-          match Migrations_sql.read filename with
+          match Data_store_migrations_sql.read filename with
           | Some sql ->
               Some (id, name, sql)
           | None ->
@@ -93,7 +93,7 @@ let run_migrations conn =
           end
         | _ ->
             None )
-      Migrations_sql.file_list
+      Data_store_migrations_sql.file_list
   in
   match pending with
   | [] ->
@@ -102,4 +102,35 @@ let run_migrations conn =
       let%lwt () =
         Lwt_io.printlf "found %d pending migrations" (List.length pending)
       in
-      Lwt_list.iter_s (run_migration conn) pending
+      Lwt_list.iter_s
+        (run_migration conn Util.Constants.pegasus_db_filepath)
+        pending
+
+let run_us_migrations conn did =
+  let%lwt () = Util.use_pool conn Queries.create_migrations_table in
+  let%lwt applied =
+    Util.use_pool conn Queries.get_applied_migrations
+    >|= List.map (fun m -> m.id)
+  in
+  let pending =
+    List.filter_map
+      (fun filename ->
+        match parse_migration_filename filename with
+        | Some (id, name) when not (List.mem id applied) -> begin
+          match User_store_migrations_sql.read filename with
+          | Some sql ->
+              Some (id, name, sql)
+          | None ->
+              None
+          end
+        | _ ->
+            None )
+      User_store_migrations_sql.file_list
+  in
+  match pending with
+  | [] ->
+      Lwt.return_unit
+  | _ ->
+      Lwt_list.iter_s
+        (run_migration conn (Util.Constants.user_db_filepath did))
+        pending

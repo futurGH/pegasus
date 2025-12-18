@@ -68,27 +68,6 @@ open Types
 
 module Queries = struct
   (* mst block storage *)
-  let create_blocks_tables conn =
-    let$! () =
-      [%rapper
-        execute
-          {sql| CREATE TABLE IF NOT EXISTS mst (
-                  cid TEXT NOT NULL PRIMARY KEY,
-                  data BLOB NOT NULL
-                )
-          |sql}]
-        () conn
-    in
-    [%rapper
-      execute
-        {sql| CREATE TABLE IF NOT EXISTS repo_commit (
-                id INTEGER PRIMARY KEY CHECK (id = 0),
-                cid TEXT NOT NULL,
-                data BLOB NOT NULL
-              )
-        |sql}]
-      () conn
-
   let get_block cid =
     [%rapper
       get_opt
@@ -150,26 +129,6 @@ module Queries = struct
       ~cid ~data
 
   (* record storage *)
-  let create_records_table conn =
-    let$! () =
-      [%rapper
-        execute
-          {sql| CREATE TABLE IF NOT EXISTS records (
-                path TEXT NOT NULL PRIMARY KEY,
-                cid TEXT NOT NULL,
-                since TEXT NOT NULL,
-                data BLOB NOT NULL
-              )
-        |sql}]
-        () conn
-    in
-    [%rapper
-      execute
-        {sql| CREATE INDEX IF NOT EXISTS records_cid_idx ON records (cid);
-              CREATE INDEX IF NOT EXISTS records_since_idx ON records (since);
-        |sql}]
-      () conn
-
   let get_record =
     [%rapper
       get_opt
@@ -214,35 +173,6 @@ module Queries = struct
   let delete_record path =
     [%rapper execute {sql| DELETE FROM records WHERE path = %string{path} |sql}]
       ~path
-
-  (* blob storage *)
-  let create_blobs_tables conn =
-    let$! () =
-      [%rapper
-        execute
-          {sql| CREATE TABLE IF NOT EXISTS blobs (
-                cid TEXT PRIMARY KEY,
-                mimetype TEXT NOT NULL
-              )
-          |sql}]
-        () conn
-    in
-    let$! () =
-      [%rapper
-        execute
-          (* no `references` on blob_cid because blobs may be uploaded later *)
-          {sql| CREATE TABLE IF NOT EXISTS blobs_records (
-                  record_path TEXT NOT NULL REFERENCES records(path),
-                  blob_cid TEXT NOT NULL,
-                  PRIMARY KEY (record_path, blob_cid)
-                )
-          |sql}]
-        () conn
-    in
-    [%rapper
-      execute
-        {sql| CREATE INDEX IF NOT EXISTS blobs_records_blob_cid_idx ON blobs_records (blob_cid) |sql}]
-      () conn
 
   let get_blob =
     [%rapper
@@ -362,11 +292,7 @@ let connect ?create ?write did : t Lwt.t =
   in
   Lwt.return {did; db}
 
-let init t : unit Lwt.t =
-  let%lwt () = Util.use_pool t.db Queries.create_blocks_tables in
-  let%lwt () = Util.use_pool t.db Queries.create_records_table in
-  let%lwt () = Util.use_pool t.db Queries.create_blobs_tables in
-  Lwt.return_unit
+let init t : unit Lwt.t = Migrations.run_us_migrations t.db t.did
 
 (* mst blocks; implements Writable_blockstore *)
 

@@ -20,10 +20,7 @@ module Types = struct
   type firehose_event = {seq: int; time: int; t: string; data: bytes}
 
   type reserved_key =
-    { key_did: string
-    ; did: string option
-    ; private_key: string
-    ; created_at: int }
+    {key_did: string; did: string option; private_key: string; created_at: int}
 end
 
 open Types
@@ -75,8 +72,7 @@ module Queries = struct
 
   let delete_actor =
     [%rapper
-      execute
-        {sql| DELETE FROM actors WHERE did = %string{did}
+      execute {sql| DELETE FROM actors WHERE did = %string{did}
         |sql}]
 
   let update_actor_handle =
@@ -273,7 +269,7 @@ let connect ?create ?write () : t Lwt.t =
     Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
   Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
 
-let init conn : unit Lwt.t = Migrations.run_migrations conn
+let init conn : unit Lwt.t = Migrations.run_ds_migrations conn
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
