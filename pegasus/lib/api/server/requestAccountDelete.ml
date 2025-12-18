@@ -9,8 +9,8 @@ let handler =
             "del-"
             ^ String.sub
                 Digestif.SHA256.(
-                  digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex
-                )
+                  digest_string (did ^ Int.to_string @@ Util.now_ms ())
+                  |> to_hex )
                 0 8
           in
           let expires_at = Util.now_ms () + (15 * 60 * 1000) in

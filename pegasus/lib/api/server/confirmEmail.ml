@@ -1,4 +1,5 @@
-type request = {email: string; token: string} [@@deriving yojson {strict= false}]
+type request = {email: string; token: string}
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
@@ -10,10 +11,10 @@ let handler =
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->
           Errors.invalid_request ~name:"AccountNotFound" "account not found"
-      | Some actor ->
+      | Some actor -> (
           if String.lowercase_ascii actor.email <> email then
             Errors.invalid_request ~name:"InvalidEmail" "email does not match"
-          else (
+          else
             match (actor.auth_code, actor.auth_code_expires_at) with
             | Some auth_code, Some expires_at
               when String.starts_with ~prefix:"eml-" auth_code
