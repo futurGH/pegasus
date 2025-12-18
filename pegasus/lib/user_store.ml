@@ -292,7 +292,7 @@ let connect ?create ?write did : t Lwt.t =
   in
   Lwt.return {did; db}
 
-let init t : unit Lwt.t = Migrations.run_us_migrations t.db t.did
+let init t : unit Lwt.t = Migrations.run_migrations User_store t.db
 
 (* mst blocks; implements Writable_blockstore *)
 

@@ -1,13 +1,8 @@
-[@@@ocaml.warning "-33"]
-
 open Lwt.Infix
 
 type migration = {id: int; name: string; applied_at: int}
 
 module Queries = struct
-  open Util.Rapper
-  open Util.Syntax
-
   let create_migrations_table =
     [%rapper
       execute
@@ -62,19 +57,31 @@ let parse_migration_filename filename =
     else None
   with _ -> None
 
-let run_migration conn path (id, name, sql) =
-  let%lwt () = Lwt_io.printlf "running migration %03d: %s" id name in
-  let%lwt result = execute_raw path sql in
-  let%lwt () =
-    match result with Ok () -> Lwt.return_unit | Error e -> raise e
-  in
-  let applied_at = Util.now_ms () in
-  let%lwt () =
-    Util.use_pool conn (Queries.record_migration ~id ~name ~applied_at)
-  in
-  Lwt_io.printlf "migration %03d applied successfully" id
+let run_migration db (id, name, sql) =
+  (* I think it's better to do a transaction per migration, no harm in applying the ones that don't error *)
+  Util.use_pool db (fun conn ->
+      Util.transact conn (fun () ->
+          let module C = (val conn : Caqti_lwt.CONNECTION) in
+          let query =
+            Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+          in
+          let result = C.exec query () in
+          Lwt_result.map
+            (fun _ ->
+              let applied_at = Util.now_ms () in
+              Queries.record_migration ~id ~name ~applied_at conn )
+            result ) )
 
-let run_ds_migrations conn =
+type migration_type = Data_store | User_store
+
+let run_migrations typ conn =
+  let read_migration, file_list =
+    match typ with
+    | Data_store ->
+        Data_store_migrations_sql.(read, file_list)
+    | User_store ->
+        User_store_migrations_sql.(read, file_list)
+  in
   let%lwt () = Util.use_pool conn Queries.create_migrations_table in
   let%lwt applied =
     Util.use_pool conn Queries.get_applied_migrations
@@ -85,7 +92,7 @@ let run_ds_migrations conn =
       (fun filename ->
         match parse_migration_filename filename with
         | Some (id, name) when not (List.mem id applied) -> begin
-          match Data_store_migrations_sql.read filename with
+          match read_migration filename with
           | Some sql ->
               Some (id, name, sql)
           | None ->
@@ -93,44 +100,14 @@ let run_ds_migrations conn =
           end
         | _ ->
             None )
-      Data_store_migrations_sql.file_list
+      file_list
   in
   match pending with
   | [] ->
       Lwt.return_unit
-  | _ ->
-      let%lwt () =
-        Lwt_io.printlf "found %d pending migrations" (List.length pending)
-      in
-      Lwt_list.iter_s
-        (run_migration conn Util.Constants.pegasus_db_filepath)
-        pending
-
-let run_us_migrations conn did =
-  let%lwt () = Util.use_pool conn Queries.create_migrations_table in
-  let%lwt applied =
-    Util.use_pool conn Queries.get_applied_migrations
-    >|= List.map (fun m -> m.id)
-  in
-  let pending =
-    List.filter_map
-      (fun filename ->
-        match parse_migration_filename filename with
-        | Some (id, name) when not (List.mem id applied) -> begin
-          match User_store_migrations_sql.read filename with
-          | Some sql ->
-              Some (id, name, sql)
-          | None ->
-              None
-          end
-        | _ ->
-            None )
-      User_store_migrations_sql.file_list
-  in
-  match pending with
-  | [] ->
-      Lwt.return_unit
-  | _ ->
-      Lwt_list.iter_s
-        (run_migration conn (Util.Constants.user_db_filepath did))
-        pending
+  | _ -> (
+    try%lwt Lwt_list.iter_s (run_migration conn) pending with
+    | Caqti_error.Exn e ->
+        failwith ("failed to run migrations: " ^ Caqti_error.show e)
+    | exn ->
+        failwith ("failed to run migrations: " ^ Printexc.to_string exn) )
