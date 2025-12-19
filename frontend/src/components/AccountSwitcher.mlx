@@ -12,7 +12,7 @@ let fallback handle =
   <button className="flex px-2 py-1.5 -mx-2 rounded-lg">
     <span className="text-mana-100 font-serif flex items-center gap-x-2">
       <div className="w-5 h-5 mr-1 rounded-md bg-mist-20" />
-      <span className="self-baseline">(string ("@" ^ handle))</span>
+      <span className="self-baseline">(string handle)</span>
       <ChevronDownIcon
         className="w-3 h-3 mt-0.5 text-mana-100"
         strokeWidth="3"
@@ -68,7 +68,7 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
                     | None ->
                         null )
                     <span className="self-baseline select-none">
-                      (string ("@" ^ user.handle))
+                      (string user.handle)
                     </span>
                     <ChevronDownIcon
                       className="w-3 h-3 mt-0.5 text-mana-100 hidden \
