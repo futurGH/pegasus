@@ -1,0 +1,14 @@
+type request = {did: string; handle: string} [@@deriving yojson {strict= false}]
+
+let handler =
+  Xrpc.handler ~auth:Admin (fun {req; db; _} ->
+      let%lwt {did; handle} = Xrpc.parse_body req request_of_yojson in
+      match%lwt Data_store.get_actor_by_identifier did db with
+      | None ->
+          Errors.invalid_request "account not found"
+      | Some _ -> (
+        match%lwt Identity.UpdateHandle.update_handle ~did ~handle db with
+        | Ok () ->
+            Dream.empty `OK
+        | Error e ->
+            Errors.invalid_request ~name:"InvalidHandle" e ) )

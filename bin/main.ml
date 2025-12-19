@@ -38,6 +38,26 @@ let handlers =
   ; ( get
     , "/xrpc/com.atproto.identity.resolveHandle"
     , Api.Identity.ResolveHandle.handler )
+  ; (* admin *)
+    ( post
+    , "/xrpc/com.atproto.admin.deleteAccount"
+    , Api.Admin.DeleteAccount.handler )
+  ; ( get
+    , "/xrpc/com.atproto.admin.getAccountInfo"
+    , Api.Admin.GetAccountInfo.handler )
+  ; ( get
+    , "/xrpc/com.atproto.admin.getAccountInfos"
+    , Api.Admin.GetAccountInfos.handler )
+  ; ( get
+    , "/xrpc/com.atproto.admin.getInviteCodes"
+    , Api.Admin.GetInviteCodes.handler )
+  ; (post, "/xrpc/com.atproto.admin.sendEmail", Api.Admin.SendEmail.handler)
+  ; ( post
+    , "/xrpc/com.atproto.admin.updateAccountEmail"
+    , Api.Admin.UpdateAccountEmail.handler )
+  ; ( post
+    , "/xrpc/com.atproto.admin.updateAccountHandle"
+    , Api.Admin.UpdateAccountHandle.handler )
   ; (* account management *)
     ( post
     , "/xrpc/com.atproto.server.createInviteCode"

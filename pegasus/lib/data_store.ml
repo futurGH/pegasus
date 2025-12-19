@@ -123,6 +123,16 @@ module Queries = struct
               RETURNING @int{remaining}
         |sql}]
 
+  let list_invites =
+    [%rapper
+      get_many
+        {sql| SELECT @string{code}, @string{did}, @int{remaining}
+              FROM invite_codes
+              ORDER BY code ASC
+              LIMIT %int{limit}
+        |sql}
+        record_out]
+
   (* reserved keys *)
   let create_reserved_key =
     [%rapper
@@ -326,6 +336,9 @@ let create_invite ~code ~did ~remaining conn =
 let get_invite ~code conn = Util.use_pool conn @@ Queries.get_invite ~code
 
 let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
+
+let list_invites ?(limit = 100) conn =
+  Util.use_pool conn @@ Queries.list_invites ~limit
 
 (* reserved keys *)
 let create_reserved_key ~key_did ~did ~private_key conn =

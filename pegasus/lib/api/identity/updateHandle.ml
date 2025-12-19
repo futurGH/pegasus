@@ -8,7 +8,7 @@ let update_handle ~did ~handle db =
     match%lwt Data_store.get_actor_by_identifier handle db with
     | Some _ ->
         Lwt.return_error "handle already in use"
-    | None ->
+    | None -> (
         let%lwt () = Data_store.update_actor_handle ~did ~handle db in
         let%lwt plc_result =
           if String.starts_with ~prefix:"did:plc:" did then
@@ -52,7 +52,7 @@ let update_handle ~did ~handle db =
         | Ok () ->
             let () = Ttl_cache.String_cache.remove Id_resolver.Did.cache did in
             let%lwt _ = Sequencer.sequence_identity db ~did ~handle () in
-            Lwt.return_ok () )
+            Lwt.return_ok () ) )
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
