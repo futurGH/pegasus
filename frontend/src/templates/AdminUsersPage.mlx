@@ -63,7 +63,7 @@ let[@react.component] make
         <form className="flex-1">
           <Input
             name="filter"
-            placeholder="Filter users"
+            placeholder="filter users"
             value=filter
             showIndicator=false
           />

@@ -29,6 +29,11 @@ let handlers =
   ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
   ; (get, "/account/login", Api.Account_.Login.get_handler)
   ; (post, "/account/login", Api.Account_.Login.post_handler)
+  ; (get, "/account/signup", Api.Account_.Signup.get_handler)
+  ; (post, "/account/signup", Api.Account_.Signup.post_handler)
+  ; ( get
+    , "/account/signup/check-handle"
+    , Api.Account_.Signup.check_handle_handler )
   ; (get, "/account/logout", Api.Account_.Logout.handler)
   ; (* admin ui *)
     (get, "/admin", Api.Admin_.Index.handler)

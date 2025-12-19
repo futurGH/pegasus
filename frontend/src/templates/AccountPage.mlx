@@ -327,7 +327,7 @@ let[@react.component] make
                 name="password"
                 type_="password"
                 label="Password"
-                placeholder="⸱⸱⸱⸱⸱⸱⸱⸱"
+                placeholder="********"
                 autoComplete="current-password"
                 showIndicator=false
               />
