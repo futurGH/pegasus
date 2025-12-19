@@ -450,7 +450,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   in
   Lwt.return {commit= new_commit; results}
 
-let load ?write ?(ensure_active = false) ?ds did : t Lwt.t =
+let load ?write ?create ?(ensure_active = false) ?ds did : t Lwt.t =
   let%lwt data_store_conn =
     match ds with
     | Some ds ->
@@ -459,7 +459,7 @@ let load ?write ?(ensure_active = false) ?ds did : t Lwt.t =
         Data_store.connect ?write ()
   in
   let%lwt user_db =
-    try%lwt User_store.connect did
+    try%lwt User_store.connect ?create ~write:true did
     with _ ->
       Errors.invalid_request ~name:"RepoNotFound"
         "your princess is in another castle"

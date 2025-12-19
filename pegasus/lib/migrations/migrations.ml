@@ -32,20 +32,24 @@ module Queries = struct
         |sql}]
 end
 
-let execute_raw db_path sql =
-  let db = Sqlite3.db_open db_path in
-  try
-    let rc = Sqlite3.exec db sql in
-    let _ = try Sqlite3.db_close db with _ -> true in
-    match rc with
+let execute_raw conn sql =
+  let module C = (val conn : Caqti_lwt.CONNECTION) in
+  match C.driver_connection with
+  | Some (Caqti_driver_sqlite3.Driver_connection db) -> (
+    match Sqlite3.exec db sql with
     | Sqlite3.Rc.OK ->
         Lwt.return_ok ()
     | _ ->
         let err_msg = Sqlite3.errmsg db in
-        Lwt.return_error (Failure ("sql error: " ^ err_msg))
-  with e ->
-    let _ = try Sqlite3.db_close db with _ -> true in
-    Lwt.return_error e
+        Lwt.return_error
+          (Caqti_error.request_failed
+             ~uri:(Uri.of_string "sqlite3://")
+             ~query:sql (Caqti_error.Msg err_msg) ) )
+  | _ ->
+      Lwt.return_error
+        (Caqti_error.request_failed
+           ~uri:(Uri.of_string "sqlite3://")
+           ~query:sql (Caqti_error.Msg "driver_connection not available") )
 
 let parse_migration_filename filename =
   try
@@ -58,19 +62,13 @@ let parse_migration_filename filename =
   with _ -> None
 
 let run_migration db (id, name, sql) =
-  (* I think it's better to do a transaction per migration, no harm in applying the ones that don't error *)
   Util.use_pool db (fun conn ->
       Util.transact conn (fun () ->
-          let module C = (val conn : Caqti_lwt.CONNECTION) in
-          let query =
-            Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
-          in
-          let result = C.exec query () in
-          Lwt_result.map
-            (fun _ ->
-              let applied_at = Util.now_ms () in
-              Queries.record_migration ~id ~name ~applied_at conn )
-            result ) )
+          let open Lwt_result.Infix in
+          execute_raw conn sql
+          >>= fun () ->
+          let applied_at = Util.now_ms () in
+          Queries.record_migration ~id ~name ~applied_at conn ) )
 
 type migration_type = Data_store | User_store
 

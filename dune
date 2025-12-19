@@ -73,7 +73,7 @@
   (action
    (with-stdout-to
     %{null}
-    (run ocaml-crunch -e sql -m plain . -o %{target})))))
+    (run ocaml-crunch -e sql -m plain ./data_store -o %{target})))))
 
 (subdir
  pegasus/lib/migrations/
@@ -84,4 +84,4 @@
   (action
    (with-stdout-to
     %{null}
-    (run ocaml-crunch -e sql -m plain . -o %{target})))))
+    (run ocaml-crunch -e sql -m plain ./user_store -o %{target})))))
