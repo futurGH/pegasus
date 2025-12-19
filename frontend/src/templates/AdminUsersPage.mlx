@@ -1,0 +1,527 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type actor =
+  { did: string
+  ; handle: string
+  ; email: string
+  ; email_confirmed: bool
+  ; created_at: string
+  ; deactivated: bool }
+[@@deriving json]
+
+type props =
+  { actors: actor list
+  ; csrf_token: string
+  ; filter: string
+  ; cursor: string
+  ; next_cursor: string option [@default None]
+  ; hostname: string
+  ; error: string option [@default None]
+  ; success: string option [@default None] }
+[@@deriving json]
+
+let admin_pages =
+  [ ("Users", "/admin/users")
+  ; ("Invite codes", "/admin/invites") ]
+
+let[@react.component] make
+    ~props:
+      ({ actors
+       ; csrf_token
+       ; filter
+       ; cursor
+       ; next_cursor
+       ; hostname
+       ; error
+       ; success } :
+        props ) () =
+  (* create account modal state *)
+  let createModalOpen, setCreateModalOpen = useState (fun () -> false) in
+  let newEmail, setNewEmail = useState (fun () -> "") in
+  let newHandle, setNewHandle = useState (fun () -> "") in
+  let newPassword, setNewPassword = useState (fun () -> "") in
+  (* action menu state *)
+  let menuOpenFor, setMenuOpenFor = useState (fun () -> (None : string option)) in
+  (* edit modal state, tracks relevant actor and action *)
+  let editModal, setEditModal = useState (fun () -> (None : (actor * string) option)) in
+  let editValue, setEditValue = useState (fun () -> "") in
+  (* delete confirmation state *)
+  let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : actor option)) in
+  <div className="w-full max-w-3xl h-auto mx-8 px-4 sm:px-0 flex flex-col md:flex-row gap-12">
+    <Sidebar pages=admin_pages active_page="/admin/users" />
+    <main className="flex-1 w-full max-w-2xl">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "users")
+      </h1>
+      <p className="text-mist-100 mb-4">
+        (string "Enter a DID, handle, or email to filter the list by.")
+      </p>
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <form className="flex-1">
+          <Input
+            name="filter"
+            placeholder="Filter users"
+            value=filter
+            showIndicator=false
+          />
+        </form>
+        <ClientOnly fallback=(
+          <Button kind=`Primary className="w-full sm:max-w-64">
+            (string "create account")
+          </Button>
+        )>
+        [%browser_only
+          (fun () ->
+            let module Aria = ReactAria in
+            <Aria.DialogTrigger
+              isOpen=createModalOpen
+              onOpenChange=(fun o -> setCreateModalOpen (fun _ -> o))>
+              <Aria.Pressable>
+                <Button
+                  kind=`Primary
+                  className="w-full sm:max-w-64"
+                  onClick=(fun _ -> setCreateModalOpen (fun _ -> true))>
+                  (string "create account")
+                </Button>
+              </Aria.Pressable>
+              <Aria.ModalOverlay
+                className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+                isDismissable=true>
+                <Aria.Modal
+                  className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                  <Aria.Dialog className="outline-none">
+                    <Aria.Heading
+                      slot="title"
+                      className="text-lg font-serif text-mana-200 mb-2">
+                      (string "create account")
+                    </Aria.Heading>
+                    <p className="text-mist-100 mb-4">
+                      (string "Quickly create a new account on this PDS.")
+                    </p>
+                    <form className="flex flex-col gap-y-3">
+                      <input type_="hidden" name="dream.csrf" value=csrf_token />
+                      <input type_="hidden" name="action" value="create_account" />
+                      <Input
+                        name="email"
+                        type_="email"
+                        label="Email"
+                        required=true
+                        showIndicator=false
+                        value=newEmail
+                        onChange=(fun e ->
+                          setNewEmail (fun _ -> (Event.Form.target e)##value))
+                      />
+                      <Input
+                        name="handle"
+                        label="Handle"
+                        required=true
+                        showIndicator=false
+                        value=newHandle
+                        onChange=(fun e ->
+                          setNewHandle (fun _ -> (Event.Form.target e)##value))
+                        trailing=(
+                          <span className="font-serif text-mist-80 text-sm whitespace-nowrap">
+                            (string ("." ^ hostname))
+                          </span>
+                        )
+                      />
+                      <Input
+                        name="password"
+                        type_="password"
+                        label="Password"
+                        required=true
+                        showIndicator=false
+                        value=newPassword
+                        onChange=(fun e ->
+                          setNewPassword (fun _ -> (Event.Form.target e)##value))
+                      />
+                      <Button formMethod="post" type_="submit" className="mt-2">
+                        (string "create")
+                      </Button>
+                    </form>
+                  </Aria.Dialog>
+                </Aria.Modal>
+              </Aria.ModalOverlay>
+            </Aria.DialogTrigger> )]
+        </ClientOnly>
+      </div>
+      ( match error with
+      | Some err ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-phoenix-100 text-sm">
+              <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+            </span>
+          </div>
+      | None -> null )
+      ( match success with
+      | Some msg ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-mana-100 text-sm">
+              <CheckmarkIcon className="w-4 h-4 mr-2" /> (string msg)
+            </span>
+          </div>
+      | None -> null )
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-xl text-sm">
+          <thead>
+            <tr className="text-left text-mist-80">
+              <th className="pb-2 font-normal">(string "Handle")</th>
+              <th className="pb-2 font-normal">(string "Email")</th>
+              <th className="pb-2 font-normal">(string "Created at")</th>
+              <th className="pb-2 font-normal w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ( List.map
+                (fun (actor : actor) ->
+                  let handleClasses = "font-medium truncate " ^
+                  	(if actor.deactivated then "text-phoenix-100" else "text-mana-100") in
+                  <tr key=actor.did className="border-t border-mist-60/50">
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-3">
+                        <div className="max-w-54">
+                          <p className=handleClasses ?title=(if actor.deactivated then Some "Deactivated" else None)>
+                            (string actor.handle)
+                          </p>
+                          <p className="text-xs text-mist-80 truncate">
+                            (string actor.did)
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-1">
+                        <span className="text-mist-100">(string actor.email)</span>
+                        ( if actor.email_confirmed then
+                            <CheckmarkIcon className="w-4 h-4 text-mana-100" />
+                          else
+                            <XIcon className="w-4 h-4 text-phoenix-100" /> )
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4 text-mist-100">
+                      (string actor.created_at)
+                    </td>
+                    <td className="py-3">
+                      <ClientOnly fallback=(
+                        <button className="p-1 text-mist-80 hover:text-mana-100">
+                          <EllipsisIcon className="w-5 h-5" />
+                        </button>
+                      )>
+                      [%browser_only
+                        (fun () ->
+                          let module Aria = ReactAria in
+                          let isOpen = menuOpenFor = Some actor.did in
+                          <Aria.MenuTrigger
+                            isOpen=isOpen
+                            onOpenChange=(fun o ->
+                              setMenuOpenFor (fun _ -> if o then Some actor.did else None))>
+                            <Aria.Pressable>
+                              <button
+                                className="p-1 text-mist-80 hover:text-mana-100 cursor-pointer"
+                                onClick=(fun _ -> setMenuOpenFor (fun _ -> Some actor.did))>
+                                <EllipsisIcon className="w-5 h-5" />
+                              </button>
+                            </Aria.Pressable>
+                            <Aria.Popover
+                              className="bg-feather-100 border border-mist-60/50 rounded-lg shadow-xl py-1 min-w-48">
+                              <Aria.Menu
+                                className="outline-none"
+                                onAction=(fun action ->
+                                  setMenuOpenFor (fun _ -> None) ;
+                                  match action with
+                                  | "change_handle" ->
+                                      setEditValue (fun _ -> actor.handle) ;
+                                      setEditModal (fun _ -> Some (actor, "handle"))
+                                  | "change_email" ->
+                                      setEditValue (fun _ -> actor.email) ;
+                                      setEditModal (fun _ -> Some (actor, "email"))
+                                  | "change_password" ->
+                                      setEditValue (fun _ -> "") ;
+                                      setEditModal (fun _ -> Some (actor, "password"))
+                                  | "send_password_reset" ->
+                                      setEditModal (fun _ -> Some (actor, "send_reset"))
+                                  | "deactivate" ->
+                                      setEditModal (fun _ -> Some (actor, "deactivate"))
+                                  | "reactivate" ->
+                                      setEditModal (fun _ -> Some (actor, "reactivate"))
+                                  | "delete" ->
+                                      setDeleteConfirmFor (fun _ -> Some actor)
+                                  | _ -> () )>
+                                <Aria.MenuItem
+                                  id="change_handle"
+                                  className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-mist-100">
+                                  (string "Change handle")
+                                </Aria.MenuItem>
+                                <Aria.MenuItem
+                                  id="change_email"
+                                  className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-mist-100">
+                                  (string "Change email")
+                                </Aria.MenuItem>
+                                <Aria.MenuItem
+                                  id="change_password"
+                                  className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-mist-100">
+                                  (string "Change password")
+                                </Aria.MenuItem>
+                                <Aria.MenuItem
+                                  id="send_password_reset"
+                                  className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-mist-100">
+                                  (string "Send password reset code")
+                                </Aria.MenuItem>
+                                <Aria.Separator className="my-1 border-t border-mist-60/50" />
+                                ( if actor.deactivated then
+                                    <Aria.MenuItem
+                                      id="reactivate"
+                                      className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-mana-100">
+                                      (string "Reactivate account")
+                                    </Aria.MenuItem>
+                                  else
+                                    <Aria.MenuItem
+                                      id="deactivate"
+                                      className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-phoenix-100">
+                                      (string "Deactivate account")
+                                    </Aria.MenuItem> )
+                                <Aria.MenuItem
+                                  id="delete"
+                                  className="px-3 py-2 outline-none cursor-pointer hover:bg-mist-60/30 text-phoenix-100">
+                                  (string "Delete account")
+                                </Aria.MenuItem>
+                              </Aria.Menu>
+                            </Aria.Popover>
+                          </Aria.MenuTrigger> )]
+                      </ClientOnly>
+                    </td>
+                  </tr> )
+                actors
+            |> Array.of_list |> array )
+          </tbody>
+        </table>
+      </div>
+      ( match next_cursor with
+      | Some cursor ->
+          <div className="mt-4">
+            <a href=("?filter=" ^ filter ^ "&cursor=" ^ cursor)>
+              <Button kind=`Secondary>(string "Load more")</Button>
+            </a>
+          </div>
+      | None -> null )
+      (* edit modal *)
+      <ClientOnly fallback=null>
+      [%browser_only
+        (fun () ->
+          let module Aria = ReactAria in
+          <Aria.DialogTrigger
+            isOpen=(editModal <> None)
+            onOpenChange=(fun o -> if not o then setEditModal (fun _ -> None))>
+            <Aria.ModalOverlay
+              className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+              isDismissable=true>
+              <Aria.Modal
+                className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                <Aria.Dialog className="outline-none">
+                  ( match editModal with
+                  | Some (actor, "handle") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "change handle")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="change_handle" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <Input
+                          name="handle"
+                          label="New handle"
+                          required=true
+                          showIndicator=false
+                          value=editValue
+                          onChange=(fun e ->
+                            setEditValue (fun _ -> (Event.Form.target e)##value))
+                        />
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "save")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | Some (actor, "email") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "change email")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="change_email" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <Input
+                          name="email"
+                          type_="email"
+                          label="New email"
+                          required=true
+                          showIndicator=false
+                          value=editValue
+                          onChange=(fun e ->
+                            setEditValue (fun _ -> (Event.Form.target e)##value))
+                        />
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "save")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | Some (actor, "password") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "change password")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="change_password" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <Input
+                          name="password"
+                          type_="password"
+                          label="New password"
+                          required=true
+                          showIndicator=false
+                          value=editValue
+                          onChange=(fun e ->
+                            setEditValue (fun _ -> (Event.Form.target e)##value))
+                        />
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "save")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | Some (actor, "send_reset") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "send password reset")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="send_password_reset" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <p className="text-mist-100">
+                          (string ("Send a password reset email to " ^ actor.email ^ "?"))
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "send")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | Some (actor, "deactivate") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "deactivate account")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="deactivate" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <p className="text-mist-100">
+                          (string ("Deactivate " ^ actor.handle ^ "? The account can be reactivated later."))
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button kind=`Danger formMethod="post" type_="submit">(string "deactivate")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | Some (actor, "reactivate") ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "reactivate account")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="reactivate" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <p className="text-mist-100">
+                          (string ("Reactivate " ^ actor.handle ^ "?"))
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "reactivate")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModal (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | _ -> null )
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger> )]
+      </ClientOnly>
+      (* delete confirmation modal *)
+      <ClientOnly fallback=null>
+      [%browser_only
+        (fun () ->
+          let module Aria = ReactAria in
+          <Aria.DialogTrigger
+            isOpen=(deleteConfirmFor <> None)
+            onOpenChange=(fun o -> if not o then setDeleteConfirmFor (fun _ -> None))>
+            <Aria.ModalOverlay
+              className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+              isDismissable=true>
+              <Aria.Modal
+                className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                <Aria.Dialog className="outline-none">
+                  ( match deleteConfirmFor with
+                  | Some actor ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "delete account")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="delete" />
+                        <input type_="hidden" name="did" value=actor.did />
+                        <p className="text-mist-100">
+                          (string ("Are you sure you want to delete " ^ actor.handle ^ "? This action cannot be undone."))
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button kind=`Danger formMethod="post" type_="submit">(string "delete")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setDeleteConfirmFor (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | None -> null )
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger> )]
+      </ClientOnly>
+    </main>
+  </div>

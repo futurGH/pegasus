@@ -1,0 +1,20 @@
+[@@@ocaml.warning "-26-27"]
+
+open React
+
+let[@react.component] make ~pages ~active_page ?header () =
+  let selected_class = "text-mana-100 font-medium" in
+  let unselected_class = "text-mist-100 hover:text-mana-100" in
+  <aside className="flex flex-col gap-y-2 min-w-24 max-w-3xs">
+    (match header with Some h -> h | None -> null)
+    <nav className="flex flex-col gap-y-1 mt-2">
+      ( List.map
+          (fun (label, href) ->
+            let className =
+              if href = active_page then selected_class else unselected_class
+            in
+            <a href className key=href>(string label)</a> )
+          pages
+      |> Array.of_list |> array )
+    </nav>
+  </aside>

@@ -1,0 +1,11 @@
+let[@react.component] make ?className ?(strokeWidth = "2") () =
+  <svg
+    ?className
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth>
+    <path d="M20 6 9 17l-5-5" />
+  </svg>

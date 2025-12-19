@@ -9,6 +9,9 @@ let update_handle ~did ~handle db =
     | Some _ ->
         Lwt.return_error "handle already in use"
     | None -> (
+        let%lwt {handle= prev_handle; _} =
+          Data_store.get_actor_by_identifier did db |> Lwt.map Option.get
+        in
         let%lwt () = Data_store.update_actor_handle ~did ~handle db in
         let%lwt plc_result =
           if String.starts_with ~prefix:"did:plc:" did then
@@ -25,6 +28,9 @@ let update_handle ~did ~handle db =
                       latest.operation.also_known_as
                   | false ->
                       ("at://" ^ handle) :: latest.operation.also_known_as
+                in
+                let aka =
+                  List.filter (fun x -> x <> "at://" ^ prev_handle) aka
                 in
                 let signed =
                   Plc.sign_operation Env.rotation_key

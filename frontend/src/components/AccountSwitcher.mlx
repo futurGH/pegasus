@@ -28,8 +28,9 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
        rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
        active:bg-mist-20/40"
     else
-      "group flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 rounded-lg \
-       focus-visible:outline-none hover:bg-mist-20/40 active:bg-mist-20/40"
+      "group min-w-48 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
+       rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
+       active:bg-mist-20/40"
   in
   let value_class =
     if inline then "text-mana-100 font-serif inline-flex items-center gap-x-1"

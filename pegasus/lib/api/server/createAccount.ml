@@ -95,7 +95,7 @@ let handler =
       let () =
         Util.mkfile_p (Util.Constants.user_db_filepath did) ~perm:0o644
       in
-      let%lwt repo = Repository.load ~write:true ~ds:ctx.db did in
+      let%lwt repo = Repository.load ~write:true ~create:true ~ds:ctx.db did in
       let%lwt _ = Repository.put_initial_commit repo in
       let%lwt _ =
         Sequencer.sequence_identity ctx.db ~did ~handle:input.handle ()

@@ -110,3 +110,41 @@ module SelectValue = struct
   [@@mel.module "react-aria-components"] [@@react.component]
 end
 [@@platform js]
+
+module MenuTrigger = struct
+  external make :
+       children:React.element
+    -> ?isOpen:bool
+    -> ?defaultOpen:bool
+    -> ?onOpenChange:(bool -> unit)
+    -> React.element = "MenuTrigger"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Menu = struct
+  external make :
+       children:React.element
+    -> ?className:string
+    -> ?onAction:(string -> unit)
+    -> React.element = "Menu"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module MenuItem = struct
+  external make :
+       children:React.element
+    -> ?id:string
+    -> ?className:string
+    -> ?onAction:(unit -> unit)
+    -> React.element = "MenuItem"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]
+
+module Separator = struct
+  external make : ?className:string -> React.element = "Separator"
+  [@@mel.module "react-aria-components"] [@@react.component]
+end
+[@@platform js]

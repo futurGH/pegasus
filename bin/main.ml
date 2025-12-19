@@ -22,7 +22,7 @@ let handlers =
   ; (post, "/oauth/authorize", Api.Oauth_.Authorize.post_handler)
   ; (options, "/oauth/token", Xrpc.handler (fun _ -> Dream.empty `No_Content))
   ; (post, "/oauth/token", Api.Oauth_.Token.post_handler)
-  ; (* account *)
+  ; (* account ui *)
     (get, "/account", Api.Account_.Index.get_handler)
   ; (post, "/account", Api.Account_.Index.post_handler)
   ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
@@ -30,6 +30,14 @@ let handlers =
   ; (get, "/account/login", Api.Account_.Login.get_handler)
   ; (post, "/account/login", Api.Account_.Login.post_handler)
   ; (get, "/account/logout", Api.Account_.Logout.handler)
+  ; (* admin ui *)
+    (get, "/admin", Api.Admin_.Index.handler)
+  ; (get, "/admin/login", Api.Admin_.Login.get_handler)
+  ; (post, "/admin/login", Api.Admin_.Login.post_handler)
+  ; (get, "/admin/users", Api.Admin_.Users.get_handler)
+  ; (post, "/admin/users", Api.Admin_.Users.post_handler)
+  ; (get, "/admin/invites", Api.Admin_.Invites.get_handler)
+  ; (post, "/admin/invites", Api.Admin_.Invites.post_handler)
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"

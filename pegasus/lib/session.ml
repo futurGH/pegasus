@@ -1,10 +1,15 @@
 type data =
   { current_did: string option [@default None]
   ; logged_in_dids: string list [@default []]
-  ; session_id: string option [@default None] }
+  ; session_id: string option [@default None]
+  ; admin_authenticated: bool [@default false] }
 [@@deriving yojson {strict= false}]
 
-let default = {current_did= None; logged_in_dids= []; session_id= None}
+let default =
+  { current_did= None
+  ; logged_in_dids= []
+  ; session_id= None
+  ; admin_authenticated= false }
 
 type cache_entry = {timestamp: float; data: data}
 
@@ -68,9 +73,13 @@ module Raw = struct
 
   let set_current_did req did =
     match%lwt get_session req with
-    | Some {logged_in_dids; session_id; _} ->
+    | Some {logged_in_dids; session_id; admin_authenticated; _} ->
         let%lwt () =
-          set_session req {current_did= Some did; logged_in_dids; session_id}
+          set_session req
+            { current_did= Some did
+            ; logged_in_dids
+            ; session_id
+            ; admin_authenticated }
         in
         Lwt.return_unit
     | None ->
@@ -85,9 +94,10 @@ module Raw = struct
 
   let set_logged_in_dids req dids =
     match%lwt get_session req with
-    | Some {current_did; session_id; _} ->
+    | Some {current_did; session_id; admin_authenticated; _} ->
         let%lwt () =
-          set_session req {current_did; logged_in_dids= dids; session_id}
+          set_session req
+            {current_did; logged_in_dids= dids; session_id; admin_authenticated}
         in
         Lwt.return_unit
     | None ->
@@ -98,28 +108,33 @@ open Raw
 
 let log_in_did req did =
   match%lwt get_session req with
-  | Some {logged_in_dids; session_id; _} ->
+  | Some {logged_in_dids; session_id; admin_authenticated; _} ->
       let%lwt () =
         set_session req
           { current_did= Some did
           ; logged_in_dids=
               ( if List.mem did logged_in_dids then logged_in_dids
                 else did :: logged_in_dids )
-          ; session_id }
+          ; session_id
+          ; admin_authenticated }
       in
       Lwt.return_unit
   | None ->
       set_session req
-        {current_did= Some did; logged_in_dids= [did]; session_id= None}
+        { current_did= Some did
+        ; logged_in_dids= [did]
+        ; session_id= None
+        ; admin_authenticated= false }
 
 let log_out_did req did =
   match%lwt get_session req with
-  | Some {current_did; logged_in_dids; session_id} ->
+  | Some {current_did; logged_in_dids; session_id; admin_authenticated} ->
       let%lwt () =
         set_session req
           { current_did
           ; logged_in_dids= List.filter (fun d -> d <> did) logged_in_dids
-          ; session_id }
+          ; session_id
+          ; admin_authenticated }
       in
       Lwt.return_unit
   | None ->
@@ -167,3 +182,25 @@ let list_logged_in_actors req db =
           | _ ->
               Lwt.return_none )
         dids
+
+let set_admin_authenticated req authenticated =
+  match%lwt get_session req with
+  | Some {current_did; logged_in_dids; session_id; _} ->
+      set_session req
+        { current_did
+        ; logged_in_dids
+        ; session_id
+        ; admin_authenticated= authenticated }
+  | None ->
+      set_session req
+        { current_did= None
+        ; logged_in_dids= []
+        ; session_id= None
+        ; admin_authenticated= authenticated }
+
+let is_admin_authenticated req =
+  match%lwt get_session req with
+  | Some {admin_authenticated; _} ->
+      Lwt.return admin_authenticated
+  | None ->
+      Lwt.return false

@@ -133,6 +133,42 @@ module Queries = struct
         |sql}
         record_out]
 
+  let delete_invite =
+    [%rapper
+      execute
+        {sql| DELETE FROM invite_codes WHERE code = %string{code}
+        |sql}]
+
+  let update_invite =
+    [%rapper
+      execute
+        {sql| UPDATE invite_codes SET did = %string{did}, remaining = %int{remaining}
+              WHERE code = %string{code}
+        |sql}]
+
+  let list_actors_filtered =
+    [%rapper
+      get_many
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+              FROM actors
+              WHERE (did LIKE '%' || %string{filter} || '%'
+                  OR handle LIKE '%' || %string{filter} || '%'
+                  OR email LIKE '%' || %string{filter} || '%')
+              AND did > %string{cursor}
+              ORDER BY did ASC LIMIT %int{limit}
+        |sql}
+        record_out]
+
+  let list_all_actors =
+    [%rapper
+      get_many
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+              FROM actors
+              WHERE did > %string{cursor}
+              ORDER BY did ASC LIMIT %int{limit}
+        |sql}
+        record_out]
+
   (* reserved keys *)
   let create_reserved_key =
     [%rapper
@@ -339,6 +375,16 @@ let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
 
 let list_invites ?(limit = 100) conn =
   Util.use_pool conn @@ Queries.list_invites ~limit
+
+let delete_invite ~code conn = Util.use_pool conn @@ Queries.delete_invite ~code
+
+let update_invite ~code ~did ~remaining conn =
+  Util.use_pool conn @@ Queries.update_invite ~code ~did ~remaining
+
+let list_actors_filtered ?(cursor = "") ?(limit = 100) ~filter conn =
+  if String.length filter = 0 then
+    Util.use_pool conn @@ Queries.list_all_actors ~cursor ~limit
+  else Util.use_pool conn @@ Queries.list_actors_filtered ~filter ~cursor ~limit
 
 (* reserved keys *)
 let create_reserved_key ~key_did ~did ~private_key conn =

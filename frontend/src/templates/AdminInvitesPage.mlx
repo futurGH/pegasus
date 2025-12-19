@@ -1,0 +1,292 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type invite =
+  { code: string
+  ; did: string
+  ; remaining: int }
+[@@deriving json]
+
+type props =
+  { invites: invite list
+  ; csrf_token: string
+  ; error: string option [@default None]
+  ; success: string option [@default None] }
+[@@deriving json]
+
+let admin_pages =
+  [ ("Users", "/admin/users")
+  ; ("Invite codes", "/admin/invites") ]
+
+let[@react.component] make
+    ~props:
+      ({ invites
+       ; csrf_token
+       ; error
+       ; success } :
+        props ) () =
+  (* create invite modal state *)
+  let createModalOpen, setCreateModalOpen = useState (fun () -> false) in
+  let newCode, setNewCode = useState (fun () -> "") in
+  let newDid, setNewDid = useState (fun () -> "") in
+  let newRemaining, setNewRemaining = useState (fun () -> "1") in
+  (* edit modal state *)
+  let editModalFor, setEditModalFor = useState (fun () -> (None : invite option)) in
+  let editDid, setEditDid = useState (fun () -> "admin") in
+  let editRemaining, setEditRemaining = useState (fun () -> "") in
+  (* delete confirmation state *)
+  let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : invite option)) in
+  <div className="w-full max-w-3xl h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
+    <Sidebar pages=admin_pages active_page="/admin/invites" />
+    <main className="flex-1 w-full max-w-2xl">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "invite codes")
+      </h1>
+      <p className="text-mist-100 mb-4">
+        (string "Manage invite codes for new account registration.")
+      </p>
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <ClientOnly fallback=(
+          <Button kind=`Primary className="w-full sm:max-w-64">
+            (string "create invite code")
+          </Button>
+        )>
+        [%browser_only
+          (fun () ->
+            let module Aria = ReactAria in
+            <Aria.DialogTrigger
+              isOpen=createModalOpen
+              onOpenChange=(fun o -> setCreateModalOpen (fun _ -> o))>
+              <Aria.Pressable>
+                <Button
+                  kind=`Primary
+                  className="w-full sm:max-w-64"
+                  onClick=(fun _ -> setCreateModalOpen (fun _ -> true))>
+                  (string "create invite code")
+                </Button>
+              </Aria.Pressable>
+              <Aria.ModalOverlay
+                className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+                isDismissable=true>
+                <Aria.Modal
+                  className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                  <Aria.Dialog className="outline-none">
+                    <Aria.Heading
+                      slot="title"
+                      className="text-lg font-serif text-mana-200 mb-2">
+                      (string "create invite code")
+                    </Aria.Heading>
+                    <p className="text-mist-100 mb-4">
+                      (string "Create a new invite code for user registration.")
+                    </p>
+                    <form className="flex flex-col gap-y-3">
+                      <input type_="hidden" name="dream.csrf" value=csrf_token />
+                      <input type_="hidden" name="action" value="create_invite" />
+                      <Input
+                        name="new_code"
+                        label="Code (optional)"
+                        placeholder="Leave empty to generate"
+                        showIndicator=false
+                        value=newCode
+                        onChange=(fun e ->
+                          setNewCode (fun _ -> (Event.Form.target e)##value))
+                      />
+                      <Input
+                        name="did"
+                        label="For (DID)"
+                        placeholder="admin"
+                        showIndicator=false
+                        value=newDid
+                        onChange=(fun e ->
+                          setNewDid (fun _ -> (Event.Form.target e)##value))
+                      />
+                      <Input
+                        name="remaining"
+                        type_="number"
+                        label="Available uses"
+                        showIndicator=false
+                        value=newRemaining
+                        onChange=(fun e ->
+                          setNewRemaining (fun _ -> (Event.Form.target e)##value))
+                      />
+                      <Button formMethod="post" type_="submit" className="mt-2">
+                        (string "create")
+                      </Button>
+                    </form>
+                  </Aria.Dialog>
+                </Aria.Modal>
+              </Aria.ModalOverlay>
+            </Aria.DialogTrigger> )]
+        </ClientOnly>
+      </div>
+      ( match error with
+      | Some err ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-phoenix-100 text-sm">
+              <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+            </span>
+          </div>
+      | None -> null )
+      ( match success with
+      | Some msg ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-mana-100 text-sm">
+              <CheckmarkIcon className="w-4 h-4 mr-2" /> (string msg)
+            </span>
+          </div>
+      | None -> null )
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-xl text-sm">
+          <thead>
+            <tr className="text-left text-mist-80">
+              <th className="pb-2 font-normal">(string "Code")</th>
+              <th className="pb-2 font-normal">(string "For")</th>
+              <th className="pb-2 font-normal">(string "Remaining")</th>
+              <th className="pb-2 font-normal w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ( List.map
+                (fun (invite : invite) ->
+                  <tr key=invite.code className="border-t border-mist-60/50">
+                    <td className="py-3 pr-4">
+                      <span className="font-mono text-mana-100">
+                        (string invite.code)
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-mist-100">
+                      (string invite.did)
+                    </td>
+                    <td className="py-3 pr-4 text-mist-100">
+                      (string (string_of_int invite.remaining))
+                    </td>
+                    <td className="py-3">
+                      <div className="flex gap-2">
+                        <button
+                          className="p-1 text-mist-80 hover:text-mana-100 cursor-pointer"
+                          onClick=(fun _ ->
+                            setEditDid (fun _ -> invite.did) ;
+                            setEditRemaining (fun _ -> string_of_int invite.remaining) ;
+                            setEditModalFor (fun _ -> Some invite))>
+                          <PencilLineIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="p-1 text-mist-80 hover:text-phoenix-100 cursor-pointer"
+                          onClick=(fun _ -> setDeleteConfirmFor (fun _ -> Some invite))>
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr> )
+                invites
+            |> Array.of_list |> array )
+          </tbody>
+        </table>
+      </div>
+      (* edit modal *)
+      <ClientOnly fallback=null>
+      [%browser_only
+        (fun () ->
+          let module Aria = ReactAria in
+          <Aria.DialogTrigger
+            isOpen=(editModalFor <> None)
+            onOpenChange=(fun o -> if not o then setEditModalFor (fun _ -> None))>
+            <Aria.ModalOverlay
+              className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+              isDismissable=true>
+              <Aria.Modal
+                className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                <Aria.Dialog className="outline-none">
+                  ( match editModalFor with
+                  | Some invite ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "edit invite code")
+                        </Aria.Heading>
+                        <p className="text-mist-80 text-sm">
+                          (string ("Code: " ^ invite.code))
+                        </p>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="update_invite" />
+                        <input type_="hidden" name="code" value=invite.code />
+                        <Input
+                          name="did"
+                          label="For (DID)"
+                          showIndicator=false
+                          value=editDid
+                          onChange=(fun e ->
+                            setEditDid (fun _ -> (Event.Form.target e)##value))
+                        />
+                        <Input
+                          name="remaining"
+                          type_="number"
+                          label="Remaining uses"
+                          showIndicator=false
+                          value=editRemaining
+                          onChange=(fun e ->
+                            setEditRemaining (fun _ -> (Event.Form.target e)##value))
+                        />
+                        <div className="flex gap-3 mt-2">
+                          <Button formMethod="post" type_="submit">(string "save")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setEditModalFor (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | None -> null )
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger> )]
+      </ClientOnly>
+      (* delete confirmation modal *)
+      <ClientOnly fallback=null>
+      [%browser_only
+        (fun () ->
+          let module Aria = ReactAria in
+          <Aria.DialogTrigger
+            isOpen=(deleteConfirmFor <> None)
+            onOpenChange=(fun o -> if not o then setDeleteConfirmFor (fun _ -> None))>
+            <Aria.ModalOverlay
+              className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+              isDismissable=true>
+              <Aria.Modal
+                className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                <Aria.Dialog className="outline-none">
+                  ( match deleteConfirmFor with
+                  | Some invite ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "delete invite code")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="delete_invite" />
+                        <input type_="hidden" name="code" value=invite.code />
+                        <p className="text-mist-100">
+                          (string ("Are you sure you want to delete invite code " ^ invite.code ^ "?"))
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button kind=`Danger formMethod="post" type_="submit">(string "delete")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setDeleteConfirmFor (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | None -> null )
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger> )]
+      </ClientOnly>
+    </main>
+  </div>

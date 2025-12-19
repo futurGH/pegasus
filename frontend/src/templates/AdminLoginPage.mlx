@@ -1,0 +1,33 @@
+open Melange_json.Primitives
+open React
+
+type props = {csrf_token: string; error: string option [@default None]}
+[@@deriving json]
+
+let[@react.component] make ~props:({csrf_token; error} : props) () =
+  <main className="w-full h-auto max-w-xs px-4 sm:px-0">
+    <h1 className="text-2xl font-serif text-mana-200 mb-2">(string "admin")</h1>
+    <span className="w-full text-balance text-mist-100">
+      (string "Enter your admin password to continue.")
+    </span>
+    <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
+      <input type_="hidden" name="dream.csrf" value=csrf_token />
+      <Input
+        sr_only=true
+        name="password"
+        type_="password"
+        label="password"
+        autoComplete="current-password"
+      />
+      ( match error with
+      | Some error ->
+          <span className="inline-flex items-center text-phoenix-100 text-sm">
+            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string error)
+          </span>
+      | None ->
+          null )
+      <Button type_="submit" formMethod="post" className="mt-2">
+        (string "sign in")
+      </Button>
+    </form>
+  </main>

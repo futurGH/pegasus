@@ -14,12 +14,17 @@ type route = {path: string; template: (module Template)}
 
 let routes =
   [ {path= "/oauth/authorize"; template= (module OauthAuthorizePage)}
+  ; {path= "/account/login"; template= (module LoginPage)}
   ; {path= "/account"; template= (module AccountPage)}
   ; {path= "/account/permissions"; template= (module AccountPermissionsPage)}
-  ; {path= "/account/login"; template= (module LoginPage)} ]
+  ; {path= "/admin/login"; template= (module AdminLoginPage)}
+  ; {path= "/admin/users"; template= (module AdminUsersPage)}
+  ; {path= "/admin/invites"; template= (module AdminInvitesPage)} ]
 
 let find_by_path path_to_find =
-  List.find_opt (fun {path; _} -> path = path_to_find) routes
+  List.find_opt
+    (fun {path; _} -> path = path_to_find || path = path_to_find ^ "/")
+    routes
 
 let get_current_path () = [%mel.raw {| window.location.pathname |}]
 
