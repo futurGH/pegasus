@@ -76,7 +76,7 @@ let[@react.component] make
         props ) () =
   <div className="w-auto h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
     <AccountSidebar
-      current_user logged_in_users active_page=AccountSidebar.Permissions
+      current_user logged_in_users active_page="/account/permissions"
     />
     <main className="flex-1 w-full max-w-md">
       <section>

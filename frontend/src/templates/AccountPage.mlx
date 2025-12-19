@@ -65,7 +65,7 @@ let[@react.component] make
   let deleteTokenInput, setDeleteTokenInput = useState (fun () -> "") in
   <div className="w-auto h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
     <AccountSidebar
-      current_user logged_in_users active_page=AccountSidebar.Account
+      current_user logged_in_users active_page="/account"
     />
     <main className="flex-1 w-full max-w-md">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
@@ -185,136 +185,136 @@ let[@react.component] make
 	                  ()
 	                in
 	                <Aria.DialogTrigger defaultOpen=email_change_pending>
-	                <Input
-	                    name="email"
-						type_="email"
-	                    label="Email"
-	                    placeholder=email
-	                    showIndicator=false
-	                    disabled=true
-	                    trailing=(
-	                    <Aria.Pressable>
-	                        <button
-	                        type_="button"
-	                        className="p-1 hover:text-mana-100 cursor-pointer"
-	                        ariaLabel="Change email"
-	                        onClick=(fun _ -> setEmailModalOpen (fun _ -> true))>
-	                        <PencilLineIcon className="w-4 h-4" />
-	                        </button>
-	                    </Aria.Pressable>
-	                    )
-	                />
-	                <Aria.ModalOverlay
-	                    className="fixed inset-0 z-50 bg-feather-100/80 \
-	                                flex items-center justify-center"
-	                    isDismissable=(not emailPending)
-	                    isOpen=emailModalOpen
-	                    onOpenChange=(fun o -> setEmailModalOpen (fun _ -> o))
-	                    >
-	                    <Aria.Modal
-	                    className="bg-feather-100 border border-mist-40 rounded-xl \
-	                                p-6 w-full max-w-sm shadow-xl">
-	                    <Aria.Dialog className="outline-none">
-	                        <Aria.Heading
-	                        slot="title"
-	                        className="text-lg font-serif text-mana-200 mb-2">
-	                        (string "change email")
-	                        </Aria.Heading>
-	                        ( if emailPending then
-	                            <form
-	                              className="flex flex-col gap-y-3"
-	                              onSubmit=(fun e ->
-	                                  Event.Form.preventDefault e ;
-	                                  submitEmailForm "confirm_email_change"
-	                                    [|("token", emailTokenInput)|] )>
-	                            <p className="text-mist-100">
-	                                (string
-	                                    ( "Enter the verification code sent to "
-	                                    ^ Option.value emailPendingAddress
-	                                        ~default:"your new email"
-	                                    ^ "." ) )
-	                            </p>
-	                            <Input
-	                                name="token"
-	                                label="Verification code"
-	                                placeholder="eml-..."
-		                            required=true
-		                            showIndicator=false
-	                                value=emailTokenInput
-	                                onChange=(fun e ->
-	                                    setEmailTokenInput (fun _ ->
-	                                        (Event.Form.target e)##value ) )
-	                            />
-	                            ( match emailErrorState with
-	                            | Some err ->
-	                                <span
-	                                    className="inline-flex items-center \
-	                                                text-phoenix-100 text-sm">
-	                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
-	                                    (string err)
-	                                </span>
-	                            | None ->
-	                                null )
-	                            <div className="flex flex-row gap-x-3 mt-2">
-	                                <Button
-	                                  type_="submit"
-	                                  disabled=emailLoading>
-	                                  (string (if emailLoading then "verifying..." else "verify"))
-	                                </Button>
-	                                <Button
-	                                  kind=`Secondary
-	                                  type_="button"
-	                                  disabled=emailLoading
-	                                  onClick=(fun _ ->
-	                                      submitEmailForm "cancel_email_change" [||])>
-	                                  (string "cancel")
-	                                </Button>
-	                            </div>
-	                            </form>
-	                        else
-	                            <form
-	                              className="flex flex-col gap-y-3"
-	                              onSubmit=(fun e ->
-	                                  Event.Form.preventDefault e ;
-	                                  submitEmailForm "request_email_change"
-	                                    [|("new_email", newEmailInput)|] )>
-	                            <Input
-	                                name="new_email"
-	                                label="New email address"
-	                                type_="email"
-		                            required=true
-		                            showIndicator=false
-	                                value=newEmailInput
-	                                onChange=(fun e ->
-	                                    setNewEmailInput (fun _ ->
-	                                        (Event.Form.target e)##value ) )
-	                            />
-	                            ( match emailErrorState with
-	                            | Some err ->
-	                                <span
-	                                    className="inline-flex items-center \
-	                                                text-phoenix-100 text-sm">
-	                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
-	                                    (string err)
-	                                </span>
-	                            | None ->
-	                                null )
-	                            <div className="flex flex-row gap-x-3 mt-2">
-	                                <Button
-	                                  type_="submit"
-	                                  disabled=emailLoading>
-	                                  (string (if emailLoading then "sending..." else "send code"))
-	                                </Button>
-	                                <Button kind=`Tertiary
-	                                  className="text-mist-100 hover:text-mana-100"
-	                                  onClick=(fun _ -> setEmailModalOpen (fun _ -> false))>
-	                                  (string "cancel")
-	                                </Button>
-	                            </div>
-	                            </form> )
-	                    </Aria.Dialog>
-	                    </Aria.Modal>
-	                </Aria.ModalOverlay>
+		                <Input
+		                    name="email"
+							type_="email"
+		                    label="Email"
+		                    placeholder=email
+		                    showIndicator=false
+		                    disabled=true
+		                    trailing=(
+		                    <Aria.Pressable>
+		                        <button
+		                        type_="button"
+		                        className="p-1 hover:text-mana-100 cursor-pointer"
+		                        ariaLabel="Change email"
+		                        onClick=(fun _ -> setEmailModalOpen (fun _ -> true))>
+		                        <PencilLineIcon className="w-4 h-4" />
+		                        </button>
+		                    </Aria.Pressable>
+		                    )
+		                />
+		                <Aria.ModalOverlay
+		                    className="fixed inset-0 z-50 bg-mist-80/80 \
+		                                flex items-center justify-center"
+		                    isDismissable=(not emailPending)
+		                    isOpen=emailModalOpen
+		                    onOpenChange=(fun o -> setEmailModalOpen (fun _ -> o))
+		                    >
+		                    <Aria.Modal
+		                    className="bg-feather-100 border border-mist-60 rounded-xl \
+		                                px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+		                    <Aria.Dialog className="outline-none">
+		                        <Aria.Heading
+		                        slot="title"
+		                        className="text-lg font-serif text-mana-200 mb-2">
+		                        (string "change email")
+		                        </Aria.Heading>
+		                        ( if emailPending then
+		                            <form
+		                              className="flex flex-col gap-y-3"
+		                              onSubmit=(fun e ->
+		                                  Event.Form.preventDefault e ;
+		                                  submitEmailForm "confirm_email_change"
+		                                    [|("token", emailTokenInput)|] )>
+		                            <p className="text-mist-100">
+		                                (string
+		                                    ( "Enter the verification code sent to "
+		                                    ^ Option.value emailPendingAddress
+		                                        ~default:"your new email"
+		                                    ^ "." ) )
+		                            </p>
+		                            <Input
+		                                name="token"
+		                                label="Verification code"
+		                                placeholder="eml-..."
+			                            required=true
+			                            showIndicator=false
+		                                value=emailTokenInput
+		                                onChange=(fun e ->
+		                                    setEmailTokenInput (fun _ ->
+		                                        (Event.Form.target e)##value ) )
+		                            />
+		                            ( match emailErrorState with
+		                            | Some err ->
+		                                <span
+		                                    className="inline-flex items-center \
+		                                                text-phoenix-100 text-sm">
+		                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
+		                                    (string err)
+		                                </span>
+		                            | None ->
+		                                null )
+		                            <div className="flex flex-row gap-x-3 mt-2">
+		                                <Button
+		                                  type_="submit"
+		                                  disabled=emailLoading>
+		                                  (string (if emailLoading then "verifying..." else "verify"))
+		                                </Button>
+		                                <Button
+		                                  kind=`Secondary
+		                                  type_="button"
+		                                  disabled=emailLoading
+		                                  onClick=(fun _ ->
+		                                      submitEmailForm "cancel_email_change" [||])>
+		                                  (string "cancel")
+		                                </Button>
+		                            </div>
+		                            </form>
+		                        else
+		                            <form
+		                              className="flex flex-col gap-y-3"
+		                              onSubmit=(fun e ->
+		                                  Event.Form.preventDefault e ;
+		                                  submitEmailForm "request_email_change"
+		                                    [|("new_email", newEmailInput)|] )>
+		                            <Input
+		                                name="new_email"
+		                                label="New email address"
+		                                type_="email"
+			                            required=true
+			                            showIndicator=false
+		                                value=newEmailInput
+		                                onChange=(fun e ->
+		                                    setNewEmailInput (fun _ ->
+		                                        (Event.Form.target e)##value ) )
+		                            />
+		                            ( match emailErrorState with
+		                            | Some err ->
+		                                <span
+		                                    className="inline-flex items-center \
+		                                                text-phoenix-100 text-sm">
+		                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
+		                                    (string err)
+		                                </span>
+		                            | None ->
+		                                null )
+		                            <div className="flex flex-row gap-x-3 mt-2">
+		                                <Button
+		                                  type_="submit"
+		                                  disabled=emailLoading>
+		                                  (string (if emailLoading then "sending..." else "send code"))
+		                                </Button>
+		                                <Button kind=`Tertiary
+		                                  className="text-mist-100 hover:text-mana-100"
+		                                  onClick=(fun _ -> setEmailModalOpen (fun _ -> false))>
+		                                  (string "cancel")
+		                                </Button>
+		                            </div>
+		                            </form> )
+		                    </Aria.Dialog>
+		                    </Aria.Modal>
+		                </Aria.ModalOverlay>
 	                </Aria.DialogTrigger> )]
               </ClientOnly>
               <Input
@@ -327,7 +327,7 @@ let[@react.component] make
                 name="password"
                 type_="password"
                 label="Password"
-                placeholder="********"
+                placeholder="⸱⸱⸱⸱⸱⸱⸱⸱"
                 autoComplete="current-password"
                 showIndicator=false
               />
@@ -361,7 +361,7 @@ let[@react.component] make
               <h2 className="text-xl font-serif text-mana-200 mb-1">
                 (string "download repository")
               </h2>
-              <p className="text-mist-100 mb-3">
+              <p className="text-mist-100 mb-4">
                 (string
                    "Export your data to back up or transfer to another PDS." )
               </p>
@@ -377,12 +377,12 @@ let[@react.component] make
               <h2 className="text-xl font-serif text-mana-200 mb-1">
                 (string "danger zone")
               </h2>
-              <p className="text-mist-100 mb-1.5">
+              <p className="text-mist-100 mb-1">
                 (string
                    "Deactivating your account will temporarily render your \
                     data inaccessible until you reactivate it." )
               </p>
-              <p className="text-mist-100 mb-3">
+              <p className="text-mist-100 mb-4">
                 (string
                    "Deleting your account will permanently remove all your \
                     data." )
@@ -453,102 +453,102 @@ let[@react.component] make
                           ()
                         in
                         <Aria.DialogTrigger defaultOpen=delete_pending>
-                        <Aria.Pressable>
-                            <Button kind=`Danger className="flex-1" onClick=(fun _ -> setDeleteModalOpen (fun _ -> true))>
-                              (string "delete account")
-                            </Button>
-                        </Aria.Pressable>
-                        <Aria.ModalOverlay
-                            className="fixed inset-0 z-50 bg-feather-100/80 \
-                                        flex items-center justify-center"
-                            isDismissable=(not deletePendingState)
-                            isOpen=deleteModalOpen onOpenChange=(fun o -> setDeleteModalOpen (fun _ -> o))>
-                            <Aria.Modal
-                            className="bg-feather-100 border border-mist-40 rounded-xl \
-                                        p-6 w-full max-w-sm shadow-xl">
-                            <Aria.Dialog className="outline-none">
-                                <Aria.Heading
-                                slot="title"
-                                className="text-lg font-serif text-mana-200 mb-2">
-                                  (string "delete account")
-                                </Aria.Heading>
-                                ( if deletePendingState then
-                                    <form
-                                      className="flex flex-col gap-y-3"
-                                      onSubmit=(fun e ->
-                                          Event.Form.preventDefault e ;
-                                          submitDeleteForm "confirm_delete"
-                                            [|("token", deleteTokenInput)|] )>
-                                    <p className="text-mist-100 text-sm">
-                                        (string
-                                            "Enter the confirmation code sent to your email." )
-                                    </p>
-                                    <Input
-                                        name="token"
-                                        label="Confirmation code"
-                                        placeholder="del-..."
-                                        required=true
-                                        showIndicator=false
-                                        value=deleteTokenInput
-                                        onChange=(fun e ->
-                                            setDeleteTokenInput (fun _ ->
-                                                (Event.Form.target e)##value ) )
-                                    />
-                                    ( match deleteErrorState with
-                                    | Some err ->
-                                        <span
-                                            className="inline-flex items-center \
-                                                        text-phoenix-100 text-sm">
-                                            <CircleAlertIcon className="w-4 h-4 mr-2" />
-                                            (string err)
-                                        </span>
-                                    | None ->
-                                        null )
-                                    <div className="flex flex-row gap-x-3 mt-2">
-                                        <Button
-                                          kind=`Danger
-                                          type_="submit"
-                                          disabled=deleteLoading>
-                                          (string (if deleteLoading then "deleting..." else "confirm"))
-                                        </Button>
-                                        <Button
-                                          kind=`Secondary
-                                          type_="button"
-                                          disabled=deleteLoading
-                                          onClick=(fun _ ->
-                                              submitDeleteForm "cancel_delete" [||])>
-                                          (string "cancel")
-                                        </Button>
-                                    </div>
-                                    </form>
-                                else
-                                    <form
-                                      className="flex flex-col gap-y-3"
-                                      onSubmit=(fun e ->
-                                          Event.Form.preventDefault e ;
-                                          submitDeleteForm "request_delete" [||] )>
-                                    <p className="text-mist-100">
-                                        (string
-                                            "This action is irreversible. A confirmation \
-                                            code will be sent to your email." )
-                                    </p>
-                                    <div className="flex flex-row gap-x-3 mt-2">
-                                        <Button
-                                          kind=`Danger
-                                          type_="submit"
-                                          disabled=deleteLoading>
-                                          (string (if deleteLoading then "sending..." else "send code"))
-                                        </Button>
-                                        <Button kind=`Tertiary
-                                          onClick=(fun _ -> setDeleteModalOpen (fun _ -> false))
-                                          className="text-mist-100 hover:text-mana-100">
-                                          (string "cancel")
-                                        </Button>
-                                    </div>
-                                    </form> )
-                            </Aria.Dialog>
-                            </Aria.Modal>
-                        </Aria.ModalOverlay>
+	                        <Aria.Pressable>
+	                            <Button kind=`Danger className="flex-1" onClick=(fun _ -> setDeleteModalOpen (fun _ -> true))>
+	                              (string "delete account")
+	                            </Button>
+	                        </Aria.Pressable>
+	                        <Aria.ModalOverlay
+	                            className="fixed inset-0 z-50 bg-mist-80/80 \
+	                                        flex items-center justify-center"
+	                            isDismissable=(not deletePendingState)
+	                            isOpen=deleteModalOpen onOpenChange=(fun o -> setDeleteModalOpen (fun _ -> o))>
+	                            <Aria.Modal
+	                            className="bg-feather-100 border border-mist-60 rounded-xl \
+	                                        px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+	                            <Aria.Dialog className="outline-none">
+	                                <Aria.Heading
+	                                slot="title"
+	                                className="text-lg font-serif text-mana-200 mb-2">
+	                                  (string "delete account")
+	                                </Aria.Heading>
+	                                ( if deletePendingState then
+	                                    <form
+	                                      className="flex flex-col gap-y-3"
+	                                      onSubmit=(fun e ->
+	                                          Event.Form.preventDefault e ;
+	                                          submitDeleteForm "confirm_delete"
+	                                            [|("token", deleteTokenInput)|] )>
+	                                    <p className="text-mist-100 text-sm">
+	                                        (string
+	                                            "Enter the confirmation code sent to your email." )
+	                                    </p>
+	                                    <Input
+	                                        name="token"
+	                                        label="Confirmation code"
+	                                        placeholder="del-..."
+	                                        required=true
+	                                        showIndicator=false
+	                                        value=deleteTokenInput
+	                                        onChange=(fun e ->
+	                                            setDeleteTokenInput (fun _ ->
+	                                                (Event.Form.target e)##value ) )
+	                                    />
+	                                    ( match deleteErrorState with
+	                                    | Some err ->
+	                                        <span
+	                                            className="inline-flex items-center \
+	                                                        text-phoenix-100 text-sm">
+	                                            <CircleAlertIcon className="w-4 h-4 mr-2" />
+	                                            (string err)
+	                                        </span>
+	                                    | None ->
+	                                        null )
+	                                    <div className="flex flex-row gap-x-3 mt-2">
+	                                        <Button
+	                                          kind=`Danger
+	                                          type_="submit"
+	                                          disabled=deleteLoading>
+	                                          (string (if deleteLoading then "deleting..." else "confirm"))
+	                                        </Button>
+	                                        <Button
+	                                          kind=`Secondary
+	                                          type_="button"
+	                                          disabled=deleteLoading
+	                                          onClick=(fun _ ->
+	                                              submitDeleteForm "cancel_delete" [||])>
+	                                          (string "cancel")
+	                                        </Button>
+	                                    </div>
+	                                    </form>
+	                                else
+	                                    <form
+	                                      className="flex flex-col gap-y-3"
+	                                      onSubmit=(fun e ->
+	                                          Event.Form.preventDefault e ;
+	                                          submitDeleteForm "request_delete" [||] )>
+	                                    <p className="text-mist-100">
+	                                        (string
+	                                            "This action is irreversible. A confirmation \
+	                                            code will be sent to your email." )
+	                                    </p>
+	                                    <div className="flex flex-row gap-x-3 mt-2">
+	                                        <Button
+	                                          kind=`Danger
+	                                          type_="submit"
+	                                          disabled=deleteLoading>
+	                                          (string (if deleteLoading then "sending..." else "send code"))
+	                                        </Button>
+	                                        <Button kind=`Tertiary
+	                                          onClick=(fun _ -> setDeleteModalOpen (fun _ -> false))
+	                                          className="text-mist-100 hover:text-mana-100">
+	                                          (string "cancel")
+	                                        </Button>
+	                                    </div>
+	                                    </form> )
+	                            </Aria.Dialog>
+	                            </Aria.Modal>
+	                        </Aria.ModalOverlay>
                         </Aria.DialogTrigger> )]
                 </ClientOnly>
               </div>
