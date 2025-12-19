@@ -377,25 +377,25 @@ let[@react.component] make
               <h2 className="text-xl font-serif text-mana-200 mb-1">
                 (string "danger zone")
               </h2>
-              <p className="text-mist-100 mb-3">
+              <p className="text-mist-100 mb-1.5">
                 (string
                    "Deactivating your account will temporarily render your \
                     data inaccessible until you reactivate it." )
-                <br />
+              </p>
+              <p className="text-mist-100 mb-3">
                 (string
                    "Deleting your account will permanently remove all your \
                     data." )
               </p>
               <div className="flex flex-row gap-x-3 mt-2">
-                <form>
+                <form className="flex-1">
                   <input type_="hidden" name="dream.csrf" value=csrf_token />
                   <Button
                     kind=`Danger_secondary
                     type_="submit"
                     formMethod="post"
                     name="action"
-                    value="deactivate"
-                    className="flex-1">
+                    value="deactivate">
                     (string "deactivate account")
                   </Button>
                 </form>
