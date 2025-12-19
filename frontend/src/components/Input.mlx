@@ -5,7 +5,8 @@ let req_marker = " *"
 
 let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
     ?(sr_only = false) ?value ?placeholder ?autoComplete ?(required = false)
-    ?(disabled = false) ?trailing ?(show_optional_indicator = true) () =
+    ?(disabled = false) ?trailing ?(showIndicator = true) ?onChange ()
+    =
   let id = Option.value id ~default:name in
   let placeholder = if label <> None && sr_only then label else placeholder in
   let input =
@@ -18,6 +19,7 @@ let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
       required
       disabled
       ?value
+      ?onChange
       className="block min-w-0 grow text-mist-100 placeholder:text-mist-80 \
                  placeholder:font-medium focus-visible:outline-none"
     />
@@ -30,11 +32,11 @@ let[@react.component] make ?id ~name ?(className = "") ?(type_ = "text") ?label
                     ^ if sr_only then " sr-only" else "" )>
           <label htmlFor=id className="text-mist-100 mb-1">
             (string label)
-            ( if required then
+            ( if required && showIndicator then
                 <span className="text-phoenix-100">(string req_marker)</span>
               else null )
           </label>
-          ( if required || not show_optional_indicator then null
+          ( if required || not showIndicator then null
             else <span className="text-mist-80">(string "optional")</span> )
         </div>
     | None ->

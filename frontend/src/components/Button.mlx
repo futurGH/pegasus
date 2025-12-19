@@ -32,7 +32,8 @@ let classes = function
          disabled:text-mist-80"
 
 let[@react.component] make ?id ?name ?(kind = `Primary) ?(type_ = "button")
-    ?formMethod ?onClick ?value ?(className = "") ?ref ~children () =
+    ?formMethod ?onClick ?value ?disabled ?(className = "") ?ref
+    ~children () =
   <button
     ?id
     ?name
@@ -40,6 +41,7 @@ let[@react.component] make ?id ?name ?(kind = `Primary) ?(type_ = "button")
     ?formMethod
     ?onClick
     ?value
+    ?disabled
     className=(classes kind ^ " " ^ className)
     ?ref>
     children
