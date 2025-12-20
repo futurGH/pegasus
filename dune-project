@@ -49,6 +49,7 @@
   (ocaml (= 5.2.1))
   dune
   lwt
+  (aws-s3-lwt (>= 4.8.1))
   (caqti (>= 1.9.0))
   (caqti-driver-sqlite3 (>= 1.9.0))
   (caqti-lwt (>= 1.9.0))

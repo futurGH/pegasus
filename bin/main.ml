@@ -197,10 +197,11 @@ let public_loader _root path _request =
 let static_routes =
   [Dream.get "/public/**" (Dream.static ~loader:public_loader "")]
 
-let main =
+let serve () =
   Printexc.record_backtrace true ;
   let%lwt db = Data_store.connect ~create:true () in
   let%lwt () = Data_store.init db in
+  S3.Backup.start () ;
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.pipeline
        [ Dream.logger
@@ -218,4 +219,41 @@ let main =
   @ [ Dream.get "/xrpc/**" (Xrpc.service_proxy_handler db)
     ; Dream.post "/xrpc/**" (Xrpc.service_proxy_handler db) ]
 
-let () = Lwt_main.run main
+let migrate_blobs ?did () =
+  match did with
+  | Some did ->
+      print_endline ("migrating blobs for user " ^ did) ;
+      let%lwt _ = S3.Blob_migration.migrate_user ~did in
+      Lwt.return_unit
+  | None ->
+      print_endline "migrating all blobs to S3" ;
+      S3.Blob_migration.migrate_all ()
+
+let print_usage () =
+  print_endline
+  @@ String.trim
+       {|
+usage: pegasus [command]
+
+commands:
+  serve                    start the PDS
+  migrate-blobs            migrate all local blobs to S3
+  migrate-blobs <did>      migrate blobs for a specific user to S3
+|}
+
+(** CLI entry point *)
+let () =
+  let args = Array.to_list Sys.argv |> List.tl in
+  match args with
+  | [] | ["serve"] ->
+      Lwt_main.run (serve ())
+  | ["migrate-blobs"] ->
+      Lwt_main.run (migrate_blobs ())
+  | ["migrate-blobs"; did] ->
+      Lwt_main.run (migrate_blobs ~did ())
+  | ["help"] | ["--help"] | ["-h"] ->
+      print_usage ()
+  | cmd :: _ ->
+      print_endline ("unknown command: " ^ cmd) ;
+      print_usage () ;
+      exit 1

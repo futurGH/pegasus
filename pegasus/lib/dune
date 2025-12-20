@@ -1,6 +1,7 @@
 (library
  (name pegasus)
  (libraries
+  aws-s3-lwt
   caqti
   caqti-lwt
   caqti-lwt.unix

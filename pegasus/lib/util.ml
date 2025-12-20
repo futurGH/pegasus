@@ -530,3 +530,17 @@ let send_email_or_log ~(recipients : Letters.recipient list) ~subject
       with _ -> Lwt.return (log_email ()) ) )
   | _ ->
       Lwt.return (log_email ())
+
+let s3_error_to_string : Aws_s3_lwt.S3.error -> string = function
+  | Redirect endpoint ->
+      "redirect to " ^ endpoint.host
+  | Throttled ->
+      "throttled"
+  | Unknown (code, msg) ->
+      Printf.sprintf "unknown error %d: %s" code msg
+  | Failed exn ->
+      Printf.sprintf "failed: %s" (Printexc.to_string exn)
+  | Forbidden ->
+      "forbidden"
+  | Not_found ->
+      "not found"

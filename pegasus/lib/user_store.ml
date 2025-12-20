@@ -5,9 +5,8 @@ module Block_map = Mist.Storage.Block_map
 module Lex = Mist.Lex
 module Tid = Mist.Tid
 
-let delete_blob_file ~did cid =
-  let file = Filename.concat (Util.Constants.user_blobs_location did) cid in
-  if Sys.file_exists file then Sys.remove file
+let delete_blob_file ~did ~cid ~storage =
+  Lwt.async (fun () -> Blob_store.delete ~did ~cid ~storage)
 
 module Types = struct
   open struct
@@ -59,9 +58,10 @@ module Types = struct
 
   type record = {path: string; cid: Cid.t; value: Lex.repo_record; since: Tid.t}
 
-  type blob = {cid: Cid.t; mimetype: string}
+  type blob = {cid: Cid.t; mimetype: string; storage: Blob_store.storage}
 
-  type blob_with_contents = {cid: Cid.t; mimetype: string; data: Blob.t}
+  type blob_with_contents =
+    {cid: Cid.t; mimetype: string; data: Blob.t; storage: Blob_store.storage}
 end
 
 open Types
@@ -177,8 +177,7 @@ module Queries = struct
   let get_blob =
     [%rapper
       get_opt
-        {sql| SELECT @CID{cid}, @string{mimetype} FROM blobs WHERE cid = %CID{cid} |sql}
-        record_out]
+        {sql| SELECT @CID{cid}, @string{mimetype}, @string{storage} FROM blobs WHERE cid = %CID{cid} |sql}]
 
   let list_blobs =
     [%rapper
@@ -227,18 +226,34 @@ module Queries = struct
               )
         |sql}]
 
-  let put_blob cid mimetype =
+  let put_blob cid mimetype storage =
     [%rapper
       get_one
-        {sql| INSERT INTO blobs (cid, mimetype)
-              VALUES (%CID{cid}, %string{mimetype})
-              ON CONFLICT (cid) DO UPDATE SET mimetype = excluded.mimetype
+        {sql| INSERT INTO blobs (cid, mimetype, storage)
+              VALUES (%CID{cid}, %string{mimetype}, %string{storage})
+              ON CONFLICT (cid) DO UPDATE SET mimetype = excluded.mimetype, storage = excluded.storage
               RETURNING @CID{cid}
         |sql}]
-      ~cid ~mimetype
+      ~cid ~mimetype ~storage
 
   let delete_blob cid =
     [%rapper execute {sql| DELETE FROM blobs WHERE cid = %CID{cid} |sql}] ~cid
+
+  let update_blob_storage cid storage =
+    [%rapper
+      execute
+        {sql| UPDATE blobs SET storage = %string{storage} WHERE cid = %CID{cid} |sql}]
+      ~cid ~storage
+
+  let list_blobs_by_storage =
+    [%rapper
+      get_many
+        {sql| SELECT @CID{cid}, @string{mimetype} FROM blobs
+              WHERE storage = %string{storage}
+              AND cid > %string{cursor}
+              ORDER BY cid
+              LIMIT %int{limit}
+        |sql}]
 
   let delete_orphaned_blobs_by_record_path path =
     [%rapper
@@ -251,7 +266,7 @@ module Queries = struct
                   SELECT 1 FROM blobs_records
                   WHERE blob_cid = blobs.cid AND record_path != %string{path}
               )
-              RETURNING @CID{cid}
+              RETURNING @CID{cid}, @string{storage}
         |sql}]
       ~path
 
@@ -415,7 +430,9 @@ let delete_record t path : unit Lwt.t =
           in
           let () =
             List.iter
-              (fun cid -> delete_blob_file ~did:t.did (Cid.to_string cid))
+              (fun (cid, storage_str) ->
+                let storage = Blob_store.storage_of_string storage_str in
+                delete_blob_file ~did:t.did ~cid ~storage )
               deleted_blobs
           in
           del ) )
@@ -426,17 +443,22 @@ let get_blob t cid : blob_with_contents option Lwt.t =
   match%lwt Util.use_pool t.db @@ Queries.get_blob ~cid with
   | None ->
       Lwt.return_none
-  | Some blob ->
-      let {cid; mimetype} : blob = blob in
-      let file =
-        Filename.concat
-          (Util.Constants.user_blobs_location t.did)
-          (Cid.to_string cid)
-      in
-      let data =
-        In_channel.with_open_bin file In_channel.input_all |> Bytes.of_string
-      in
-      Lwt.return_some {cid; mimetype; data}
+  | Some (cid, mimetype, storage_str) -> (
+      let storage = Blob_store.storage_of_string storage_str in
+      let%lwt data_opt = Blob_store.get ~did:t.did ~cid ~storage in
+      match data_opt with
+      | Some data ->
+          Lwt.return_some {cid; mimetype; data; storage}
+      | None ->
+          Lwt.return_none )
+
+let get_blob_metadata t cid : blob option Lwt.t =
+  match%lwt Util.use_pool t.db @@ Queries.get_blob ~cid with
+  | None ->
+      Lwt.return_none
+  | Some (cid, mimetype, storage_str) ->
+      let storage = Blob_store.storage_of_string storage_str in
+      Lwt.return_some {cid; mimetype; storage}
 
 let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
   Util.use_pool t.db
@@ -457,21 +479,29 @@ let count_referenced_blobs t : int Lwt.t =
   Util.use_pool t.db @@ Queries.count_referenced_blobs ()
 
 let put_blob t cid mimetype data : Cid.t Lwt.t =
-  let file =
-    Filename.concat
-      (Util.Constants.user_blobs_location t.did)
-      (Cid.to_string cid)
-  in
-  Core_unix.mkdir_p (Filename.dirname file) ~perm:0o755 ;
-  Out_channel.with_open_bin file (fun oc -> Out_channel.output_bytes oc data) ;
-  Util.use_pool t.db @@ Queries.put_blob cid mimetype
+  let%lwt storage = Blob_store.put ~did:t.did ~cid ~data in
+  let storage_str = Blob_store.storage_to_string storage in
+  Util.use_pool t.db @@ Queries.put_blob cid mimetype storage_str
 
 let delete_blob t cid : unit Lwt.t =
-  delete_blob_file ~did:t.did (Cid.to_string cid) ;
+  let%lwt blob_opt = get_blob_metadata t cid in
+  ( match blob_opt with
+  | Some {storage; _} ->
+      delete_blob_file ~did:t.did ~cid ~storage
+  | None ->
+      () ) ;
   Util.use_pool t.db @@ Queries.delete_blob cid
 
-let delete_orphaned_blobs_by_record_path t path : Cid.t list Lwt.t =
-  Util.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
+let delete_orphaned_blobs_by_record_path t path :
+    (Cid.t * Blob_store.storage) list Lwt.t =
+  let%lwt results =
+    Util.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
+  in
+  Lwt.return
+  @@ List.map
+       (fun (cid, storage_str) ->
+         (cid, Blob_store.storage_of_string storage_str) )
+       results
 
 let list_blob_refs t path : Cid.t list Lwt.t =
   Util.use_pool t.db @@ Queries.list_blob_refs path
@@ -489,3 +519,13 @@ let put_blob_refs t path cids : (unit, exn) Lwt_result.t =
 let clear_blob_refs t path cids : unit Lwt.t =
   if List.is_empty cids then Lwt.return_unit
   else Util.use_pool t.db @@ Queries.clear_blob_refs path cids
+
+let update_blob_storage t cid storage : unit Lwt.t =
+  let storage_str = Blob_store.storage_to_string storage in
+  Util.use_pool t.db @@ Queries.update_blob_storage cid storage_str
+
+let list_blobs_by_storage t ~storage ~limit ~cursor :
+    (Cid.t * string) list Lwt.t =
+  let storage_str = Blob_store.storage_to_string storage in
+  Util.use_pool t.db
+  @@ Queries.list_blobs_by_storage ~storage:storage_str ~limit ~cursor
