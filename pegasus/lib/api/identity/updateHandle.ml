@@ -81,8 +81,22 @@ let update_handle ~did ~handle db =
             let%lwt _ = Sequencer.sequence_identity db ~did ~handle () in
             Lwt.return_ok () ) )
 
+let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
+
 let handler =
-  Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
+  Xrpc.handler ~auth:Authorization
+    ~rate_limits:
+      [ Route
+          { duration_ms= 5 * Util.minute
+          ; points= 10
+          ; calc_key= Some calc_key_did
+          ; calc_points= None }
+      ; Route
+          { duration_ms= Util.day
+          ; points= 50
+          ; calc_key= Some calc_key_did
+          ; calc_points= None } ]
+    (fun {req; auth; db; _} ->
       Auth.assert_identity_scope auth ~attr:Oauth.Scopes.Handle ;
       let did = Auth.get_authed_did_exn auth in
       let%lwt {handle} = Xrpc.parse_body req request_of_yojson in

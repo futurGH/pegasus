@@ -19,7 +19,14 @@ let reset_password ~token ~password db =
         Lwt.return_error ExpiredToken )
 
 let handler =
-  Xrpc.handler (fun {req; db; _} ->
+  Xrpc.handler
+    ~rate_limits:
+      [ Route
+          { duration_ms= 5 * Util.minute
+          ; points= 50
+          ; calc_key= None
+          ; calc_points= None } ]
+    (fun {req; db; _} ->
       let%lwt {token; password} = Xrpc.parse_body req request_of_yojson in
       match%lwt reset_password ~token ~password db with
       | Ok did ->

@@ -16,8 +16,22 @@ let request_account_delete (actor : Data_store.Types.actor) db =
          (Printf.sprintf "Delete your account using the following token: %s"
             code ) )
 
+let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
+
 let handler =
-  Xrpc.handler ~auth:Authorization (fun {auth; db; _} ->
+  Xrpc.handler ~auth:Authorization
+    ~rate_limits:
+      [ Route
+          { duration_ms= Util.day
+          ; points= 15
+          ; calc_key= Some calc_key_did
+          ; calc_points= None }
+      ; Route
+          { duration_ms= Util.hour
+          ; points= 5
+          ; calc_key= Some calc_key_did
+          ; calc_points= None } ]
+    (fun {auth; db; _} ->
       let did = Auth.get_authed_did_exn auth in
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->

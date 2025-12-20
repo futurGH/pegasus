@@ -1,6 +1,12 @@
 open Pegasus
 open Dream
 
+let () =
+  Rate_limiter.Shared.register ~name:"repo-write-hour" ~duration_ms:Util.hour
+    ~points:5000 ;
+  Rate_limiter.Shared.register ~name:"repo-write-day" ~duration_ms:Util.day
+    ~points:35000
+
 let handlers =
   [ (* meta *)
     (get, "/", Api.Root.handler)

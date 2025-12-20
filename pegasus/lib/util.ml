@@ -317,6 +317,12 @@ let multi_query pool
           let%lwt result = aux (Ok 0) queries in
           Lwt.return result ) )
 
+let minute = 60 * 1000
+
+let hour = 60 * minute
+
+let day = 24 * hour
+
 (* unix timestamp *)
 let now_ms () : int = int_of_float (Unix.gettimeofday () *. 1000.)
 

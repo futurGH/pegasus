@@ -19,7 +19,14 @@ let request_password_reset (actor : Data_store.Types.actor) db =
             code ) )
 
 let handler =
-  Xrpc.handler (fun {req; auth; db; _} ->
+  Xrpc.handler
+    ~rate_limits:
+      [ Route
+          {duration_ms= Util.day; points= 50; calc_key= None; calc_points= None}
+      ; Route
+          {duration_ms= Util.hour; points= 15; calc_key= None; calc_points= None}
+      ]
+    (fun {req; auth; db; _} ->
       let%lwt actor_opt =
         match auth with
         | Auth.Access {did} | Auth.OAuth {did; _} -> (

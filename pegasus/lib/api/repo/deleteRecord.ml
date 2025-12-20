@@ -11,8 +11,22 @@ type response = {commit: res_commit option [@default None]}
 
 and res_commit = {cid: string; rev: string} [@@deriving yojson {strict= false}]
 
+let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
+
+let calc_points_delete _ctx = 1
+
 let handler =
-  Xrpc.handler ~auth:Authorization (fun ctx ->
+  Xrpc.handler ~auth:Authorization
+    ~rate_limits:
+      [ Shared
+          { name= "repo-write-hour"
+          ; calc_key= Some calc_key_did
+          ; calc_points= Some calc_points_delete }
+      ; Shared
+          { name= "repo-write-day"
+          ; calc_key= Some calc_key_did
+          ; calc_points= Some calc_points_delete } ]
+    (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
       Auth.assert_repo_scope ctx.auth ~collection:input.collection
         ~action:Oauth.Scopes.Delete ;

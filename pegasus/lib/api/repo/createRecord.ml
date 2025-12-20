@@ -18,8 +18,22 @@ type response =
 
 and res_commit = {cid: string; rev: string} [@@deriving yojson]
 
+let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
+
+let calc_points_create _ctx = 3
+
 let handler =
-  Xrpc.handler ~auth:Authorization (fun ctx ->
+  Xrpc.handler ~auth:Authorization
+    ~rate_limits:
+      [ Shared
+          { name= "repo-write-hour"
+          ; calc_key= Some calc_key_did
+          ; calc_points= Some calc_points_create }
+      ; Shared
+          { name= "repo-write-day"
+          ; calc_key= Some calc_key_did
+          ; calc_points= Some calc_points_create } ]
+    (fun ctx ->
       let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       Auth.assert_repo_scope ctx.auth ~collection:input.collection

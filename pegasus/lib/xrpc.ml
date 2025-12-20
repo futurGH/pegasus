@@ -7,22 +7,122 @@ type context = {req: Dream.request; db: Data_store.t; auth: Auth.credentials}
 
 type handler = context -> Dream.response Lwt.t
 
-let handler ?(auth : Auth.Verifiers.t = Any) (hdlr : handler) (init : init) =
+type rate_limit_rule =
+  | Shared of
+      { name: string
+      ; calc_key: (context -> string option) option
+      ; calc_points: (context -> int) option }
+  | Route of
+      { duration_ms: int
+      ; points: int
+      ; calc_key: (context -> string option) option
+      ; calc_points: (context -> int) option }
+
+let default_calc_key (ctx : context) = Some (Dream.client ctx.req)
+
+let default_calc_points (_ctx : context) = 1
+
+let consume_shared_rate_limit ~name ~key ~points =
+  match Rate_limiter.Shared.get name with
+  | Some limiter -> (
+    match Rate_limiter.consume limiter ~key ~points with
+    | Rate_limiter.Exceeded status ->
+        raise (Rate_limiter.Rate_limit_exceeded status)
+    | result ->
+        result )
+  | None ->
+      failwith (Printf.sprintf "shared rate limiter %s not found" name)
+
+let consume_route_rate_limit ~name ~duration_ms ~key ~max_points ~consume_points
+    =
+  let limiter =
+    Rate_limiter.Route.get_or_create ~name ~duration_ms ~points:max_points
+  in
+  match Rate_limiter.consume limiter ~key ~points:consume_points with
+  | Rate_limiter.Exceeded status ->
+      raise (Rate_limiter.Rate_limit_exceeded status)
+  | result ->
+      result
+
+let apply_rate_limits ~nsid (rules : rate_limit_rule list) (ctx : context) =
+  let results =
+    List.mapi
+      (fun i rule ->
+        match rule with
+        | Shared {name; calc_key; calc_points} -> (
+            let calc_key = Option.value calc_key ~default:default_calc_key in
+            let calc_points =
+              Option.value calc_points ~default:default_calc_points
+            in
+            match calc_key ctx with
+            | None ->
+                Rate_limiter.Skipped
+            | Some key ->
+                let points = calc_points ctx in
+                consume_shared_rate_limit ~name ~key ~points )
+        | Route {duration_ms; points= max_points; calc_key; calc_points} -> (
+            let calc_key = Option.value calc_key ~default:default_calc_key in
+            let calc_points =
+              Option.value calc_points ~default:default_calc_points
+            in
+            let name = Printf.sprintf "%s-%d" nsid i in
+            match calc_key ctx with
+            | None ->
+                Rate_limiter.Skipped
+            | Some key ->
+                let consume_points = calc_points ctx in
+                consume_route_rate_limit ~name ~duration_ms ~key ~max_points
+                  ~consume_points ) )
+      rules
+  in
+  match Rate_limiter.get_tightest_limit results with
+  | Some (Rate_limiter.Exceeded status) ->
+      raise (Rate_limiter.Rate_limit_exceeded status)
+  | _ ->
+      ()
+
+let rate_limit_response (status : Rate_limiter.status) =
+  let reset_at =
+    ((Unix.gettimeofday () *. 1000.0) +. Float.of_int status.ms_before_next)
+    /. 1000.0
+  in
+  let headers =
+    [ ("RateLimit-Limit", Int.to_string status.limit)
+    ; ("RateLimit-Reset", Int.to_string (Float.to_int reset_at))
+    ; ("RateLimit-Remaining", Int.to_string status.remaining_points)
+    ; ( "RateLimit-Policy"
+      , Printf.sprintf "%d;w=%d" status.limit (status.duration_ms / 1000) ) ]
+  in
+  Dream.json ~status:`Too_Many_Requests ~headers
+    {|{"error":"RateLimitExceeded","message":"Rate limit exceeded"}|}
+
+let extract_nsid req = (Dream.path [@warning "-3"]) req |> List.rev |> List.hd
+
+let handler ?(auth : Auth.Verifiers.t = Any)
+    ?(rate_limits : rate_limit_rule list = []) (hdlr : handler) (init : init) =
   let open Errors in
   try
     let auth = Auth.Verifiers.of_t auth in
     try%lwt
       match%lwt auth init with
       | Ok creds -> (
-        try%lwt hdlr {req= init.req; db= init.db; auth= creds}
-        with e ->
-          if not (is_xrpc_error e) then log_exn ~req:init.req e ;
-          exn_to_response e )
+          let ctx = {req= init.req; db= init.db; auth= creds} in
+          try
+            let nsid = extract_nsid init.req in
+            apply_rate_limits ~nsid rate_limits ctx ;
+            try%lwt hdlr ctx
+            with e ->
+              if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+              exn_to_response e
+          with Rate_limiter.Rate_limit_exceeded status ->
+            rate_limit_response status )
       | Error e ->
           exn_to_response e
     with
     | Redirect r ->
         Dream.redirect init.req r
+    | Rate_limiter.Rate_limit_exceeded status ->
+        rate_limit_response status
     | e ->
         if not (is_xrpc_error e) then log_exn ~req:init.req e ;
         exn_to_response e

@@ -44,8 +44,22 @@ let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
   in
   Lwt.return token_required
 
+let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
+
 let handler =
-  Xrpc.handler ~auth:Authorization (fun {auth; db; _} ->
+  Xrpc.handler ~auth:Authorization
+    ~rate_limits:
+      [ Route
+          { duration_ms= Util.day
+          ; points= 15
+          ; calc_key= Some calc_key_did
+          ; calc_points= None }
+      ; Route
+          { duration_ms= Util.hour
+          ; points= 5
+          ; calc_key= Some calc_key_did
+          ; calc_points= None } ]
+    (fun {auth; db; _} ->
       Auth.assert_account_scope auth ~attr:Oauth.Scopes.Email
         ~action:Oauth.Scopes.Manage ;
       let did = Auth.get_authed_did_exn auth in
