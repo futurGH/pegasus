@@ -134,8 +134,10 @@ let post_handler =
                   else
                     let handle = handle ^ "." ^ Env.hostname in
                     match Util.validate_handle handle with
-                    | Error e ->
-                        render_page ~error:e ()
+                    | Error (InvalidFormat e)
+                    | Error (TooLong e)
+                    | Error (TooShort e) ->
+                        render_page ~error:("Handle " ^ e) ()
                     | Ok _ -> (
                       match%lwt
                         Data_store.get_actor_by_identifier email ctx.db
@@ -203,8 +205,14 @@ let post_handler =
                   with
                   | Ok () ->
                       render_page ~success:"Handle updated." ()
-                  | Error e ->
-                      render_page ~error:e () )
+                  | Error (InvalidFormat e)
+                  | Error (TooLong e)
+                  | Error (TooShort e) ->
+                      render_page ~error:("Handle " ^ e) ()
+                  | Error HandleTaken ->
+                      render_page ~error:"Handle already taken" ()
+                  | Error (InternalServerError _) ->
+                      render_page ~error:"Internal server error" () )
               | Some "change_email" -> (
                   let email =
                     List.assoc_opt "email" fields

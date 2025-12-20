@@ -11,4 +11,5 @@ let handler =
         | Ok () ->
             Dream.empty `OK
         | Error e ->
-            Errors.invalid_request ~name:"InvalidHandle" e ) )
+            Errors.invalid_request ~name:"InvalidHandle"
+              (Identity.UpdateHandle.update_handle_error_to_string e) ) )

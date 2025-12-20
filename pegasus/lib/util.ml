@@ -338,17 +338,22 @@ let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
     []
     (Mist.Lex.String_map.bindings record)
 
+type validate_handle_error =
+  | InvalidFormat of string
+  | TooShort of string
+  | TooLong of string
+
 let validate_handle handle =
   let front =
     String.sub handle 0 (String.length handle - (String.length Env.hostname + 1))
   in
-  if String.contains front '.' then Error "handle can't contain periods"
+  if String.contains front '.' then Error (InvalidFormat "can't contain periods")
   else
     match String.length front with
     | l when l < 3 ->
-        Error "handle too short"
+        Error (TooShort "must be at least 3 characters")
     | l when l > 18 ->
-        Error "handle too long"
+        Error (TooLong "must be at most 18 characters")
     | _ ->
         Ok ()
 

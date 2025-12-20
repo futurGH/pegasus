@@ -48,8 +48,8 @@ let create_account ~email ~handle ~password ?invite_code ?did ?recovery_key db =
   | Ok () -> (
     (* validate handle *)
     match Util.validate_handle handle with
-    | Error e ->
-        Lwt.return_error (InvalidHandle e)
+    | Error (InvalidFormat e) | Error (TooLong e) | Error (TooShort e) ->
+        Lwt.return_error (InvalidHandle ("handle " ^ e))
     | Ok _ -> (
       (* check for existing accounts *)
       match%lwt

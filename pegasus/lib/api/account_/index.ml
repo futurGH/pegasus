@@ -111,8 +111,14 @@ let post_handler =
                         else Lwt.return_ok ()
                       in
                       match handle_result with
-                      | Error e ->
-                          render_page ~error:e ()
+                      | Error (InvalidFormat e)
+                      | Error (TooLong e)
+                      | Error (TooShort e) ->
+                          render_page ~error:("Handle " ^ e) ()
+                      | Error HandleTaken ->
+                          render_page ~error:"Handle already taken" ()
+                      | Error (InternalServerError _) ->
+                          render_page ~error:"Internal server error" ()
                       | Ok () ->
                           (* update password if provided *)
                           let%lwt () =

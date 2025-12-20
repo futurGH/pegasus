@@ -1,13 +1,32 @@
 type request = {handle: string} [@@deriving yojson]
 
+type update_handle_error =
+  | InvalidFormat of string
+  | HandleTaken
+  | TooShort of string
+  | TooLong of string
+  | InternalServerError of string
+
+let update_handle_error_to_string = function
+  | InvalidFormat m | TooShort m | TooLong m ->
+      "handle " ^ m
+  | HandleTaken ->
+      "handle already taken"
+  | InternalServerError msg ->
+      msg
+
 let update_handle ~did ~handle db =
   match Util.validate_handle handle with
-  | Error e ->
-      Lwt.return_error e
+  | Error (InvalidFormat e) ->
+      Lwt.return_error (InvalidFormat e)
+  | Error (TooShort e) ->
+      Lwt.return_error (TooShort e)
+  | Error (TooLong e) ->
+      Lwt.return_error (TooLong e)
   | Ok () -> (
     match%lwt Data_store.get_actor_by_identifier handle db with
     | Some _ ->
-        Lwt.return_error "handle already in use"
+        Lwt.return_error HandleTaken
     | None -> (
         let%lwt {handle= prev_handle; _} =
           Data_store.get_actor_by_identifier did db |> Lwt.map Option.get
@@ -17,7 +36,8 @@ let update_handle ~did ~handle db =
           if String.starts_with ~prefix:"did:plc:" did then
             match%lwt Plc.get_audit_log did with
             | Error e ->
-                Lwt.return_error ("failed to fetch did doc: " ^ e)
+                Lwt.return_error
+                  (InternalServerError ("failed to fetch did doc: " ^ e))
             | Ok log -> (
                 let latest = List.rev log |> List.hd in
                 let aka =
@@ -48,8 +68,9 @@ let update_handle ~did ~handle db =
                     Lwt.return_ok ()
                 | Error (status, msg) ->
                     Lwt.return_error
-                      (Printf.sprintf "failed to submit plc operation: %d %s"
-                         status msg ) )
+                      (InternalServerError
+                         (Printf.sprintf "failed to submit plc operation: %d %s"
+                            status msg ) ) )
           else Lwt.return_ok ()
         in
         match plc_result with
@@ -69,5 +90,6 @@ let handler =
       | Ok () ->
           Dream.empty `OK
       | Error e ->
-          Dream.error (fun log -> log ~request:req "%s" e) ;
-          Errors.invalid_request ~name:"InvalidHandle" e )
+          let msg = update_handle_error_to_string e in
+          Dream.error (fun log -> log ~request:req "%s" msg) ;
+          Errors.invalid_request ~name:"InvalidHandle" msg )

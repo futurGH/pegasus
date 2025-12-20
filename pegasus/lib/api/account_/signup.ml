@@ -15,10 +15,10 @@ let check_handle_handler =
         let handle = handle_input ^ "." ^ Env.hostname in
         let validation_result = Util.validate_handle handle in
         match validation_result with
-        | Error e ->
+        | Error (InvalidFormat e) | Error (TooLong e) | Error (TooShort e) ->
             Dream.json @@ Yojson.Safe.to_string
             @@ check_handle_response_to_yojson
-                 {valid= false; available= false; error= Some e}
+                 {valid= false; available= false; error= Some ("Handle " ^ e)}
         | Ok () -> (
             let%lwt existing =
               Data_store.get_actor_by_identifier handle ctx.db
