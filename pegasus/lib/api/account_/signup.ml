@@ -7,12 +7,16 @@ let check_handle_handler =
       let handle_input =
         Dream.query ctx.req "handle" |> Option.value ~default:""
       in
+      let hostname_suffix = "." ^ Env.hostname in
       if String.length handle_input = 0 then
         Dream.json @@ Yojson.Safe.to_string
         @@ check_handle_response_to_yojson
              {valid= false; available= false; error= Some "Handle is required"}
       else
-        let handle = handle_input ^ "." ^ Env.hostname in
+        let handle =
+          if String.contains handle_input '.' then handle_input
+          else handle_input ^ hostname_suffix
+        in
         let validation_result = Util.validate_handle handle in
         match validation_result with
         | Error (InvalidFormat e) | Error (TooLong e) | Error (TooShort e) ->
@@ -46,9 +50,12 @@ let get_handler =
 
 let post_handler =
   Xrpc.handler (fun ctx ->
-      let csrf_token = Dream.csrf_token ctx.req in
-      let invite_required = Env.invite_required in
-      let hostname = Env.hostname in
+      let props : Frontend.SignupPage.props =
+        { csrf_token= Dream.csrf_token ctx.req
+        ; invite_required= Env.invite_required
+        ; hostname= Env.hostname
+        ; error= None }
+      in
       match%lwt Dream.form ctx.req with
       | `Ok fields -> (
           let invite_code =
@@ -61,7 +68,11 @@ let post_handler =
           let handle_input =
             List.assoc_opt "handle" fields |> Option.value ~default:""
           in
-          let handle = handle_input ^ "." ^ Env.hostname in
+          let hostname_suffix = "." ^ Env.hostname in
+          let handle =
+            if String.contains handle_input '.' then handle_input
+            else handle_input ^ hostname_suffix
+          in
           let email =
             List.assoc_opt "email" fields
             |> Option.value ~default:"" |> String.lowercase_ascii
@@ -77,54 +88,40 @@ let post_handler =
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error= Some "An invite code is required to sign up." }
+                  { props with
+                    error= Some "An invite code is required to sign up." }
           | Error Server.CreateAccount.InvalidInviteCode ->
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
-                ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error= Some "Invalid invite code." }
+                ~props:{props with error= Some "Invalid invite code."}
           | Error (Server.CreateAccount.InvalidHandle e) ->
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
-                ~props:{csrf_token; invite_required; hostname; error= Some e}
+                ~props:{props with error= Some e}
           | Error Server.CreateAccount.EmailAlreadyExists ->
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error= Some "An account with that email already exists." }
+                  { props with
+                    error= Some "An account with that email already exists." }
           | Error Server.CreateAccount.HandleAlreadyExists ->
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error= Some "An account with that handle already exists." }
+                  { props with
+                    error= Some "An account with that handle already exists." }
           | Error Server.CreateAccount.DidAlreadyExists ->
               Util.render_html ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error= Some "An account with that DID already exists." }
+                  { props with
+                    error= Some "An account with that DID already exists." }
           | Error (Server.CreateAccount.PlcError _) ->
               Util.render_html ~status:`Internal_Server_Error ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error=
+                  { props with
+                    error=
                       Some
                         "Failed to create your identity. Please try again \
                          later." }
@@ -132,10 +129,8 @@ let post_handler =
               Util.render_html ~status:`Internal_Server_Error ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
-                  { csrf_token
-                  ; invite_required
-                  ; hostname
-                  ; error=
+                  { props with
+                    error=
                       Some "Failed to use your invite code. Please try again."
                   }
           | Ok {did; _} ->
@@ -145,7 +140,5 @@ let post_handler =
           Util.render_html ~status:`Bad_Request ~title:"Sign Up"
             (module Frontend.SignupPage)
             ~props:
-              { csrf_token
-              ; invite_required
-              ; hostname
-              ; error= Some "Invalid form submission. Please try again." } )
+              { props with
+                error= Some "Invalid form submission. Please try again." } )

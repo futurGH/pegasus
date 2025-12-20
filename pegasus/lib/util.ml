@@ -344,18 +344,26 @@ type validate_handle_error =
   | TooLong of string
 
 let validate_handle handle =
-  let front =
-    String.sub handle 0 (String.length handle - (String.length Env.hostname + 1))
-  in
-  if String.contains front '.' then Error (InvalidFormat "can't contain periods")
+  (* if it's a custom domain, just check that it contains a period *)
+  if not (String.ends_with ~suffix:("." ^ Env.hostname) handle) then
+    if not (String.contains handle '.') then
+      Error (InvalidFormat ("must end with " ^ "." ^ Env.hostname))
+    else Ok ()
   else
-    match String.length front with
-    | l when l < 3 ->
-        Error (TooShort "must be at least 3 characters")
-    | l when l > 18 ->
-        Error (TooLong "must be at most 18 characters")
-    | _ ->
-        Ok ()
+    let front =
+      String.sub handle 0
+        (String.length handle - (String.length Env.hostname + 1))
+    in
+    if String.contains front '.' then
+      Error (InvalidFormat "can't contain periods")
+    else
+      match String.length front with
+      | l when l < 3 ->
+          Error (TooShort "must be at least 3 characters")
+      | l when l > 18 ->
+          Error (TooLong "must be at most 18 characters")
+      | _ ->
+          Ok ()
 
 let mkfile_p path ~perm =
   Core_unix.mkdir_p (Filename.dirname path) ~perm:0o755 ;

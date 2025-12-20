@@ -10,89 +10,8 @@ type props =
   ; error: string option [@default None] }
 [@@deriving json]
 
-type handle_status =
-  | Idle
-  | Checking
-  | Valid
-  | Invalid of string
-
-let encode_uri_component s =
-  let buf = Buffer.create (String.length s * 3) in
-  String.iter (fun c ->
-    match c with
-    | 'A'..'Z' | 'a'..'z' | '0'..'9'
-    | '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' ->
-        Buffer.add_char buf c
-    | _ ->
-        Printf.bprintf buf "%%%02X" (Char.code c)
-  ) s;
-  Buffer.contents buf
-
 let[@react.component] make
     ~props:({csrf_token; invite_required; hostname; error} : props) () =
-  let handleValue, setHandleValue = useState (fun () -> "") in
-  let handleStatus, setHandleStatus = useState (fun () -> Idle) in
-  let checkTimeoutRef = useRef None in
-  let checkHandle =
-    [%browser_only
-      fun handle ->
-        setHandleStatus (fun _ -> Checking) ;
-        let _ =
-          Fetch.fetch
-            ("/account/signup/check-handle?handle="
-            ^ encode_uri_component handle )
-          |> Js.Promise.then_ (fun response ->
-                 if Fetch.Response.ok response then
-                   Fetch.Response.json response
-                 else Js.Promise.reject (Js.Exn.raiseError "Request failed") )
-          |> Js.Promise.then_ (fun json ->
-                 let valid =
-                   Js.Dict.get (Obj.magic json) "valid"
-                   |> Option.map Obj.magic
-                   |> Option.value ~default:false
-                 in
-                 let available =
-                   Js.Dict.get (Obj.magic json) "available"
-                   |> Option.map Obj.magic
-                   |> Option.value ~default:false
-                 in
-                 let error = Option.bind
-                 	(Js.Dict.get (Obj.magic json) "error"
-                        |> Option.map Obj.magic)
-                    (fun x ->
-                        if Js.Nullable.isNullable (Obj.magic x) then None
-                        else Some x )
-                 in
-                 ( if valid && available then setHandleStatus (fun _ -> Valid)
-                   else
-                     setHandleStatus (fun _ ->
-                         Invalid (Option.value error ~default:"Invalid handle")
-                     ) ) ;
-                 Js.Promise.resolve () )
-          |> Js.Promise.catch (fun _ ->
-                 setHandleStatus (fun _ ->
-                     Invalid "Couldn't check handle availability" ) ;
-                 Js.Promise.resolve () )
-        in
-        ()]
-  in
-  let onHandleChange =
-    [%browser_only
-      fun e ->
-        let value = (Event.Form.target e)##value in
-        setHandleValue (fun _ -> value) ;
-        ( match checkTimeoutRef.current with
-        | Some id ->
-            Js.Global.clearTimeout id
-        | None ->
-            () ) ;
-        if String.length value = 0 then setHandleStatus (fun _ -> Idle)
-        else
-          let id =
-            Js.Global.setTimeout ~f:(fun () -> checkHandle value) 300
-          in
-          checkTimeoutRef.current <- Some id]
-  in
   <main className="w-full h-auto max-w-xs px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string "sign up")
@@ -110,42 +29,7 @@ let[@react.component] make
             label="invite code"
           />
         else null )
-      <div>
-        <Input
-          sr_only=true
-          name="handle"
-          type_="text"
-          label="handle"
-          value=handleValue
-          onChange=onHandleChange
-          trailing=(
-            <span
-              className="font-serif text-mist-80 text-sm whitespace-nowrap">
-              (string ("." ^ hostname))
-            </span>
-          )
-        />
-        ( match handleStatus with
-        | Checking ->
-            <span className="text-mist-80 text-sm mt-1 block">
-              (string "Checking availability...")
-            </span>
-        | Valid ->
-            <span
-              className="inline-flex items-center text-mana-100 text-sm mt-1">
-              <CheckmarkIcon className="w-4 h-4 mr-1" />
-              (string "Handle is available")
-            </span>
-        | Invalid msg ->
-            <span
-              className="inline-flex items-center text-phoenix-100 text-sm \
-                         mt-1">
-              <CircleAlertIcon className="w-4 h-4 mr-1" />
-              (string msg)
-            </span>
-        | Idle ->
-            null )
-      </div>
+      <HandleInput sr_only=true name="handle" hostname />
       <Input sr_only=true name="email" type_="email" label="email" />
       <Input sr_only=true name="password" type_="password" label="password" />
       ( match error with

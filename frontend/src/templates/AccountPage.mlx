@@ -317,10 +317,9 @@ let[@react.component] make
 		                </Aria.ModalOverlay>
 	                </Aria.DialogTrigger> )]
               </ClientOnly>
-              <Input
+              <HandleInput
                 name="handle"
                 label="Handle"
-                placeholder=handle
                 showIndicator=false
               />
               <Input

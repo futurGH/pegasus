@@ -120,7 +120,7 @@ let post_handler =
                     List.assoc_opt "email" fields
                     |> Option.value ~default:"" |> String.lowercase_ascii
                   in
-                  let handle =
+                  let handle_input =
                     List.assoc_opt "handle" fields |> Option.value ~default:""
                   in
                   let password =
@@ -128,11 +128,15 @@ let post_handler =
                   in
                   if
                     String.length email = 0
-                    || String.length handle = 0
+                    || String.length handle_input = 0
                     || String.length password = 0
                   then render_page ~error:"All fields are required." ()
                   else
-                    let handle = handle ^ "." ^ Env.hostname in
+                    let hostname_suffix = "." ^ hostname in
+                    let handle =
+                      if String.contains handle_input '.' then handle_input
+                      else handle_input ^ hostname_suffix
+                    in
                     match Util.validate_handle handle with
                     | Error (InvalidFormat e)
                     | Error (TooLong e)

@@ -1,0 +1,125 @@
+[@@@ocaml.warning "-26-27"]
+
+open React
+
+type handle_status =
+  | Idle
+  | Checking
+  | Valid
+  | Invalid of string
+
+let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
+    ?(required = false) ?(showIndicator = true) ?(subdomainOnly = false) ?hostname ?value ?onChange () =
+  let internalValue, setInternalValue = useState (fun () -> "") in
+  let handleValue = Option.value value ~default:internalValue in
+  let handleStatus, setHandleStatus = useState (fun () -> Idle) in
+  let checkTimeoutRef = useRef None in
+  let checkHandle =
+    [%browser_only
+      fun handle ->
+        setHandleStatus (fun _ -> Checking) ;
+        let fullHandle =
+          match hostname with
+          | Some host -> handle ^ "." ^ host
+          | None -> handle
+        in
+        let _ =
+          Fetch.fetch
+            ("/account/signup/check-handle?handle="
+            ^ Js.Global.encodeURIComponent handle )
+          |> Js.Promise.then_ (fun response ->
+                 if Fetch.Response.ok response then
+                   Fetch.Response.json response
+                 else Js.Promise.reject (Js.Exn.raiseError "Request failed") )
+          |> Js.Promise.then_ (fun json ->
+                 let valid =
+                   Js.Dict.get (Obj.magic json) "valid"
+                   |> Option.map Obj.magic
+                   |> Option.value ~default:false
+                 in
+                 let available =
+                   Js.Dict.get (Obj.magic json) "available"
+                   |> Option.map Obj.magic
+                   |> Option.value ~default:false
+                 in
+                 let error = Option.bind
+                 	(Js.Dict.get (Obj.magic json) "error"
+                        |> Option.map Obj.magic)
+                    (fun x ->
+                        if Js.Nullable.isNullable (Obj.magic x) then None
+                        else Some x )
+                 in
+                 ( if valid && available then setHandleStatus (fun _ -> Valid)
+                   else
+                     setHandleStatus (fun _ ->
+                         Invalid (Option.value error ~default:"Invalid handle")
+                     ) ) ;
+                 Js.Promise.resolve () )
+          |> Js.Promise.catch (fun _ ->
+                 setHandleStatus (fun _ ->
+                     Invalid "Couldn't check handle availability" ) ;
+                 Js.Promise.resolve () )
+        in
+        ()]
+  in
+  let onHandleChange =
+    [%browser_only
+      fun e ->
+        let inputValue = (Event.Form.target e)##value in
+        ( match onChange with
+        | Some f -> f e
+        | None -> setInternalValue (fun _ -> inputValue) ) ;
+        ( match checkTimeoutRef.current with
+        | Some id ->
+            Js.Global.clearTimeout id
+        | None ->
+            () ) ;
+        if String.length inputValue = 0 then setHandleStatus (fun _ -> Idle)
+        else
+          let id =
+            Js.Global.setTimeout ~f:(fun () -> checkHandle inputValue) 300
+          in
+          checkTimeoutRef.current <- Some id]
+  in
+  let trailing =
+    match hostname with
+    | Some h ->
+        Some (
+          <span className="font-serif text-mist-80 whitespace-nowrap">
+            (string ("." ^ h))
+          </span>
+        )
+    | _ -> None
+  in
+  <div>
+    <Input
+      sr_only
+      name
+      type_="text"
+      label
+      value=handleValue
+      onChange=onHandleChange
+      required
+      showIndicator
+      ?trailing
+    />
+    ( match handleStatus with
+    | Checking ->
+        <span className="text-mist-80 text-sm mt-1 block">
+          (string "Checking availability...")
+        </span>
+    | Valid ->
+        <span
+          className="inline-flex items-center text-mana-100 text-sm mt-1">
+          <CheckmarkIcon className="w-4 h-4 mr-1" />
+          (string "Handle is available")
+        </span>
+    | Invalid msg ->
+        <span
+          className="inline-flex items-center text-phoenix-100 text-sm mt-1">
+          <CircleAlertIcon className="w-4 h-4 mr-1" />
+          (string msg)
+        </span>
+    | Idle ->
+        null )
+  </div>

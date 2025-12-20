@@ -41,7 +41,6 @@ let[@react.component] make
   (* create account modal state *)
   let createModalOpen, setCreateModalOpen = useState (fun () -> false) in
   let newEmail, setNewEmail = useState (fun () -> "") in
-  let newHandle, setNewHandle = useState (fun () -> "") in
   let newPassword, setNewPassword = useState (fun () -> "") in
   (* action menu state *)
   let menuOpenFor, setMenuOpenFor = useState (fun () -> (None : string option)) in
@@ -114,19 +113,12 @@ let[@react.component] make
                         onChange=(fun e ->
                           setNewEmail (fun _ -> (Event.Form.target e)##value))
                       />
-                      <Input
+                      <HandleInput
                         name="handle"
                         label="Handle"
                         required=true
                         showIndicator=false
-                        value=newHandle
-                        onChange=(fun e ->
-                          setNewHandle (fun _ -> (Event.Form.target e)##value))
-                        trailing=(
-                          <span className="font-serif text-mist-80 text-sm whitespace-nowrap">
-                            (string ("." ^ hostname))
-                          </span>
-                        )
+                        hostname
                       />
                       <Input
                         name="password"
@@ -332,7 +324,7 @@ let[@react.component] make
                         <input type_="hidden" name="dream.csrf" value=csrf_token />
                         <input type_="hidden" name="action" value="change_handle" />
                         <input type_="hidden" name="did" value=actor.did />
-                        <Input
+                        <HandleInput
                           name="handle"
                           label="New handle"
                           required=true
