@@ -38,28 +38,31 @@ let repo_write_of_yojson (json : Yojson.Safe.t) =
   let type' = member "$type" json |> to_string in
   let collection = member "collection" json |> to_string in
   let rkey = match member "rkey" json with `String s -> Some s | _ -> None in
-  let swap_record =
-    match member "swapRecord" json with
-    | `String s ->
-        s |> Cid.of_string |> Result.get_ok |> Option.some
+  try
+    let swap_record =
+      match member "swapRecord" json with
+      | `String s ->
+          s |> Cid.of_string |> Result.get_ok |> Option.some
+      | _ ->
+          None
+    in
+    match type' with
+    | "com.atproto.repo.applyWrites#create" ->
+        let value =
+          member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
+        in
+        Ok (Create {type'; collection; rkey; value})
+    | "com.atproto.repo.applyWrites#update" ->
+        let value =
+          member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
+        in
+        Ok
+          (Update {type'; collection; rkey= Option.get rkey; value; swap_record})
+    | "com.atproto.repo.applyWrites#delete" ->
+        Ok (Delete {type'; collection; rkey= Option.get rkey; swap_record})
     | _ ->
-        None
-  in
-  match type' with
-  | "com.atproto.repo.applyWrites#create" ->
-      let value =
-        member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
-      in
-      Ok (Create {type'; collection; rkey; value})
-  | "com.atproto.repo.applyWrites#update" ->
-      let value =
-        member "value" json |> Lex.repo_record_of_yojson |> Result.get_ok
-      in
-      Ok (Update {type'; collection; rkey= Option.get rkey; value; swap_record})
-  | "com.atproto.repo.applyWrites#delete" ->
-      Ok (Delete {type'; collection; rkey= Option.get rkey; swap_record})
-  | _ ->
-      Error "invalid applyWrites write $type"
+        Error "invalid applyWrites write $type"
+  with Invalid_argument e -> Error ("invalid property " ^ e)
 
 let repo_write_to_yojson = function
   | Create {type'; collection; rkey; value} ->
@@ -101,23 +104,25 @@ type apply_writes_result =
 let apply_writes_result_of_yojson (json : Yojson.Safe.t) =
   let open Yojson.Safe.Util in
   let type' = member "$type" json |> to_string in
-  match type' with
-  | "com.atproto.repo.applyWrites#createResult" ->
-      let uri = member "uri" json |> to_string in
-      let cid =
-        member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
-      in
-      Ok (Create {type'; uri; cid})
-  | "com.atproto.repo.applyWrites#updateResult" ->
-      let uri = member "uri" json |> to_string in
-      let cid =
-        member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
-      in
-      Ok (Update {type'; uri; cid})
-  | "com.atproto.repo.applyWrites#deleteResult" ->
-      Ok (Delete {type'})
-  | _ ->
-      Error "invalid applyWrites result $type"
+  try
+    match type' with
+    | "com.atproto.repo.applyWrites#createResult" ->
+        let uri = member "uri" json |> to_string in
+        let cid =
+          member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
+        in
+        Ok (Create {type'; uri; cid})
+    | "com.atproto.repo.applyWrites#updateResult" ->
+        let uri = member "uri" json |> to_string in
+        let cid =
+          member "cid" json |> to_string |> Cid.of_string |> Result.get_ok
+        in
+        Ok (Update {type'; uri; cid})
+    | "com.atproto.repo.applyWrites#deleteResult" ->
+        Ok (Delete {type'})
+    | _ ->
+        Error "invalid applyWrites result $type"
+  with Invalid_argument e -> Error ("invalid property " ^ e)
 
 let apply_writes_result_to_yojson = function
   | Create {type'; uri; cid} ->

@@ -2,6 +2,19 @@ let getenv name =
   try Sys.getenv name
   with Not_found -> failwith ("Missing environment variable " ^ name)
 
+let log_level =
+  match Sys.getenv_opt "PDS_LOG_LEVEL" |> Option.map String.lowercase_ascii with
+  | Some "debug" ->
+      `Debug
+  | Some "info" ->
+      `Info
+  | Some "warn" | Some "warning" ->
+      `Warning
+  | Some "error" ->
+      `Error
+  | _ ->
+      `Info
+
 let data_dir = Option.value ~default:"./data" @@ Sys.getenv_opt "PDS_DATA_DIR"
 
 let hostname = getenv "PDS_HOSTNAME"

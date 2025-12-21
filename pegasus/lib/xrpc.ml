@@ -139,14 +139,24 @@ let parse_query (req : Dream.request)
              (k, try Yojson.Safe.from_string v with _ -> `String v) )
            queries )
     in
-    query_json |> of_yojson |> Result.get_ok
+    match query_json |> of_yojson with
+    | Error e ->
+        Dream.debug (fun log -> log "error parsing query: %s" e) ;
+        Errors.internal_error ()
+    | Ok query ->
+        query
   with _ -> Errors.invalid_request "invalid query string"
 
 let parse_body (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
   try%lwt
     let%lwt body = Dream.body req in
-    body |> Yojson.Safe.from_string |> of_yojson |> Result.get_ok |> Lwt.return
+    match body |> Yojson.Safe.from_string |> of_yojson with
+    | Error e ->
+        Dream.debug (fun log -> log "error parsing body: %s" e) ;
+        Errors.internal_error ()
+    | Ok body ->
+        Lwt.return body
   with _ -> Errors.invalid_request "invalid request body"
 
 let parse_proxy_header req =

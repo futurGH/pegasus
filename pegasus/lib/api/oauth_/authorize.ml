@@ -117,7 +117,7 @@ let post_handler =
           let request_uri = List.assoc_opt "request_uri" fields in
           let did = List.assoc_opt "did" fields in
           match (action, code, request_uri, did) with
-          | Some action, Some code, Some request_uri, Some did ->
+          | Some action, Some code, Some request_uri, Some did -> (
               let prefix = Constants.request_uri_prefix in
               let request_id =
                 String.sub request_uri (String.length prefix)
@@ -128,71 +128,76 @@ let post_handler =
                 Errors.invalid_request "request not found"
               else
                 let req_record = Option.get req_record in
-                let req =
+                match
                   Yojson.Safe.from_string req_record.request_data
-                  |> par_request_of_yojson |> Result.get_ok
-                in
-                if action = "allow" then
-                  let%lwt is_logged_in = Session.is_logged_in ctx.req did in
-                  if is_logged_in then
-                    let%lwt code_record = Queries.get_auth_code ctx.db code in
-                    match code_record with
-                    | None ->
-                        Errors.invalid_request "invalid code"
-                    | Some code_rec ->
-                        if code_rec.authorized_by <> None then
-                          Errors.invalid_request "code already authorized"
-                        else if code_rec.used then
-                          Errors.invalid_request "code already used"
-                        else if Util.now_ms () > code_rec.expires_at then
-                          Errors.invalid_request "code expired"
-                        else if code_rec.request_id <> request_id then
-                          Errors.invalid_request "code not for this request"
-                        else
-                          let%lwt () =
-                            Queries.activate_auth_code ctx.db code did
-                          in
-                          let params =
-                            [ ("code", code)
-                            ; ("state", req.state)
-                            ; ("iss", Env.host_endpoint) ]
-                          in
-                          let query =
-                            String.concat "&"
-                              (List.map
-                                 (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                                 params )
-                          in
-                          let separator =
-                            match req.response_mode with
-                            | Some "fragment" ->
-                                "#"
-                            | _ ->
-                                "?"
-                          in
-                          Dream.redirect ctx.req
-                            (req.redirect_uri ^ separator ^ query)
-                  else
-                    Uri.make ~path:"/account/login"
-                      ~query:
-                        [ ("client_id", [req_record.client_id])
-                        ; ("request_uri", [request_uri]) ]
-                      ()
-                    |> Uri.to_string |> Dream.redirect ctx.req
-                else
-                  let params =
-                    [ ("error", "access_denied")
-                    ; ("error_description", "Unable to authorize user.")
-                    ; ("state", req.state)
-                    ; ("iss", Env.host_endpoint) ]
-                  in
-                  let query =
-                    String.concat "&"
-                      (List.map
-                         (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                         params )
-                  in
-                  Dream.redirect ctx.req (req.redirect_uri ^ "?" ^ query)
+                  |> par_request_of_yojson
+                with
+                | Error _ ->
+                    Errors.invalid_request "invalid par request"
+                | Ok req ->
+                    if action = "allow" then
+                      let%lwt is_logged_in = Session.is_logged_in ctx.req did in
+                      if is_logged_in then
+                        let%lwt code_record =
+                          Queries.get_auth_code ctx.db code
+                        in
+                        match code_record with
+                        | None ->
+                            Errors.invalid_request "invalid code"
+                        | Some code_rec ->
+                            if code_rec.authorized_by <> None then
+                              Errors.invalid_request "code already authorized"
+                            else if code_rec.used then
+                              Errors.invalid_request "code already used"
+                            else if Util.now_ms () > code_rec.expires_at then
+                              Errors.invalid_request "code expired"
+                            else if code_rec.request_id <> request_id then
+                              Errors.invalid_request "code not for this request"
+                            else
+                              let%lwt () =
+                                Queries.activate_auth_code ctx.db code did
+                              in
+                              let params =
+                                [ ("code", code)
+                                ; ("state", req.state)
+                                ; ("iss", Env.host_endpoint) ]
+                              in
+                              let query =
+                                String.concat "&"
+                                  (List.map
+                                     (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
+                                     params )
+                              in
+                              let separator =
+                                match req.response_mode with
+                                | Some "fragment" ->
+                                    "#"
+                                | _ ->
+                                    "?"
+                              in
+                              Dream.redirect ctx.req
+                                (req.redirect_uri ^ separator ^ query)
+                      else
+                        Uri.make ~path:"/account/login"
+                          ~query:
+                            [ ("client_id", [req_record.client_id])
+                            ; ("request_uri", [request_uri]) ]
+                          ()
+                        |> Uri.to_string |> Dream.redirect ctx.req
+                    else
+                      let params =
+                        [ ("error", "access_denied")
+                        ; ("error_description", "Unable to authorize user.")
+                        ; ("state", req.state)
+                        ; ("iss", Env.host_endpoint) ]
+                      in
+                      let query =
+                        String.concat "&"
+                          (List.map
+                             (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
+                             params )
+                      in
+                      Dream.redirect ctx.req (req.redirect_uri ^ "?" ^ query) )
           | _ ->
               Errors.invalid_request "invalid request" )
       | _ ->

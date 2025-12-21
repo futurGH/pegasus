@@ -25,19 +25,25 @@ let verify_bearer_jwt t token expected_scope =
   | Ok (_, payload) -> (
     try
       let now_s = int_of_float (Unix.gettimeofday ()) in
-      let jwt = Jwt.symmetric_jwt_of_yojson payload |> Result.get_ok in
-      if jwt.aud <> Env.did then Lwt.return_error "invalid aud"
-      else if jwt.sub = "" then Lwt.return_error "missing sub"
-      else if now_s < jwt.iat then Lwt.return_error "token issued in the future"
-      else if now_s > jwt.exp then Lwt.return_error "expired token"
-      else if jwt.scope <> expected_scope then Lwt.return_error "invalid scope"
-      else if jwt.jti = "" then Lwt.return_error "missing jti"
-      else
-        let%lwt revoked_at =
-          Data_store.is_token_revoked t ~did:jwt.sub ~jti:jwt.jti
-        in
-        if revoked_at <> None then Lwt.return_error "token revoked"
-        else Lwt.return_ok jwt
+      match Jwt.symmetric_jwt_of_yojson payload with
+      | Error e ->
+          Dream.debug (fun log -> log "bearer jwt decode error: %s" e) ;
+          Lwt.return_error "invalid token format"
+      | Ok jwt ->
+          if jwt.aud <> Env.did then Lwt.return_error "invalid aud"
+          else if jwt.sub = "" then Lwt.return_error "missing sub"
+          else if now_s < jwt.iat then
+            Lwt.return_error "token issued in the future"
+          else if now_s > jwt.exp then Lwt.return_error "expired token"
+          else if jwt.scope <> expected_scope then
+            Lwt.return_error "invalid scope"
+          else if jwt.jti = "" then Lwt.return_error "missing jti"
+          else
+            let%lwt revoked_at =
+              Data_store.is_token_revoked t ~did:jwt.sub ~jti:jwt.jti
+            in
+            if revoked_at <> None then Lwt.return_error "token revoked"
+            else Lwt.return_ok jwt
     with _ -> Lwt.return_error "invalid token format" )
 
 let verify_auth ?(refresh = false) credentials did =

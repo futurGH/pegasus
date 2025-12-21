@@ -7,10 +7,10 @@ type nonce_state =
   ; rotation_interval_ms: int64 }
 
 type ec_jwk = {crv: string; kty: string; x: string; y: string}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 type proof = {jti: string; jkt: string; htm: string; htu: string}
-[@@deriving yojson]
+[@@deriving yojson {strict= false}]
 
 let jti_cache : (string, int) Hashtbl.t =
   Hashtbl.create Constants.jti_cache_size
@@ -133,73 +133,79 @@ let verify_dpop_proof ~mthd ~url ~dpop_header ?access_token () =
             if alg <> "ES256" && alg <> "ES256K" then
               Error "only es256 and es256k supported for dpop"
             else
-              let jwk =
-                header |> member "jwk" |> ec_jwk_of_yojson |> Result.get_ok
-              in
-              if
-                not
-                  ( match (alg, jwk.crv) with
-                  | "ES256", "P-256" ->
-                      true
-                  | "ES256K", "secp256k1" ->
-                      true
-                  | _ ->
-                      false )
-              then
-                Error
-                  (Printf.sprintf "algorithm %s doesn't match curve %s" alg
-                     jwk.crv )
-              else
-                let jti = payload |> member "jti" |> to_string in
-                let htm = payload |> member "htm" |> to_string in
-                let htu = payload |> member "htu" |> to_string in
-                let iat = payload |> member "iat" |> to_int in
-                let nonce_claim =
-                  payload |> member "nonce" |> to_string_option
-                in
-                match nonce_claim with
-                (* error must be this string; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
-                | None ->
-                    Error "use_dpop_nonce"
-                | Some n when not (verify_nonce n) ->
-                    Error "use_dpop_nonce"
-                | Some _ -> (
-                    if htm <> mthd then Error "htm mismatch"
-                    else if
-                      not (String.equal (normalize_url htu) (normalize_url url))
-                    then Error "htu mismatch"
-                    else
-                      let now = int_of_float (Unix.gettimeofday ()) in
-                      if now - iat > Constants.max_dpop_age_s then
-                        Error "dpop proof too old"
-                      else if iat - now > 5 then Error "dpop proof in future"
-                      else if not (add_jti jti) then
-                        Error "dpop proof replay detected"
-                      else if
-                        not (try verify_signature jwt jwk with _ -> false)
-                      then Error "invalid dpop signature"
-                      else
-                        let jkt = compute_jwk_thumbprint jwk in
-                        (* verify ath if access token is provided *)
-                        match access_token with
-                        | Some token ->
-                            let ath_claim =
-                              payload |> member "ath" |> to_string_option
-                            in
-                            let expected_ath =
-                              Digestif.SHA256.(
-                                digest_string token |> to_raw_string
-                                |> Jwt.b64_encode )
-                            in
-                            if Some expected_ath <> ath_claim then
-                              Error "ath mismatch"
-                            else Ok {jti; jkt; htm; htu}
-                        | None ->
-                            let ath_claim =
-                              payload |> member "ath" |> to_string_option
-                            in
-                            if ath_claim <> None then
-                              Error "ath claim not allowed without access token"
-                            else Ok {jti; jkt; htm; htu} ) )
+              match header |> member "jwk" |> ec_jwk_of_yojson with
+              | Error e ->
+                  Dream.debug (fun log -> log "error parsing jwk: %s" e) ;
+                  Errors.internal_error ()
+              | Ok jwk -> (
+                  if
+                    not
+                      ( match (alg, jwk.crv) with
+                      | "ES256", "P-256" ->
+                          true
+                      | "ES256K", "secp256k1" ->
+                          true
+                      | _ ->
+                          false )
+                  then
+                    Error
+                      (Printf.sprintf "algorithm %s doesn't match curve %s" alg
+                         jwk.crv )
+                  else
+                    let jti = payload |> member "jti" |> to_string in
+                    let htm = payload |> member "htm" |> to_string in
+                    let htu = payload |> member "htu" |> to_string in
+                    let iat = payload |> member "iat" |> to_int in
+                    let nonce_claim =
+                      payload |> member "nonce" |> to_string_option
+                    in
+                    match nonce_claim with
+                    (* error must be this string; see https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
+                    | None ->
+                        Error "use_dpop_nonce"
+                    | Some n when not (verify_nonce n) ->
+                        Error "use_dpop_nonce"
+                    | Some _ -> (
+                        if htm <> mthd then Error "htm mismatch"
+                        else if
+                          not
+                            (String.equal (normalize_url htu)
+                               (normalize_url url) )
+                        then Error "htu mismatch"
+                        else
+                          let now = int_of_float (Unix.gettimeofday ()) in
+                          if now - iat > Constants.max_dpop_age_s then
+                            Error "dpop proof too old"
+                          else if iat - now > 5 then
+                            Error "dpop proof in future"
+                          else if not (add_jti jti) then
+                            Error "dpop proof replay detected"
+                          else if
+                            not (try verify_signature jwt jwk with _ -> false)
+                          then Error "invalid dpop signature"
+                          else
+                            let jkt = compute_jwk_thumbprint jwk in
+                            (* verify ath if access token is provided *)
+                            match access_token with
+                            | Some token ->
+                                let ath_claim =
+                                  payload |> member "ath" |> to_string_option
+                                in
+                                let expected_ath =
+                                  Digestif.SHA256.(
+                                    digest_string token |> to_raw_string
+                                    |> Jwt.b64_encode )
+                                in
+                                if Some expected_ath <> ath_claim then
+                                  Error "ath mismatch"
+                                else Ok {jti; jkt; htm; htu}
+                            | None ->
+                                let ath_claim =
+                                  payload |> member "ath" |> to_string_option
+                                in
+                                if ath_claim <> None then
+                                  Error
+                                    "ath claim not allowed without access token"
+                                else Ok {jti; jkt; htm; htu} ) ) )
       | _ ->
           Error "invalid dpop jwt" )
