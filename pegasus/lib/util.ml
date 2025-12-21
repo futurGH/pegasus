@@ -533,7 +533,9 @@ let send_email_or_log ~(recipients : Letters.recipient list) ~subject
         failwith (Printf.sprintf "failed to construct email: %s" e)
     | Ok message -> (
       try%lwt Letters.send ~config ~sender ~recipients ~message
-      with _ -> Lwt.return (log_email ()) ) )
+      with e ->
+        Errors.log_exn e ;
+        Lwt.return (log_email ()) ) )
   | _ ->
       Lwt.return (log_email ())
 
