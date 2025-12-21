@@ -319,7 +319,8 @@ module Verifiers = struct
           @@ Errors.auth_required ~name:"AccountDeactivated"
                "account is deactivated"
       | None ->
-          Lwt.return_error @@ Errors.auth_required "invalid session" )
+          let%lwt () = Session.Raw.clear_session req in
+          Lwt.return_error @@ Errors.auth_required "no active session" )
     | None ->
         Lwt.return_error @@ Errors.auth_required "no active session"
 
@@ -365,7 +366,9 @@ module Verifiers = struct
                "unexpected authorization type" )
 
   let any : verifier =
-   fun ctx -> try authorization ctx with _ -> unauthenticated ctx
+   fun ctx ->
+    try%lwt Lwt_result.map_error raise @@ authorization ctx
+    with _ -> unauthenticated ctx
 
   type t =
     | Unauthenticated

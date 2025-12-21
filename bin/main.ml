@@ -241,7 +241,6 @@ commands:
   migrate-blobs <did>      migrate blobs for a specific user to S3
 |}
 
-(** CLI entry point *)
 let () =
   let args = Array.to_list Sys.argv |> List.tl in
   match args with

@@ -17,7 +17,7 @@ let[@react.component] make
       (string "sign up")
     </h1>
     <span className="w-full text-balance text-mist-100">
-      (string "Create your account on this PDS.")
+      (string "You'll need an invite code to create an account on this PDS.")
     </span>
     <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
       <input type_="hidden" name="dream.csrf" value=csrf_token />
@@ -44,11 +44,11 @@ let[@react.component] make
       </Button>
     </form>
     <span className="text-sm text-mist-100">
-      (string "Already have an account? ")
+      (string "already have an account? ")
       <a
         href="/account/login"
         className="text-mana-100 underline hover:text-mana-200">
-        (string "Sign in")
+        (string "sign in")
       </a>
       (string ".")
     </span>

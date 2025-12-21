@@ -33,7 +33,7 @@ let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
       </Button>
     </form>
     <span className="text-sm text-mist-100">
-      (string "Or ")
+      (string "or ")
       <a
         href="/account/signup"
         className="text-mana-100 underline hover:text-mana-200">

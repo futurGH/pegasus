@@ -29,5 +29,5 @@ let handler =
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⠿⠆⠀⠀⠀⠀⠀⠀
 
     this is [pegasus](https://tangled.org/@futur.blue/pegasus)
-    it's going to be an atproto personal data server eventually
+    manage your account at /account
 |} )
