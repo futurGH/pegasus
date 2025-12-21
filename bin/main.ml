@@ -229,29 +229,6 @@ let migrate_blobs ?did () =
       print_endline "migrating all blobs to S3" ;
       S3.Blob_migration.migrate_all ()
 
-let generate_env () =
-  let rotation_key =
-    Kleidos.K256.(generate_keypair () |> fst |> privkey_to_multikey)
-  in
-  let jwt_key =
-    Kleidos.K256.(generate_keypair () |> fst |> privkey_to_multikey)
-  in
-  let dpop_nonce_secret =
-    Base64.(encode ~alphabet:uri_safe_alphabet ~pad:false)
-      (Mirage_crypto_rng_unix.getrandom 32)
-    |> Result.get_ok
-  in
-  print_endline
-  @@ Printf.ksprintf String.trim
-       {|
-environment variables generated:
-
-PDS_ROTATION_KEY_MULTIBASE=%s
-PDS_JWK_MULTIBASE=%s
-PDS_DPOP_NONCE_SECRET=%s
-		|}
-       rotation_key jwt_key dpop_nonce_secret
-
 let print_usage () =
   print_endline
   @@ String.trim
@@ -260,9 +237,10 @@ usage: pegasus [command]
 
 commands:
   serve                    start the PDS
-  generate-env             generate required environment variables
   migrate-blobs            migrate all local blobs to S3
   migrate-blobs <did>      migrate blobs for a specific user to S3
+
+see also: gen-keys
 |}
 
 let () =
@@ -270,8 +248,6 @@ let () =
   match args with
   | [] | ["serve"] ->
       Lwt_main.run (serve ())
-  | ["generate-env"] ->
-      generate_env ()
   | ["migrate-blobs"] ->
       Lwt_main.run (migrate_blobs ())
   | ["migrate-blobs"; did] ->

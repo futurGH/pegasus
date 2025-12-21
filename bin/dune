@@ -5,3 +5,9 @@
  (libraries pegasus kleidos dream lwt lwt_ppx)
  (preprocess
   (pps lwt_ppx)))
+
+(executable
+ (public_name gen-keys)
+ (name gen_keys)
+ (package pegasus)
+ (libraries kleidos mirage-crypto-rng mirage-crypto-rng.unix base64))

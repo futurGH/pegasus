@@ -31,5 +31,6 @@ FROM --platform=linux/amd64 debian:12 AS run
 RUN apt-get update && apt-get install -y libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config
 
 COPY --from=build /home/opam/pegasus/_build/default/bin/main.exe /bin/pegasus
+COPY --from=build /home/opam/pegasus/_build/default/bin/gen_keys.exe /bin/gen-keys
 
 ENTRYPOINT ["/bin/pegasus"]
