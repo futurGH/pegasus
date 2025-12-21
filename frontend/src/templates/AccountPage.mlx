@@ -14,6 +14,9 @@ type props =
   ; handle: string
   ; email: string
   ; deactivated: bool [@default false]
+  ; email_confirmed: bool [@default true]
+  ; email_confirmation_pending: bool [@default false]
+  ; email_confirmation_error: string option [@default None]
   ; email_change_pending: bool [@default false]
   ; pending_email: string option [@default None]
   ; email_error: string option [@default None]
@@ -31,6 +34,9 @@ let[@react.component] make
        ; handle
        ; email
        ; deactivated
+       ; email_confirmed
+       ; email_confirmation_pending
+       ; email_confirmation_error
        ; email_change_pending
        ; pending_email
        ; email_error
@@ -63,6 +69,15 @@ let[@react.component] make
   in
   let deleteLoading, setDeleteLoading = useState (fun () -> false) in
   let deleteTokenInput, setDeleteTokenInput = useState (fun () -> "") in
+  let confirmEmailPending, setConfirmEmailPending =
+    useState (fun () -> email_confirmation_pending)
+  in
+  let confirmEmailError, setConfirmEmailError =
+    useState (fun () -> email_confirmation_error)
+  in
+  let confirmEmailLoading, setConfirmEmailLoading = useState (fun () -> false) in
+  let confirmEmailTokenInput, setConfirmEmailTokenInput = useState (fun () -> "") in
+  let successMessage, setSuccessMessage = useState (fun () -> success) in
   <div className="w-auto h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
     <AccountSidebar
       current_user logged_in_users active_page="/account"
@@ -317,6 +332,131 @@ let[@react.component] make
 		                </Aria.ModalOverlay>
 	                </Aria.DialogTrigger> )]
               </ClientOnly>
+              ( if not email_confirmed then
+                  <ClientOnly fallback=(
+                    <span className="-mt-1.5 inline-flex items-center text-mist-80 text-sm">
+                      <CircleAlertIcon className="w-4 h-4 mr-2" />
+                      (string ("Your email address isn't confirmed " ^ {js|·|js}))
+                      <button
+                        type_="button"
+                        disabled=true
+                        className="ml-1 underline text-mana-100 hover:text-mana-200 cursor-pointer \
+                                   disabled:cursor-not-allowed">
+                        (string "send confirmation code")
+                      </button>
+                    </span>
+                  )>
+                  [%browser_only
+                    (fun () ->
+                        let submitConfirmEmailForm action fields =
+                          setConfirmEmailLoading (fun _ -> true) ;
+                          setConfirmEmailError (fun _ -> None) ;
+                          let body =
+                            Fetch.BodyInit.make
+                              (Webapi.Url.URLSearchParams.makeWithArray
+                                 (Array.append
+                                    [|("dream.csrf", csrf_token); ("action", action)|]
+                                    fields )
+                              |> Webapi.Url.URLSearchParams.toString )
+                          in
+                          let _ =
+                            Fetch.fetchWithInit "/account"
+                              (Fetch.RequestInit.make ~method_:Post ~body
+                                 ~headers:
+                                   (Fetch.HeadersInit.makeWithArray
+                                      [|("Content-Type", "application/x-www-form-urlencoded")|] )
+                                 () )
+                            |> Js.Promise.then_ (fun response ->
+                                   setConfirmEmailLoading (fun _ -> false) ;
+                                   if Fetch.Response.ok response then
+                                     match action with
+                                     | "request_email_confirmation" ->
+                                         setConfirmEmailPending (fun _ -> true) ;
+                                         Js.Promise.resolve ()
+                                     | "confirm_email_confirmation" ->
+                                         Webapi.Dom.(
+                                           location |> Location.reload) ;
+                                         setSuccessMessage (fun _ -> Some "Email confirmed!") ;
+                                         Js.Promise.resolve ()
+                                     | "cancel_email_confirmation" ->
+                                         setConfirmEmailPending (fun _ -> false) ;
+                                         Js.Promise.resolve ()
+                                     | _ ->
+                                         Js.Promise.resolve ()
+                                   else (
+                                     setConfirmEmailError (fun _ ->
+                                         Some "An error occurred. Please try again." ) ;
+                                     Js.Promise.resolve () ) )
+                            |> Js.Promise.catch (fun _ ->
+                                   setConfirmEmailLoading (fun _ -> false) ;
+                                   setConfirmEmailError (fun _ ->
+                                       Some "An error occurred. Please try again." ) ;
+                                   Js.Promise.resolve () )
+                          in
+                          ()
+                        in
+                        <div className="flex flex-col gap-y-3">
+                          <span className="-mt-1.5 inline-flex items-center text-mist-80 text-sm">
+                            <CircleAlertIcon className="w-4 h-4 mr-2" />
+                            (string ("Your email address isn't confirmed " ^ {js|·|js}))
+                            <button
+                              type_="button"
+                              disabled=confirmEmailLoading
+                              className="ml-1 underline text-mana-100 hover:text-mana-200 cursor-pointer \
+                                         disabled:cursor-not-allowed"
+                              onClick=(fun _ ->
+                                  submitConfirmEmailForm "request_email_confirmation" [||])>
+                              (string (if confirmEmailLoading then "sending..."
+                                else if confirmEmailPending then "resend confirmation code"
+                                else "send confirmation code"))
+                            </button>
+                          </span>
+                          ( if confirmEmailPending then
+                              <div className="flex flex-col gap-y-3">
+                              <Input
+                                  name="email_token"
+                                  label="Confirmation code"
+                                  placeholder="eml-..."
+                                  showIndicator=false
+                                  value=confirmEmailTokenInput
+                                  onChange=(fun e ->
+                                      setConfirmEmailTokenInput (fun _ ->
+                                          (Event.Form.target e)##value ) )
+                              />
+                              ( match confirmEmailError with
+                              | Some err ->
+                                  <span
+                                      className="inline-flex items-center \
+                                                  text-phoenix-100 text-sm">
+                                      <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                      (string err)
+                                  </span>
+                              | None ->
+                                  null )
+                              <div className="flex flex-row gap-x-3">
+                                  <Button
+                                    type_="button"
+                                    disabled=confirmEmailLoading
+                                    onClick=(fun _ ->
+                                        submitConfirmEmailForm "confirm_email_confirmation"
+                                          [|("token", confirmEmailTokenInput)|])>
+                                    (string (if confirmEmailLoading then "confirming..." else "confirm"))
+                                  </Button>
+                                  <Button
+                                    kind=`Secondary
+                                    type_="button"
+                                    disabled=confirmEmailLoading
+                                    onClick=(fun _ ->
+                                        submitConfirmEmailForm "cancel_email_confirmation" [||])>
+                                    (string "cancel")
+                                  </Button>
+                              </div>
+                              </div>
+                          else
+                              null )
+                        </div> )]
+                  </ClientOnly>
+                else null )
               <HandleInput
                 name="handle"
                 label="Handle"
@@ -339,7 +479,7 @@ let[@react.component] make
                   </span>
               | None ->
                   null )
-              ( match success with
+              ( match successMessage with
               | Some success ->
                   <span
                     className="inline-flex items-center text-mana-100 text-sm">

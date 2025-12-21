@@ -1,3 +1,33 @@
+type request_error = AlreadyConfirmed
+
+let request_email_confirmation (actor : Data_store.Types.actor) db =
+  match actor.email_confirmed_at with
+  | Some _ ->
+      Lwt.return_error AlreadyConfirmed
+  | None ->
+      let code =
+        "eml-"
+        ^ String.sub
+            Digestif.SHA256.(
+              digest_string (actor.did ^ Int.to_string @@ Util.now_ms ())
+              |> to_hex )
+            0 8
+      in
+      let expires_at = Util.now_ms () + (10 * 60 * 1000) in
+      let%lwt () =
+        Data_store.set_auth_code ~did:actor.did ~code ~expires_at db
+      in
+      let%lwt () =
+        Util.send_email_or_log ~recipients:[To actor.email]
+          ~subject:(Printf.sprintf "Confirm email for %s" actor.handle)
+          ~body:
+            (Plain
+               (Printf.sprintf
+                  "Confirm your email address using the following token: %s"
+                  code ) )
+      in
+      Lwt.return_ok ()
+
 let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
 
 let handler =
@@ -21,29 +51,9 @@ let handler =
       | None ->
           Errors.internal_error ~msg:"actor not found" ()
       | Some actor -> (
-        match actor.email_confirmed_at with
-        | Some _ ->
+        match%lwt request_email_confirmation actor db with
+        | Error AlreadyConfirmed ->
             Errors.invalid_request ~name:"InvalidRequest"
               "email already confirmed"
-        | None ->
-            let code =
-              "eml-"
-              ^ String.sub
-                  Digestif.SHA256.(
-                    digest_string (did ^ Int.to_string @@ Util.now_ms ())
-                    |> to_hex )
-                  0 8
-            in
-            let expires_at = Util.now_ms () + (10 * 60 * 1000) in
-            let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
-            let%lwt () =
-              Util.send_email_or_log ~recipients:[To actor.email]
-                ~subject:(Printf.sprintf "Confirm email for %s" actor.handle)
-                ~body:
-                  (Plain
-                     (Printf.sprintf
-                        "Confirm your email address using the following token: \
-                         %s"
-                        code ) )
-            in
+        | _ ->
             Dream.empty `OK ) )

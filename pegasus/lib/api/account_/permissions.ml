@@ -13,15 +13,18 @@ let get_handler =
       | None ->
           Dream.redirect ctx.req "/account/login"
       | Some did -> (
-          let%lwt logged_in_users =
+          let%lwt current_user, logged_in_users =
             Session.list_logged_in_actors ctx.req ctx.db
           in
           match%lwt Data_store.get_actor_by_identifier did ctx.db with
           | None ->
               Dream.redirect ctx.req "/account/login"
           | Some actor ->
-              let current_user : Frontend.AccountSwitcher.actor =
-                {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+              let current_user =
+                Option.value
+                  ~default:
+                    {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+                  current_user
               in
               let csrf_token = Dream.csrf_token ctx.req in
               let%lwt clients =

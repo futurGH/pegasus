@@ -5,6 +5,10 @@ type data =
   ; admin_authenticated: bool [@default false] }
 [@@deriving yojson {strict= false}]
 
+type actor = Frontend.AccountSwitcher.actor =
+  {did: string; handle: string; avatar_data_uri: string option}
+[@@deriving yojson {strict= false}]
+
 let default =
   { current_did= None
   ; logged_in_dids= []
@@ -150,38 +154,43 @@ let is_logged_in req did =
 let list_logged_in_actors req db =
   match%lwt get_logged_in_dids req with
   | [] ->
-      Lwt.return []
+      Lwt.return (None, [])
   | dids ->
-      Lwt_list.filter_map_s
-        (fun did ->
-          match%lwt Data_store.get_actor_by_identifier did db with
-          | Some {handle; _} -> (
-              let actor : Frontend.OauthAuthorizePage.actor =
-                {did; handle; avatar_data_uri= None}
-              in
-              let%lwt us = User_store.connect did in
-              match%lwt
-                User_store.get_record us "app.bsky.actor.profile/self"
-              with
-              | Some {value= profile; _} -> (
-                match Mist.Lex.String_map.find_opt "avatar" profile with
-                | Some (`BlobRef {ref; _}) -> (
-                  match%lwt User_store.get_blob us ref with
-                  | Some {data; mimetype; _}
-                    when String.starts_with ~prefix:"image/" mimetype ->
-                      Lwt.return_some
-                        { actor with
-                          avatar_data_uri=
-                            Some (Util.make_data_uri ~mimetype ~data) }
+      let%lwt current_did = Raw.get_current_did req in
+      let%lwt actors =
+        Lwt_list.filter_map_s
+          (fun did ->
+            match%lwt Data_store.get_actor_by_identifier did db with
+            | Some {handle; _} -> (
+                let actor = {did; handle; avatar_data_uri= None} in
+                let%lwt us = User_store.connect did in
+                match%lwt
+                  User_store.get_record us "app.bsky.actor.profile/self"
+                with
+                | Some {value= profile; _} -> (
+                  match Mist.Lex.String_map.find_opt "avatar" profile with
+                  | Some (`BlobRef {ref; _}) -> (
+                    match%lwt User_store.get_blob us ref with
+                    | Some {data; mimetype; _}
+                      when String.starts_with ~prefix:"image/" mimetype ->
+                        Lwt.return_some
+                          { actor with
+                            avatar_data_uri=
+                              Some (Util.make_data_uri ~mimetype ~data) }
+                    | _ ->
+                        Lwt.return_some actor )
                   | _ ->
                       Lwt.return_some actor )
-                | _ ->
+                | None ->
                     Lwt.return_some actor )
-              | None ->
-                  Lwt.return_some actor )
-          | _ ->
-              Lwt.return_none )
-        dids
+            | _ ->
+                Lwt.return_none )
+          dids
+      in
+      let current_actor =
+        List.find_opt (fun (a : actor) -> Some a.did = current_did) actors
+      in
+      Lwt.return (current_actor, actors)
 
 let set_admin_authenticated req authenticated =
   match%lwt get_session req with

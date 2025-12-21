@@ -76,7 +76,7 @@ let get_handler =
                       match did with
                       | None ->
                           login_redirect
-                      | Some did ->
+                      | Some _ ->
                           let scopes = String.split_on_char ' ' req.scope in
                           let csrf_token = Dream.csrf_token ctx.req in
                           let client_id_uri =
@@ -89,15 +89,12 @@ let get_handler =
                           in
                           let client_url = (host, path) in
                           let client_name = metadata.client_name in
-                          let%lwt logged_in_users =
+                          let%lwt current_user, logged_in_users =
                             Session.list_logged_in_actors ctx.req ctx.db
                           in
                           let current_user =
-                            List.find_opt
-                              (fun (user : Frontend.OauthAuthorizePage.actor) ->
-                                user.did = did )
-                              logged_in_users
-                            |> Option.value ~default:(List.hd logged_in_users)
+                            Option.value current_user
+                              ~default:(List.hd logged_in_users)
                           in
                           Util.render_html ~title:("Authorizing " ^ host)
                             (module Frontend.OauthAuthorizePage)

@@ -61,7 +61,7 @@ let parse_user_agent ua =
       else "Unknown Browser"
     else "Unknown Browser"
   in
-  os ^ " \u{B7} " ^ browser
+  os ^ {js| · |js} ^ browser
 
 let[@react.component] make
     ~props:

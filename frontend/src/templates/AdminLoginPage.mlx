@@ -8,7 +8,7 @@ let[@react.component] make ~props:({csrf_token; error} : props) () =
   <main className="w-full h-auto max-w-xs px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">(string "admin")</h1>
     <span className="w-full text-balance text-mist-100">
-      (string "Enter your admin password to continue.")
+      (string "Enter the admin password to continue.")
     </span>
     <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
       <input type_="hidden" name="dream.csrf" value=csrf_token />

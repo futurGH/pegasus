@@ -12,24 +12,38 @@ let has_valid_email_change_code (actor : Data_store.Types.actor) =
   | _ ->
       false
 
+let has_valid_email_confirmation_code (actor : Data_store.Types.actor) =
+  match (actor.auth_code, actor.auth_code_expires_at, actor.pending_email) with
+  | Some code, Some expires_at, None ->
+      String.starts_with ~prefix:"eml-" code && expires_at > Util.now_ms ()
+  | _ ->
+      false
+
 let get_handler =
   Xrpc.handler (fun ctx ->
       match%lwt Session.Raw.get_current_did ctx.req with
       | None ->
           Dream.redirect ctx.req "/account/login"
       | Some did -> (
-          let%lwt logged_in_users =
+          let%lwt current_user, logged_in_users =
             Session.list_logged_in_actors ctx.req ctx.db
           in
           match%lwt Data_store.get_actor_by_identifier did ctx.db with
           | None ->
               Dream.redirect ctx.req "/account/login"
           | Some actor ->
-              let current_user : Frontend.AccountSwitcher.actor =
-                {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+              let current_user =
+                Option.value
+                  ~default:
+                    {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+                  current_user
               in
               let csrf_token = Dream.csrf_token ctx.req in
               let deactivated = actor.deactivated_at <> None in
+              let email_confirmed = actor.email_confirmed_at <> None in
+              let email_confirmation_pending =
+                has_valid_email_confirmation_code actor
+              in
               let email_change_pending = has_valid_email_change_code actor in
               let pending_email = actor.pending_email in
               let delete_pending = has_valid_delete_code actor in
@@ -42,6 +56,9 @@ let get_handler =
                   ; handle= actor.handle
                   ; email= actor.email
                   ; deactivated
+                  ; email_confirmed
+                  ; email_confirmation_pending
+                  ; email_confirmation_error= None
                   ; email_change_pending
                   ; pending_email
                   ; email_error= None
@@ -56,23 +73,31 @@ let post_handler =
       | None ->
           Dream.redirect ctx.req "/account/login"
       | Some did -> (
-          let%lwt logged_in_users =
+          let%lwt current_user, logged_in_users =
             Session.list_logged_in_actors ctx.req ctx.db
           in
           match%lwt Data_store.get_actor_by_identifier did ctx.db with
           | None ->
               Dream.redirect ctx.req "/account/login"
           | Some actor -> (
-              let current_user : Frontend.AccountSwitcher.actor =
-                {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+              let current_user =
+                Option.value
+                  ~default:
+                    {did= actor.did; handle= actor.handle; avatar_data_uri= None}
+                  current_user
               in
               let csrf_token = Dream.csrf_token ctx.req in
-              let render_page ?error ?success ?email_error ?delete_error () =
+              let render_page ?error ?success ?email_error
+                  ?email_confirmation_error ?delete_error () =
                 let%lwt actor_opt =
                   Data_store.get_actor_by_identifier did ctx.db
                 in
                 let actor = Option.get actor_opt in
                 let deactivated = actor.deactivated_at <> None in
+                let email_confirmed = actor.email_confirmed_at <> None in
+                let email_confirmation_pending =
+                  has_valid_email_confirmation_code actor
+                in
                 let email_change_pending = has_valid_email_change_code actor in
                 let pending_email = actor.pending_email in
                 let delete_pending = has_valid_delete_code actor in
@@ -85,6 +110,9 @@ let post_handler =
                     ; handle= actor.handle
                     ; email= actor.email
                     ; deactivated
+                    ; email_confirmed
+                    ; email_confirmation_pending
+                    ; email_confirmation_error
                     ; email_change_pending
                     ; pending_email
                     ; email_error
@@ -199,12 +227,15 @@ let post_handler =
                             render_page () )
                   | Some "confirm_email_change" -> (
                       let token =
-                        List.assoc_opt "token" fields
-                        |> Option.value ~default:"" |> String.trim
+                        List.assoc_opt "token" fields |> Option.map String.trim
                       in
                       match%lwt
-                        Server.UpdateEmail.update_email ~token:(Some token)
-                          actor ctx.db
+                        match (actor.auth_code, actor.auth_code_expires_at) with
+                        | Some code, Some expiry
+                          when Some code = token && expiry > Util.now_ms () ->
+                            Server.UpdateEmail.update_email ~token actor ctx.db
+                        | _ ->
+                            Lwt.return_error Server.UpdateEmail.InvalidToken
                       with
                       | Ok _ ->
                           render_page ~success:"Email address updated." ()
@@ -218,6 +249,41 @@ let post_handler =
                           render_page ~email_error:"Verification code required."
                             () )
                   | Some "cancel_email_change" ->
+                      let%lwt () = Data_store.clear_auth_code ~did ctx.db in
+                      render_page ()
+                  | Some "request_email_confirmation" -> (
+                    match%lwt
+                      Server.RequestEmailConfirmation.request_email_confirmation
+                        actor ctx.db
+                    with
+                    | Ok () ->
+                        render_page ()
+                    | Error Server.RequestEmailConfirmation.AlreadyConfirmed ->
+                        render_page
+                          ~email_confirmation_error:
+                            "Email is already confirmed."
+                          () )
+                  | Some "confirm_email_confirmation" -> (
+                      let token =
+                        List.assoc_opt "token" fields
+                        |> Option.value ~default:"" |> String.trim
+                      in
+                      match%lwt
+                        Server.ConfirmEmail.confirm_email ~email:actor.email
+                          ~token actor ctx.db
+                      with
+                      | Ok () ->
+                          render_page ~success:"Email confirmed." ()
+                      | Error Server.ConfirmEmail.ExpiredToken
+                      | Error Server.ConfirmEmail.InvalidToken ->
+                          render_page
+                            ~email_confirmation_error:
+                              "Invalid or expired confirmation code."
+                            ()
+                      | Error Server.ConfirmEmail.EmailMismatch ->
+                          render_page
+                            ~email_confirmation_error:"Email mismatch." () )
+                  | Some "cancel_email_confirmation" ->
                       let%lwt () = Data_store.clear_auth_code ~did ctx.db in
                       render_page ()
                   | _ ->
