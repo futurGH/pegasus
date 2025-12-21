@@ -2,7 +2,7 @@ let getenv name =
   try Sys.getenv name
   with Not_found -> failwith ("Missing environment variable " ^ name)
 
-let data_dir = Option.value ~default:"./data" @@ Sys.getenv_opt "DATA_DIR"
+let data_dir = Option.value ~default:"./data" @@ Sys.getenv_opt "PDS_DATA_DIR"
 
 let hostname = getenv "PDS_HOSTNAME"
 
@@ -11,29 +11,41 @@ let host_endpoint = "https://" ^ hostname
 let did =
   Option.value ~default:("did:web:" ^ hostname) @@ Sys.getenv_opt "PDS_DID"
 
-let invite_required = getenv "INVITE_CODE_REQUIRED" = "true"
+let invite_required = getenv "PDS_INVITE_CODE_REQUIRED" = "true"
 
-let rotation_key = getenv "ROTATION_KEY_MULTIBASE" |> Kleidos.parse_multikey_str
+let rotation_key =
+  getenv "PDS_ROTATION_KEY_MULTIBASE" |> Kleidos.parse_multikey_str
 
-let jwt_key = getenv "JWK_MULTIBASE" |> Kleidos.parse_multikey_str
+let jwt_key = getenv "PDS_JWK_MULTIBASE" |> Kleidos.parse_multikey_str
 
 let jwt_pubkey = Kleidos.derive_pubkey jwt_key
 
-let admin_password = getenv "ADMIN_PASSWORD"
+let admin_password = getenv "PDS_ADMIN_PASSWORD"
+
+let crawlers =
+  Sys.getenv_opt "PDS_CRAWLERS"
+  |> Option.value ~default:"https://bsky.network"
+  |> String.split_on_char ','
+  |> List.map (fun u ->
+      match Uri.of_string @@ String.trim u with
+      | uri when Uri.host uri <> None ->
+          uri
+      | _ ->
+          Uri.make ~scheme:"https" ~host:u () )
 
 let dpop_nonce_secret =
-  match Sys.getenv_opt "DPOP_NONCE_SECRET" with
+  match Sys.getenv_opt "PDS_DPOP_NONCE_SECRET" with
   | Some sec ->
       let secret =
         Base64.(decode_exn ~alphabet:uri_safe_alphabet ~pad:false) sec
         |> Bytes.of_string
       in
       if Bytes.length secret = 32 then secret
-      else failwith "DPOP_NONCE_SECRET must be 32 bytes in base64uri"
+      else failwith "PDS_DPOP_NONCE_SECRET must be 32 bytes in base64uri"
   | None ->
       let secret = Mirage_crypto_rng_unix.getrandom 32 in
       Dream.warning (fun log ->
-          log "DPOP_NONCE_SECRET not set; using DPOP_NONCE_SECRET=%s"
+          log "PDS_DPOP_NONCE_SECRET not set; using PDS_DPOP_NONCE_SECRET=%s"
             ( Base64.(encode ~alphabet:uri_safe_alphabet ~pad:false) secret
             |> Result.get_ok ) ) ;
       Bytes.of_string secret
@@ -41,11 +53,12 @@ let dpop_nonce_secret =
 let smtp_config, smtp_sender =
   begin
     let with_starttls =
-      Option.value ~default:"false" @@ Sys.getenv_opt "SMTP_STARTTLS" = "true"
+      Option.value ~default:"false" @@ Sys.getenv_opt "PDS_SMTP_STARTTLS"
+      = "true"
     in
     match
-      ( Option.map Uri.of_string (Sys.getenv_opt "SMTP_AUTH_URI")
-      , Sys.getenv_opt "SMTP_SENDER" )
+      ( Option.map Uri.of_string (Sys.getenv_opt "PDS_SMTP_AUTH_URI")
+      , Sys.getenv_opt "PDS_SMTP_SENDER" )
     with
     | Some uri, Some sender -> (
       match
@@ -66,18 +79,18 @@ let smtp_config, smtp_sender =
             , Some sender )
         | Error _ ->
             failwith
-              "SMTP_SENDER should be a valid mailbox, e.g. `e@mail.com` or \
+              "PDS_SMTP_SENDER should be a valid mailbox, e.g. `e@mail.com` or \
                `Name <e@mail.com>`" )
       | _ ->
           failwith
-            "SMTP_AUTH_URI must be a valid smtp:// or smtps:// URI with \
+            "PDS_SMTP_AUTH_URI must be a valid smtp:// or smtps:// URI with \
              username, password, and hostname" )
     | Some _, None ->
         failwith
-          "SMTP_SENDER must be set alongside SMTP_AUTH_URI; it should look \
-           like `e@mail.com` or `Name <e@mail.com>`"
+          "PDS_SMTP_SENDER must be set alongside PDS_SMTP_AUTH_URI; it should \
+           look like `e@mail.com` or `Name <e@mail.com>`"
     | None, Some _ ->
-        failwith "SMTP_AUTH_URI must be set alongside SMTP_SENDER"
+        failwith "PDS_SMTP_AUTH_URI must be set alongside PDS_SMTP_SENDER"
     | None, None ->
         (None, None)
   end
@@ -99,24 +112,24 @@ let s3_config =
   begin
     let default_backup_interval = 3600.0 in
     let blobs_enabled =
-      Sys.getenv_opt "S3_BLOBS_ENABLED" |> Option.map (( = ) "true")
+      Sys.getenv_opt "PDS_S3_BLOBS_ENABLED" |> Option.map (( = ) "true")
     in
     let backups_enabled =
-      Sys.getenv_opt "S3_BACKUPS_ENABLED" |> Option.map (( = ) "true")
+      Sys.getenv_opt "PDS_S3_BACKUPS_ENABLED" |> Option.map (( = ) "true")
     in
     let backup_interval_s =
-      Sys.getenv_opt "S3_BACKUP_INTERVAL_S"
+      Sys.getenv_opt "PDS_S3_BACKUP_INTERVAL_S"
       |> Option.map float_of_string_opt
       |> Option.join
     in
-    let endpoint = Sys.getenv_opt "S3_ENDPOINT" in
+    let endpoint = Sys.getenv_opt "PDS_S3_ENDPOINT" in
     match (blobs_enabled, backups_enabled) with
     | Some true, _ | _, Some true -> (
       match
-        ( Sys.getenv_opt "S3_REGION"
-        , Sys.getenv_opt "S3_BUCKET"
-        , Sys.getenv_opt "S3_ACCESS_KEY"
-        , Sys.getenv_opt "S3_SECRET_KEY" )
+        ( Sys.getenv_opt "PDS_S3_REGION"
+        , Sys.getenv_opt "PDS_S3_BUCKET"
+        , Sys.getenv_opt "PDS_S3_ACCESS_KEY"
+        , Sys.getenv_opt "PDS_S3_SECRET_KEY" )
       with
       | Some region, Some bucket, Some access_key, Some secret_key ->
           let region_obj =
@@ -139,14 +152,15 @@ let s3_config =
             ; bucket
             ; access_key
             ; secret_key
-            ; cdn_url= Sys.getenv_opt "S3_CDN_URL"
+            ; cdn_url= Sys.getenv_opt "PDS_S3_CDN_URL"
             ; credentials_obj=
                 Aws_s3.Credentials.make ~access_key ~secret_key ()
             ; endpoint_obj }
       | _ ->
           failwith
             "S3 backups require the following environment variables: \
-             S3_REGION, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY" )
+             PDS_S3_REGION, PDS_S3_BUCKET, PDS_S3_ACCESS_KEY, \
+             PDS_S3_SECRET_KEY" )
     | _ ->
         None
   end

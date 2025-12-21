@@ -458,6 +458,8 @@ module Bus = struct
 
   let queue_max = 1000
 
+  let notify_interval = 20 * Util.minute
+
   let ring : item array = Array.make ring_size {seq= 0; bytes= Bytes.empty}
 
   let head_seq = ref 0
@@ -477,11 +479,45 @@ module Bus = struct
 
   let lock = Lwt_mutex.create ()
 
+  let last_notified = ref 0
+
   let publish (it : item) =
     Lwt_mutex.with_lock lock (fun () ->
         head_seq := it.seq ;
         ring.(it.seq mod ring_size) <- it ;
         if !count < ring_size then incr count ;
+        let now = Util.now_ms () in
+        if now - !last_notified > notify_interval then begin
+          last_notified := now ;
+          List.iter
+            (fun crawler ->
+              let uri =
+                Uri.with_path crawler "/xrpc/com.atproto.sync.requestCrawl"
+              in
+              Lwt.dont_wait
+                (fun () ->
+                  let%lwt res, _ =
+                    Cohttp_lwt_unix.Client.post
+                      ~headers:
+                        (Cohttp.Header.of_list
+                           [("Content-Type", "application/json")] )
+                      ~body:
+                        (Printf.ksprintf Cohttp_lwt.Body.of_string
+                           {|{ "hostname": "%s" |} Env.hostname )
+                      uri
+                  in
+                  match res.status with
+                  | `OK ->
+                      Lwt.return_unit
+                  | status ->
+                      failwith
+                        ("errored with status " ^ Http.Status.to_string status) )
+                (fun exn ->
+                  Dream.warning (fun log ->
+                      log "failed to requestCrawl %s: %s"
+                        (Uri.to_string crawler) (Printexc.to_string exn) ) ) )
+            Env.crawlers
+        end ;
         Hashtbl.iter
           (fun _ s ->
             if not s.closed then (
