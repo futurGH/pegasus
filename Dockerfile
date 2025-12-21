@@ -28,7 +28,7 @@ RUN bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-
 
 FROM --platform=linux/amd64 debian:12 AS run
 
-RUN apt-get update && apt-get install -y libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config
+RUN apt-get update && apt-get install -y ca-certificates libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev netbase pkg-config
 
 COPY --from=build /home/opam/pegasus/_build/default/bin/main.exe /bin/pegasus
 COPY --from=build /home/opam/pegasus/_build/default/bin/gen_keys.exe /bin/gen-keys
