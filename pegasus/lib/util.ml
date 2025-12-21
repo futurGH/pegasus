@@ -388,6 +388,12 @@ let sig_matches_some_did_key ~did_keys ~signature ~msg =
     did_keys
   <> None
 
+let request_ip req =
+  Dream.header req "X-Forwarded-For"
+  |> Option.value ~default:(Dream.client req)
+  |> String.split_on_char ',' |> List.hd |> String.split_on_char ':' |> List.hd
+  |> String.trim
+
 let rec http_get ?(max_redirects = 5) ?headers uri =
   let%lwt ans = Cohttp_lwt_unix.Client.get ?headers uri in
   follow_redirect ~max_redirects uri ans

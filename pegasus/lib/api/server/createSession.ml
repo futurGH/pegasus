@@ -25,7 +25,7 @@ let handler =
       in
       let id = String.lowercase_ascii identifier in
       (* apply rate limits after parsing body so we can create key from identifier *)
-      let key = id ^ "-" ^ Dream.client req in
+      let key = id ^ "-" ^ Util.request_ip req in
       let _ =
         Xrpc.consume_route_rate_limit ~name:"repo-write-hour"
           ~duration_ms:Util.day ~max_points:300 ~key ~consume_points

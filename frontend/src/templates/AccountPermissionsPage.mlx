@@ -16,7 +16,7 @@ type authorized_app =
 type device =
   { last_ip: string
   ; last_user_agent: string option [@default None]
-  ; last_refreshed_at: int
+  ; last_refreshed_at: string
   ; is_current: bool }
 [@@deriving json]
 
@@ -61,14 +61,7 @@ let parse_user_agent ua =
       else "Unknown Browser"
     else "Unknown Browser"
   in
-  os ^ " · " ^ browser
-
-let format_date timestamp_ms =
-  let date = Js.Date.fromFloat (float_of_int timestamp_ms) in
-  let month = Js.Date.getMonth date |> int_of_float in
-  let day = Js.Date.getDate date |> int_of_float in
-  let year = Js.Date.getFullYear date |> int_of_float in
-  Printf.sprintf "%d/%d/%d" year (month + 1) day
+  os ^ " \u{B7} " ^ browser
 
 let[@react.component] make
     ~props:
@@ -180,7 +173,7 @@ let[@react.component] make
                       </div>
                       <span className="text-sm text-mist-80">
                         (string
-                           ( format_date device.last_refreshed_at
+                           ( device.last_refreshed_at
                            ^ " from " ^ device.last_ip ) )
                       </span>
                     </li> )

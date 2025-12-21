@@ -4,7 +4,7 @@ let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
       let%lwt req = Xrpc.parse_body ctx.req Types.token_request_of_yojson in
       let proof = Auth.get_dpop_proof_exn ctx.auth in
-      let ip = Dream.client ctx.req in
+      let ip = Util.request_ip ctx.req in
       let user_agent = Dream.header ctx.req "User-Agent" in
       match req.grant_type with
       | "authorization_code" -> (

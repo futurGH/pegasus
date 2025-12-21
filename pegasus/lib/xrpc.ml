@@ -18,7 +18,7 @@ type rate_limit_rule =
       ; calc_key: (context -> string option) option
       ; calc_points: (context -> int) option }
 
-let default_calc_key (ctx : context) = Some (Dream.client ctx.req)
+let default_calc_key (ctx : context) = Some (Util.request_ip ctx.req)
 
 let default_calc_points (_ctx : context) = 1
 

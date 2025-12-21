@@ -1,3 +1,8 @@
+let format_date timestamp_ms =
+  let ts = float_of_int timestamp_ms /. 1000.0 in
+  let dt = Timedesc.of_timestamp_float_s_exn ts in
+  Format.asprintf "%a" (Timedesc.pp ~format:"{year}/{mon:0X}/{day:0X}" ()) dt
+
 let get_client_host client_id =
   let uri = Uri.of_string client_id in
   Uri.host uri |> Option.value ~default:client_id
@@ -47,14 +52,15 @@ let get_handler =
               let%lwt device_rows =
                 Oauth.Queries.get_distinct_devices_by_did ctx.db did
               in
-              let current_ip = Dream.client ctx.req in
+              let current_ip = Util.request_ip ctx.req in
               let current_ua = Dream.header ctx.req "User-Agent" in
               let devices =
                 List.map
-                  (fun (last_ip, last_user_agent, last_refreshed_at) ->
+                  (fun (last_ip, last_user_agent, last_refreshed_ms) ->
                     let is_current =
                       last_ip = current_ip && last_user_agent = current_ua
                     in
+                    let last_refreshed_at = format_date last_refreshed_ms in
                     ( {last_ip; last_user_agent; last_refreshed_at; is_current}
                       : Frontend.AccountPermissionsPage.device ) )
                   device_rows
