@@ -27,7 +27,7 @@ let with_db (f : Data_store.t -> unit Lwt.t) : unit Lwt.t =
     Util.connect_sqlite ~create:true ~write:true
       (Uri.of_string ("sqlite3://" ^ tmp))
   in
-  let%lwt () = Data_store.init pool in
+  let%lwt () = Migrations.run_migrations Data_store pool in
   let%lwt () = f pool in
   Lwt.return ()
 

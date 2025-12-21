@@ -305,9 +305,8 @@ let connect ?create ?write did : t Lwt.t =
   let%lwt db =
     Util.connect_sqlite ?create ?write (Util.Constants.user_db_location did)
   in
+  let%lwt () = Migrations.run_migrations User_store db in
   Lwt.return {did; db}
-
-let init t : unit Lwt.t = Migrations.run_migrations User_store t.db
 
 (* mst blocks; implements Writable_blockstore *)
 

@@ -464,7 +464,6 @@ let load ?write ?create ?(ensure_active = false) ?ds did : t Lwt.t =
       Errors.invalid_request ~name:"RepoNotFound"
         "your princess is in another castle"
   in
-  let%lwt () = User_store.init user_db in
   let%lwt {signing_key; _} =
     match%lwt Data_store.get_actor_by_identifier did data_store_conn with
     | Some actor when ensure_active = false || actor.deactivated_at = None ->

@@ -200,7 +200,6 @@ let static_routes =
 let serve () =
   Printexc.record_backtrace true ;
   let%lwt db = Data_store.connect ~create:true () in
-  let%lwt () = Data_store.init db in
   S3.Backup.start () ;
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.pipeline
@@ -221,7 +220,6 @@ let serve () =
 
 let create_invite ?(uses = 1) () =
   let%lwt db = Data_store.connect ~create:true () in
-  let%lwt () = Data_store.init db in
   let%lwt code =
     Api.Server.CreateInviteCode.create_invite_code ~db ~did:"admin"
       ~use_count:uses
