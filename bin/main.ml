@@ -219,6 +219,17 @@ let serve () =
   @ [ Dream.get "/xrpc/**" (Xrpc.service_proxy_handler db)
     ; Dream.post "/xrpc/**" (Xrpc.service_proxy_handler db) ]
 
+let create_invite ?(uses = 1) () =
+  let%lwt db = Data_store.connect ~create:true () in
+  let%lwt () = Data_store.init db in
+  let%lwt code =
+    Api.Server.CreateInviteCode.create_invite_code ~db ~did:"admin"
+      ~use_count:uses
+  in
+  print_endline
+    ("invite code created with " ^ string_of_int uses ^ " use(s): " ^ code)
+  |> Lwt.return
+
 let migrate_blobs ?did () =
   match did with
   | Some did ->
@@ -237,6 +248,7 @@ usage: pegasus [command]
 
 commands:
   serve                    start the PDS
+  create-invite [uses]     create an invite code with an optional number of uses (default: 1)
   migrate-blobs            migrate all local blobs to S3
   migrate-blobs <did>      migrate blobs for a specific user to S3
 
@@ -248,6 +260,11 @@ let () =
   match args with
   | [] | ["serve"] ->
       Lwt_main.run (serve ())
+  | ["create-invite"] ->
+      Lwt_main.run (create_invite ())
+  | ["create-invite"; uses] ->
+      let uses = int_of_string uses in
+      Lwt_main.run (create_invite ~uses ())
   | ["migrate-blobs"] ->
       Lwt_main.run (migrate_blobs ())
   | ["migrate-blobs"; did] ->
