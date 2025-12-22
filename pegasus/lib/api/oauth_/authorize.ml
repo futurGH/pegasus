@@ -93,7 +93,7 @@ let get_handler =
                                 , Uri.path uri )
                           in
                           let client_url = (host, path) in
-                          let client_name = metadata.client_name in
+                          let {client_name; logo_uri; _} = metadata in
                           let%lwt current_user, logged_in_users =
                             Session.list_logged_in_actors ctx.req ctx.db
                           in
@@ -106,6 +106,7 @@ let get_handler =
                             ~props:
                               { client_url
                               ; client_name
+                              ; logo_uri
                               ; logged_in_users
                               ; current_user
                               ; scopes

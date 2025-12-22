@@ -13,6 +13,7 @@ type actor = AccountSwitcher.actor =
 type props =
   { client_url: string * string (* (host, path) *)
   ; client_name: string option [@default None]
+  ; logo_uri: string option [@default None]
   ; current_user: actor
   ; logged_in_users: actor list
   ; scopes: string list
@@ -529,6 +530,7 @@ let[@react.component] make
     ~props:
       ({ client_url
        ; client_name
+       ; logo_uri
        ; current_user
        ; logged_in_users
        ; scopes
@@ -560,7 +562,7 @@ let[@react.component] make
   in
   let add_account_url = "/account/login" ^ query_string in
   let favicon_url, set_favicon_url =
-    useState (fun () -> "https://" ^ host ^ "/favicon.ico")
+    useState (fun () -> (Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico")) )
   in
   <form className="w-full h-auto max-w-lg px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
