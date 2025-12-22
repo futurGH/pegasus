@@ -402,6 +402,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               | None ->
                   Lwt.return_unit
             in
+            let%lwt () = User_store.delete_record t.db path in
             block_map := String_map.remove path !block_map ;
             commit_ops :=
               !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
