@@ -173,8 +173,8 @@ let[@react.component] make
                       </div>
                       <span className="text-sm text-mist-80">
                         (string
-                           ( device.last_refreshed_at
-                           ^ " from " ^ device.last_ip ) )
+                           ( "Last active " ^ device.last_refreshed_at
+                           ^ {js| · |js} ^ device.last_ip ) )
                       </span>
                     </li> )
                   devices

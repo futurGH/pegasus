@@ -101,6 +101,16 @@ let post_handler =
                               Jwt.sign_jwt claims ~typ:"at+jwt"
                                 ~signing_key:Env.jwt_key
                             in
+                            let auth_ip =
+                              Option.value code_rec.authorized_ip ~default:ip
+                            in
+                            let auth_user_agent =
+                              match code_rec.authorized_user_agent with
+                              | Some ua ->
+                                  Some ua
+                              | None ->
+                                  user_agent
+                            in
                             let%lwt () =
                               Queries.insert_oauth_token ctx.db
                                 { refresh_token
@@ -111,8 +121,8 @@ let post_handler =
                                 ; created_at= now_ms
                                 ; last_refreshed_at= now_ms
                                 ; expires_at
-                                ; last_ip= ip
-                                ; last_user_agent= user_agent }
+                                ; last_ip= auth_ip
+                                ; last_user_agent= auth_user_agent }
                             in
                             let nonce = Dpop.next_nonce () in
                             Dream.json
@@ -176,7 +186,6 @@ let post_handler =
                     Queries.update_oauth_token ctx.db
                       ~old_refresh_token:refresh_token
                       ~new_refresh_token:new_refresh ~expires_at:new_expires_at
-                      ~ip ~user_agent
                   in
                   Dream.json ~headers:[("Cache-Control", "no-store")]
                   @@ Yojson.Safe.to_string

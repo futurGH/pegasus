@@ -69,6 +69,8 @@ type oauth_code =
   ; request_id: string
   ; authorized_by: string option [@default None]
   ; authorized_at: int option [@default None]
+  ; authorized_ip: string option [@default None]
+  ; authorized_user_agent: string option [@default None]
   ; expires_at: int
   ; used: bool }
 [@@deriving yojson {strict= false}]

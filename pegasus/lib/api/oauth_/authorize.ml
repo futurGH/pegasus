@@ -52,6 +52,8 @@ let get_handler =
                       ; request_id
                       ; authorized_by= None
                       ; authorized_at= None
+                      ; authorized_ip= None
+                      ; authorized_user_agent= None
                       ; expires_at
                       ; used= false }
                   in
@@ -157,8 +159,13 @@ let post_handler =
                             else if code_rec.request_id <> request_id then
                               Errors.invalid_request "code not for this request"
                             else
+                              let ip = Util.request_ip ctx.req in
+                              let user_agent =
+                                Dream.header ctx.req "User-Agent"
+                              in
                               let%lwt () =
-                                Queries.activate_auth_code ctx.db code did
+                                Queries.activate_auth_code ctx.db code did ~ip
+                                  ~user_agent
                               in
                               let params =
                                 [ ("code", code)

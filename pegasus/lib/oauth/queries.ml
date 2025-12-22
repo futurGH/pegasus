@@ -44,14 +44,15 @@ let get_auth_code conn code =
        get_opt
          {sql|
         SELECT @string{code}, @string{request_id}, @string?{authorized_by},
-               @int?{authorized_at}, @int{expires_at}, @bool{used}
+               @int?{authorized_at}, @string?{authorized_ip},
+               @string?{authorized_user_agent}, @int{expires_at}, @bool{used}
         FROM oauth_codes
         WHERE code = %string{code}
       |sql}
          record_out]
        ~code
 
-let activate_auth_code conn code did =
+let activate_auth_code conn code did ~ip ~user_agent =
   let authorized_at = Util.now_ms () in
   Util.use_pool conn
   @@ [%rapper
@@ -59,10 +60,12 @@ let activate_auth_code conn code did =
          {sql|
         UPDATE oauth_codes
         SET authorized_by = %string{did},
-            authorized_at = %int{authorized_at}
+            authorized_at = %int{authorized_at},
+            authorized_ip = %string{ip},
+            authorized_user_agent = %string?{user_agent}
         WHERE code = %string{code}
       |sql}]
-       ~did ~authorized_at ~code
+       ~did ~authorized_at ~ip ~user_agent ~code
 
 let consume_auth_code conn code =
   Util.use_pool conn
@@ -73,7 +76,8 @@ let consume_auth_code conn code =
         SET used = 1
         WHERE code = %string{code} AND used = 0
         RETURNING @string{code}, @string{request_id}, @string?{authorized_by},
-                  @int?{authorized_at}, @int{expires_at}, @bool{used}
+                  @int?{authorized_at}, @string?{authorized_ip},
+                  @string?{authorized_user_agent}, @int{expires_at}, @bool{used}
       |sql}
          record_out]
        ~code
@@ -103,19 +107,19 @@ let get_oauth_token_by_refresh conn refresh_token =
          record_out]
        ~refresh_token
 
-let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at
-    ~ip ~user_agent =
+let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
+  let now_ms = Util.now_ms () in
   Util.use_pool conn
   @@ [%rapper
        execute
          {sql|
         UPDATE oauth_tokens
         SET refresh_token = %string{new_refresh_token},
-            expires_at = %int{expires_at}, last_ip = %string{ip},
-            last_user_agent = %string?{user_agent}
+            expires_at = %int{expires_at},
+            last_refreshed_at = %int{now_ms}
         WHERE refresh_token = %string{old_refresh_token}
       |sql}]
-       ~new_refresh_token ~expires_at ~old_refresh_token ~ip ~user_agent
+       ~new_refresh_token ~expires_at ~now_ms ~old_refresh_token
 
 let delete_oauth_token_by_refresh conn refresh_token =
   Util.use_pool conn
