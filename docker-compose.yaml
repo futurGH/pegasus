@@ -7,66 +7,30 @@ services:
         volumes:
             - pds:/data
         environment:
-            # (optional) debug, info, warn, or error
-            # default: info
-            # - PDS_LOG_LEVEL=info
+            - PDS_LOG_LEVEL=${PDS_LOG_LEVEL:-info}
+            - PDS_DATA_DIR=${PDS_DATA_DIR:-./data}
+            - PDS_HOSTNAME=${PDS_HOSTNAME:?}
+            - PDS_DID=${PDS_DID}
+            - PDS_INVITE_CODE_REQUIRED=${PDS_INVITE_CODE_REQUIRED:-true}
+            - PDS_ROTATION_KEY=${PDS_ROTATION_KEY:?}
+            - PDS_JWK_MULTIBASE=${PDS_JWK_MULTIBASE:?}
+            - PDS_ADMIN_PASSWORD=${PDS_ADMIN_PASSWORD:?}
+            - PDS_CRAWLERS=${PDS_CRAWLERS:-https://bsky.network}
+            - PDS_DPOP_NONCE_SECRET=${PDS_DPOP_NONCE_SECRET}
 
-            # (optional) directory where databases and blobs will be stored
-            # default: ./data [relative to cwd]
-            - PDS_DATA_DIR=./data
+            - PDS_SMTP_STARTTLS=${PDS_SMTP_STARTTLS:-false}
+            - PDS_SMTP_AUTH_URI=${PDS_SMTP_AUTH_URI}
+            - PDS_SMTP_SENDER=${PDS_SMTP_SENDER}
 
-            # (required) hostname where this PDS is running
-            # for handles to work, you should configure *.hostname and hostname to point to this server
-            # make sure to also set this env var for the caddy container below
-            - PDS_HOSTNAME=
-
-            # (optional) the PDS's DID
-            # default: did:web:{hostname}
-            # - PDS_DID=
-
-            # (optional) whether an invite code is needed to create an account
-            # default: true
-            # - PDS_INVITE_CODE_REQUIRED=true
-
-            # (required) the rotation key the PDS will use, in multibase format
-            # tip: run the `gen-keys` binary to generate this
-            - PDS_ROTATION_KEY=
-
-            # (required) the key used to sign JWKs
-            # tip: run the `gen-keys` binary to generate this
-            - PDS_JWK_MULTIBASE=
-
-            # (required) the PDS admin password
-            # this can be used to access com.atproto.admin.* endpoints as well as the /admin dashboard
-            - PDS_ADMIN_PASSWORD=
-
-            # (optional) relays/crawlers to inform to subscribe to this PDS, comma-separated
-            # default: https://bsky.network
-            # - PDS_CRAWLERS=https://bsky.network
-
-            # (optional [but recommended]): a secret token used to generate DPoP nonces; 32 bytes, base64url
-            # tip: run the `gen-keys` binary to generate this
-            # - PDS_DPOP_NONCE_SECRET=
-
-            # (optional) email config (see readme for details)
-            # auth uri should look like smtp[s]://user:pass@host[:port]
-            # sender should look like e@mail.com or Name <e@mail.com>
-            # without setting these, emails will be logged to stdout
-            # - PDS_SMTP_STARTTLS=false
-            # - PDS_SMTP_AUTH_URI=
-            # - PDS_SMTP_SENDER=
-
-            # (optional) S3 config (see readme for details)
-            # set these to back up your databases and/or blobs to S3(-compatible storge)
-            # - PDS_S3_BLOBS_ENABLED=false
-            # - PDS_S3_BACKUPS_ENABLED=false
-            # - PDS_S3_BACKUP_INTERVAL_S=3600
-            # - PDS_S3_ENDPOINT=
-            # - PDS_S3_REGION=
-            # - PDS_S3_BUCKET=
-            # - PDS_S3_ACCESS_KEY=
-            # - PDS_S3_SECRET_KEY=
-            # - PDS_S3_CDN_URL=
+            - PDS_S3_BLOBS_ENABLED=${PDS_S3_BLOBS_ENABLED:-false}
+            - PDS_S3_BACKUPS_ENABLED=${PDS_S3_BACKUPS_ENABLED:-false}
+            - PDS_S3_BACKUP_INTERVAL_S=${PDS_S3_BACKUP_INTERVAL_S:-3600}
+            - PDS_S3_ENDPOINT=${PDS_S3_ENDPOINT}
+            - PDS_S3_REGION=${PDS_S3_REGION}
+            - PDS_S3_BUCKET=${PDS_S3_BUCKET}
+            - PDS_S3_ACCESS_KEY=${PDS_S3_ACCESS_KEY}
+            - PDS_S3_SECRET_KEY=${PDS_S3_SECRET_KEY}
+            - PDS_S3_CDN_URL=${PDS_S3_CDN_URL}
         restart: unless-stopped
 
     caddy:
@@ -79,7 +43,7 @@ services:
             - caddy-data:/data
             - caddy-config:/config
         environment:
-            - PDS_HOSTNAME=
+            - PDS_HOSTNAME=${PDS_HOSTNAME:?}
         restart: unless-stopped
 
 volumes:
