@@ -1,0 +1,3 @@
+{$PDS_HOSTNAME} {
+	reverse_proxy pds:8008
+}
