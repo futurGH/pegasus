@@ -257,11 +257,12 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
          (Cid.to_string (Option.get swap_commit))
          (match t.commit with Some (c, _) -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
+  let mst : Mst.t ref = ref (Mst.create t.db prev_commit.data) in
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
   let commit_ops : commit_evt_op list ref = ref [] in
   let added_leaves = ref Block_map.empty in
   let%lwt results =
-    List.map
+    Lwt_list.map_s
       (fun (w : repo_write) ->
         match w with
         | Create {collection; rkey; value; _} ->
@@ -290,6 +291,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             added_leaves := Block_map.set cid block !added_leaves ;
             commit_ops :=
               !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
+            let%lwt new_mst = Mst.add !mst path cid in
+            mst := new_mst ;
             let refs =
               Util.find_blob_refs value
               |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
@@ -356,6 +359,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             commit_ops :=
               !commit_ops
               @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
+            let%lwt new_mst = Mst.add !mst path new_cid in
+            mst := new_mst ;
             let refs =
               Util.find_blob_refs value
               |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
@@ -406,13 +411,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             block_map := String_map.remove path !block_map ;
             commit_ops :=
               !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
+            let%lwt new_mst = Mst.delete !mst path in
+            mst := new_mst ;
             Lwt.return
               (Delete {type'= "com.atproto.repo.applyWrites#deleteResult"}) )
       writes
-    |> Lwt.all
   in
-  let%lwt () = User_store.clear_mst t.db in
-  let%lwt new_mst = Mst.of_assoc t.db (String_map.bindings !block_map) in
+  let new_mst = !mst in
   let%lwt new_commit = put_commit t new_mst.root ~previous:(Some prev_commit) in
   let new_commit_cid, new_commit_signed = new_commit in
   let commit_block =

@@ -696,6 +696,123 @@ let test_roundtrip () =
   let%lwt eq = Mem_mst.equal mst mst' in
   Lwt.return (Alcotest.(check bool) "mst roundtrip" true eq)
 
+let test_incremental_add_canonicity () =
+  let store = Storage.Memory_blockstore.create () in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mapping = generate_bulk_data_keys store 200 in
+  let shuffled = shuffle (assoc_of_map mapping) in
+  let%lwt mst_full =
+    Lwt_list.fold_left_s
+      (fun t (k, v) -> Mem_mst.add_rebuild t k v)
+      mst shuffled
+  in
+  let* mst_inc = Mem_mst.create_empty store in
+  let%lwt mst_inc =
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst_inc shuffled
+  in
+  Alcotest.(check bool)
+    "add produces same root as full rebuild" true
+    (Cid.equal mst_full.root mst_inc.root) ;
+  let%lwt full_leaves = Mem_mst.leaves_of_root mst_full in
+  let%lwt inc_leaves = Mem_mst.leaves_of_root mst_inc in
+  Alcotest.(check int)
+    "same leaf count" (List.length full_leaves) (List.length inc_leaves) ;
+  Lwt.return_ok ()
+
+let test_incremental_delete_canonicity () =
+  let store = Storage.Memory_blockstore.create () in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mapping = generate_bulk_data_keys store 200 in
+  let shuffled = shuffle (assoc_of_map mapping) in
+  let%lwt mst =
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
+  in
+  let to_delete = take 50 shuffled in
+  let%lwt mst_full =
+    Lwt_list.fold_left_s
+      (fun t (k, _) -> Mem_mst.delete_rebuild t k)
+      mst to_delete
+  in
+  let%lwt mst_inc =
+    Lwt_list.fold_left_s (fun t (k, _) -> Mem_mst.delete t k) mst to_delete
+  in
+  Alcotest.(check bool)
+    "delete produces same root as full rebuild" true
+    (Cid.equal mst_full.root mst_inc.root) ;
+  let%lwt full_leaves = Mem_mst.leaves_of_root mst_full in
+  let%lwt inc_leaves = Mem_mst.leaves_of_root mst_inc in
+  Alcotest.(check int)
+    "same leaf count after delete" (List.length full_leaves)
+    (List.length inc_leaves) ;
+  Lwt.return_ok ()
+
+let test_incremental_mixed_ops_canonicity () =
+  let store = Storage.Memory_blockstore.create () in
+  let* mst = Mem_mst.create_empty store in
+  let%lwt mapping = generate_bulk_data_keys store 100 in
+  let shuffled = shuffle (assoc_of_map mapping) in
+  let%lwt mst =
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
+  in
+  let%lwt more_mapping = generate_bulk_data_keys store 50 in
+  let more_shuffled = shuffle (assoc_of_map more_mapping) in
+  let%lwt mst =
+    Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst more_shuffled
+  in
+  let to_delete = take 30 shuffled in
+  let%lwt mst_inc =
+    Lwt_list.fold_left_s (fun t (k, _) -> Mem_mst.delete t k) mst to_delete
+  in
+  let* mst_ref = Mem_mst.create_empty store in
+  let remaining_original =
+    List.filter (fun (k, _) -> not (List.mem_assoc k to_delete)) shuffled
+  in
+  let all_keys = remaining_original @ assoc_of_map more_mapping in
+  let%lwt mst_ref =
+    Lwt_list.fold_left_s
+      (fun t (k, v) -> Mem_mst.add_rebuild t k v)
+      mst_ref all_keys
+  in
+  Alcotest.(check bool)
+    "mixed ops produce same root as with rebuild" true
+    (Cid.equal mst_ref.root mst_inc.root) ;
+  Lwt.return_ok ()
+
+let test_incremental_edge_cases () =
+  let store = Storage.Memory_blockstore.create () in
+  let cid1 =
+    cid_of_string_exn
+      "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
+  in
+  let* mst = Mem_mst.create_empty store in
+  (* add to empty tree *)
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fo2j" cid1 in
+  let%lwt cnt = Mem_mst.leaf_count mst in
+  Alcotest.(check int) "single add to empty" 1 cnt ;
+  (* delete only entry *)
+  let%lwt mst = Mem_mst.delete mst "com.example.record/3jqfcqzm3fo2j" in
+  let%lwt cnt = Mem_mst.leaf_count mst in
+  Alcotest.(check int) "delete returns to empty" 0 cnt ;
+  (* delete nonexistent key *)
+  let%lwt mst' = Mem_mst.delete mst "com.example.record/nonexistent" in
+  Alcotest.(check bool)
+    "delete non-existent returns same root" true
+    (Cid.equal mst.root mst'.root) ;
+  (* update existing key *)
+  let cid2 =
+    cid_of_string_exn
+      "bafyreib2rxk3rybloqtdv5vwis645zhjcvdxjrrpa5hg2snpnf6asvgx6i"
+  in
+  let%lwt mst = Mem_mst.add mst "com.example/key1" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example/key1" cid2 in
+  let%lwt got = Mem_mst.get_cid mst "com.example/key1" in
+  ( match got with
+  | Some cid ->
+      Alcotest.(check bool) "update replaces value" true (Cid.equal cid cid2)
+  | None ->
+      Alcotest.fail "key should exist after update" ) ;
+  Lwt.return_ok ()
+
 let () =
   let open Alcotest in
   let run_test test =
@@ -736,4 +853,13 @@ let () =
         ; test_case "computes singlelayer2 tree root cid" `Quick (fun () ->
               run_test test_singlelayer2_root )
         ; test_case "computes simple tree root cid" `Quick (fun () ->
-              run_test test_simple_root ) ] ) ]
+              run_test test_simple_root ) ] )
+    ; ( "incremental canonicity"
+      , [ test_case "add_incremental matches add" `Quick (fun () ->
+              run_test test_incremental_add_canonicity )
+        ; test_case "delete_incremental matches delete" `Quick (fun () ->
+              run_test test_incremental_delete_canonicity )
+        ; test_case "mixed incremental ops" `Quick (fun () ->
+              run_test test_incremental_mixed_ops_canonicity )
+        ; test_case "incremental edge cases" `Quick (fun () ->
+              run_test test_incremental_edge_cases ) ] ) ]

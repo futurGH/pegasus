@@ -161,6 +161,10 @@ module type Intf = sig
 
   val delete : t -> string -> t Lwt.t
 
+  val add_rebuild : t -> string -> Cid.t -> t Lwt.t
+
+  val delete_rebuild : t -> string -> t Lwt.t
+
   val collect_nodes_and_leaves :
     t -> ((Cid.t * bytes) list * Cid.Set.t * Cid.Set.t) Lwt.t
 
@@ -870,19 +874,667 @@ struct
     in
     persist_from_sorted sorted >|= fun (root, _) -> {blockstore; root}
 
-  (* insert or replace an entry, returning a new canonical mst *)
-  let add t key cid : t Lwt.t =
+  (* insert or replace an entry, constructing a new canonical mst from scratch *)
+  let add_rebuild t key cid : t Lwt.t =
     Util.ensure_valid_key key ;
     let%lwt leaves = leaves_of_root t in
     let without = List.filter (fun (k, _) -> k <> key) leaves in
     of_assoc t.blockstore ((key, cid) :: without)
 
-  (* delete an entry, returning a new canonical mst *)
-  let delete t key : t Lwt.t =
+  (* delete an entry, constructing a new canonical mst from scratch *)
+  let delete_rebuild t key : t Lwt.t =
     Util.ensure_valid_key key ;
     let%lwt leaves = leaves_of_root t in
     let remaining = List.filter (fun (k, _) -> k <> key) leaves in
     of_assoc t.blockstore remaining
+
+  (* persist a raw node and return its cid *)
+  let persist_node_raw (blockstore : bs) (raw : node_raw) : Cid.t Lwt.t =
+    let encoded = Dag_cbor.encode (encode_node_raw raw) in
+    let cid = Cid.create Dcbor encoded in
+    let%lwt _ = Store.put_block blockstore cid encoded in
+    Lwt.return cid
+
+  (* returns the layer a raw node belongs to *)
+  let rec get_layer_raw (t : t) (raw : node_raw) : int Lwt.t =
+    match (raw.l, raw.e) with
+    | None, [] ->
+        Lwt.return 0
+    | Some left_cid, [] -> (
+      match%lwt retrieve_node_raw t left_cid with
+      | Some left_raw ->
+          let%lwt left_layer = get_layer_raw t left_raw in
+          Lwt.return (left_layer + 1)
+      | None ->
+          failwith ("couldn't find node " ^ Cid.to_string left_cid) )
+    | _, e :: _ -> (
+      match e.p with
+      | 0 ->
+          Lwt.return (Util.leading_zeros_on_hash (Bytes.to_string e.k))
+      | _ ->
+          failwith "first node entry has nonzero p value" )
+
+  (* decompress entry keys from a raw node *)
+  let decompress_keys (raw : node_raw) : string list =
+    let last_key = ref "" in
+    List.map
+      (fun (e : entry_raw) ->
+        let prefix = if e.p = 0 then "" else String.sub !last_key 0 e.p in
+        let k = prefix ^ Bytes.to_string e.k in
+        last_key := k ;
+        k )
+      raw.e
+
+  (* compress a list of (key, value, right) tuples into an entry_raw list *)
+  let compress_entries (entries : (string * Cid.t * Cid.t option) list) :
+      entry_raw list =
+    let last_key = ref "" in
+    List.map
+      (fun (k, v, t) ->
+        let p = Util.shared_prefix_length !last_key k in
+        let k_suffix =
+          String.sub k p (String.length k - p) |> Bytes.of_string
+        in
+        last_key := k ;
+        {p; k= k_suffix; v; t} )
+      entries
+
+  (* wrap a subtree cid up to target layer with empty intermediate nodes *)
+  let rec wrap_to_layer (blockstore : bs) (cid : Cid.t) (from_layer : int)
+      (to_layer : int) : Cid.t Lwt.t =
+    if from_layer >= to_layer then Lwt.return cid
+    else
+      let raw = {l= Some cid; e= []} in
+      let%lwt wrapped_cid = persist_node_raw blockstore raw in
+      wrap_to_layer blockstore wrapped_cid (from_layer + 1) to_layer
+
+  (* collect all leaves from a subtree *)
+  let collect_subtree_leaves (t : t) (cid : Cid.t) : (string * Cid.t) list Lwt.t
+      =
+    match%lwt retrieve_node t cid with
+    | Some node ->
+        leaves_of_node node
+    | None ->
+        Lwt.return []
+
+  (* rebuild a subtree from leaves
+     returns (root_cid option, actual_layer) *)
+  let rebuild_subtree (blockstore : bs) (leaves : (string * Cid.t) list) :
+      (Cid.t option * int) Lwt.t =
+    match leaves with
+    | [] ->
+        Lwt.return (None, 0)
+    | _ -> (
+        let%lwt result = of_assoc blockstore leaves in
+        let t' = {blockstore; root= result.root} in
+        match%lwt retrieve_node_raw t' result.root with
+        | Some raw ->
+            let%lwt layer = get_layer_raw t' raw in
+            Lwt.return (Some result.root, layer)
+        | None ->
+            Lwt.return (Some result.root, 0) )
+
+  (* find the position where a key would be located in a node's entries *)
+  type position =
+    | PLeft
+    | PEntry of int (* key matches entry at index *)
+    | PRight of int (* key belongs in right subtree of entry at index *)
+
+  let find_position (keys : string list) (key : string) : position =
+    let rec aux i = function
+      | [] -> (
+        match i with 0 -> PLeft | _ -> PRight (i - 1) )
+      | k :: rest ->
+          if key = k then PEntry i
+          else if key < k then if i = 0 then PLeft else PRight (i - 1)
+          else aux (i + 1) rest
+    in
+    aux 0 keys
+
+  let rec add_incremental_raw (t : t) (root_cid : Cid.t) (key : string)
+      (value : Cid.t) (key_layer : int) : Cid.t Lwt.t =
+    match%lwt retrieve_node_raw t root_cid with
+    | None ->
+        failwith ("couldn't find node " ^ Cid.to_string root_cid)
+    | Some raw ->
+        let%lwt root_layer = get_layer_raw t raw in
+        if key_layer > root_layer then
+          add_above_root t root_cid root_layer key value key_layer
+        else if key_layer = root_layer then
+          add_at_level t raw root_layer key value
+        else add_below_level t raw root_layer key value key_layer
+
+  and add_above_root (t : t) (old_root_cid : Cid.t) (old_root_layer : int)
+      (key : string) (value : Cid.t) (key_layer : int) : Cid.t Lwt.t =
+    (* wrap old root up to key_layer - 1 *)
+    let%lwt wrapped_old =
+      wrap_to_layer t.blockstore old_root_cid old_root_layer (key_layer - 1)
+    in
+    (* get all keys from old tree to determine position *)
+    let%lwt old_leaves = collect_subtree_leaves t old_root_cid in
+    let old_keys = List.map fst old_leaves in
+    let all_less = List.for_all (fun k -> k < key) old_keys in
+    let all_greater = List.for_all (fun k -> k > key) old_keys in
+    if all_less then
+      (* all old keys < new key: old tree is left, new entry has no right *)
+      let entries = compress_entries [(key, value, None)] in
+      persist_node_raw t.blockstore {l= Some wrapped_old; e= entries}
+    else if all_greater then
+      (* all old keys > new key: new entry first with old tree as right *)
+      let entries = compress_entries [(key, value, Some wrapped_old)] in
+      persist_node_raw t.blockstore {l= None; e= entries}
+    else
+      (* key is in the middle: need to split *)
+      let left_leaves = List.filter (fun (k, _) -> k < key) old_leaves in
+      let right_leaves = List.filter (fun (k, _) -> k > key) old_leaves in
+      let%lwt left_cid, left_layer = rebuild_subtree t.blockstore left_leaves in
+      let%lwt left_wrapped =
+        match left_cid with
+        | Some cid ->
+            let%lwt wrapped =
+              wrap_to_layer t.blockstore cid left_layer (key_layer - 1)
+            in
+            Lwt.return_some wrapped
+        | None ->
+            Lwt.return_none
+      in
+      let%lwt right_cid, right_layer =
+        rebuild_subtree t.blockstore right_leaves
+      in
+      let%lwt right_wrapped =
+        match right_cid with
+        | Some cid ->
+            let%lwt wrapped =
+              wrap_to_layer t.blockstore cid right_layer (key_layer - 1)
+            in
+            Lwt.return_some wrapped
+        | None ->
+            Lwt.return_none
+      in
+      let entries = compress_entries [(key, value, right_wrapped)] in
+      persist_node_raw t.blockstore {l= left_wrapped; e= entries}
+
+  and add_at_level (t : t) (raw : node_raw) (layer : int) (key : string)
+      (value : Cid.t) : Cid.t Lwt.t =
+    let keys = decompress_keys raw in
+    let pos = find_position keys key in
+    match pos with
+    | PEntry i ->
+        (* key already exists, just update value *)
+        let entries =
+          List.mapi (fun j e -> if j = i then {e with v= value} else e) raw.e
+        in
+        persist_node_raw t.blockstore {raw with e= entries}
+    | PLeft ->
+        (* key goes before all entries, but at same layer it becomes an entry *)
+        (* need to check if there's a left subtree to handle *)
+        let%lwt new_left, new_right =
+          match raw.l with
+          | None ->
+              Lwt.return (None, None)
+          | Some left_cid ->
+              (* collect leaves from left subtree and split around the new key *)
+              let%lwt left_leaves = collect_subtree_leaves t left_cid in
+              let new_left_leaves =
+                List.filter (fun (k, _) -> k < key) left_leaves
+              in
+              let new_right_leaves =
+                List.filter (fun (k, _) -> k > key) left_leaves
+              in
+              let%lwt new_left_cid, new_left_layer =
+                rebuild_subtree t.blockstore new_left_leaves
+              in
+              let%lwt new_left_wrapped =
+                match new_left_cid with
+                | Some cid ->
+                    let%lwt w =
+                      wrap_to_layer t.blockstore cid new_left_layer (layer - 1)
+                    in
+                    Lwt.return_some w
+                | None ->
+                    Lwt.return_none
+              in
+              let%lwt new_right_cid, new_right_layer =
+                rebuild_subtree t.blockstore new_right_leaves
+              in
+              let%lwt new_right_wrapped =
+                match new_right_cid with
+                | Some cid ->
+                    let%lwt w =
+                      wrap_to_layer t.blockstore cid new_right_layer (layer - 1)
+                    in
+                    Lwt.return_some w
+                | None ->
+                    Lwt.return_none
+              in
+              Lwt.return (new_left_wrapped, new_right_wrapped)
+        in
+        let old_entries = List.map2 (fun k e -> (k, e.v, e.t)) keys raw.e in
+        let first_entry = (key, value, new_right) in
+        let new_entries = compress_entries (first_entry :: old_entries) in
+        persist_node_raw t.blockstore {l= new_left; e= new_entries}
+    | PRight i ->
+        (* key goes after entry i, before entry i+1 *)
+        let entry_i = List.nth raw.e i in
+        let%lwt new_right_for_i, new_right_for_key =
+          match entry_i.t with
+          | None ->
+              Lwt.return (None, None)
+          | Some right_cid ->
+              let%lwt right_leaves = collect_subtree_leaves t right_cid in
+              let stays_right =
+                List.filter (fun (k, _) -> k < key) right_leaves
+              in
+              let goes_to_new =
+                List.filter (fun (k, _) -> k > key) right_leaves
+              in
+              let%lwt stays_cid, stays_layer =
+                rebuild_subtree t.blockstore stays_right
+              in
+              let%lwt stays_wrapped =
+                match stays_cid with
+                | Some cid ->
+                    let%lwt w =
+                      wrap_to_layer t.blockstore cid stays_layer (layer - 1)
+                    in
+                    Lwt.return_some w
+                | None ->
+                    Lwt.return_none
+              in
+              let%lwt goes_cid, goes_layer =
+                rebuild_subtree t.blockstore goes_to_new
+              in
+              let%lwt goes_wrapped =
+                match goes_cid with
+                | Some cid ->
+                    let%lwt w =
+                      wrap_to_layer t.blockstore cid goes_layer (layer - 1)
+                    in
+                    Lwt.return_some w
+                | None ->
+                    Lwt.return_none
+              in
+              Lwt.return (stays_wrapped, goes_wrapped)
+        in
+        let old_entries = List.map2 (fun k e -> (k, e.v, e.t)) keys raw.e in
+        let new_entries =
+          List.mapi
+            (fun j (k, v, r) ->
+              if j = i then (k, v, new_right_for_i)
+              else if j = i + 1 then (k, v, r)
+              else (k, v, r) )
+            old_entries
+        in
+        let rec insert_after idx acc = function
+          | [] ->
+              List.rev ((key, value, new_right_for_key) :: acc)
+          | hd :: tl ->
+              if idx = i then
+                List.rev_append acc (hd :: (key, value, new_right_for_key) :: tl)
+              else insert_after (idx + 1) (hd :: acc) tl
+        in
+        let final_entries = insert_after 0 [] new_entries in
+        let compressed = compress_entries final_entries in
+        persist_node_raw t.blockstore {raw with e= compressed}
+
+  and add_below_level (t : t) (raw : node_raw) (root_layer : int) (key : string)
+      (value : Cid.t) (key_layer : int) : Cid.t Lwt.t =
+    let keys = decompress_keys raw in
+    let pos = find_position keys key in
+    match pos with
+    | PEntry i ->
+        let entries =
+          List.mapi (fun j e -> if j = i then {e with v= value} else e) raw.e
+        in
+        persist_node_raw t.blockstore {raw with e= entries}
+    | PLeft -> (
+      match raw.l with
+      | None ->
+          (* create a left subtree with just this entry *)
+          let%lwt new_left_cid, new_left_layer =
+            rebuild_subtree t.blockstore [(key, value)]
+          in
+          let%lwt new_left =
+            match new_left_cid with
+            | Some cid ->
+                let%lwt w =
+                  wrap_to_layer t.blockstore cid new_left_layer (root_layer - 1)
+                in
+                Lwt.return_some w
+            | None ->
+                Lwt.return_none
+          in
+          persist_node_raw t.blockstore {raw with l= new_left}
+      | Some left_cid ->
+          (* recurse into left subtree *)
+          let%lwt new_left_cid =
+            add_incremental_raw t left_cid key value key_layer
+          in
+          (* check if tree grew *)
+          let%lwt new_left_raw_opt = retrieve_node_raw t new_left_cid in
+          let%lwt new_left_layer =
+            match new_left_raw_opt with
+            | Some r ->
+                get_layer_raw t r
+            | None ->
+                Lwt.return 0
+          in
+          if new_left_layer >= root_layer then
+            (* left subtree grew to our level or above, need to merge *)
+            let%lwt left_leaves = collect_subtree_leaves t new_left_cid in
+            let%lwt my_entries =
+              Lwt_list.map_s
+                (fun (k, e) ->
+                  let%lwt right_leaves =
+                    match e.t with
+                    | Some cid ->
+                        collect_subtree_leaves t cid
+                    | None ->
+                        Lwt.return []
+                  in
+                  Lwt.return ((k, e.v) :: right_leaves) )
+                (List.combine keys raw.e)
+            in
+            let all_leaves = left_leaves @ List.concat my_entries in
+            let%lwt result = of_assoc t.blockstore all_leaves in
+            Lwt.return result.root
+          else
+            (* wrap if needed and update *)
+            let%lwt wrapped =
+              wrap_to_layer t.blockstore new_left_cid new_left_layer
+                (root_layer - 1)
+            in
+            persist_node_raw t.blockstore {raw with l= Some wrapped} )
+    | PRight i -> (
+        let entry_i = List.nth raw.e i in
+        match entry_i.t with
+        | None ->
+            (* create a right subtree with just this entry *)
+            let%lwt new_right_cid, new_right_layer =
+              rebuild_subtree t.blockstore [(key, value)]
+            in
+            let%lwt new_right =
+              match new_right_cid with
+              | Some cid ->
+                  let%lwt w =
+                    wrap_to_layer t.blockstore cid new_right_layer
+                      (root_layer - 1)
+                  in
+                  Lwt.return_some w
+              | None ->
+                  Lwt.return_none
+            in
+            let entries =
+              List.mapi
+                (fun j e -> if j = i then {e with t= new_right} else e)
+                raw.e
+            in
+            persist_node_raw t.blockstore {raw with e= entries}
+        | Some right_cid ->
+            (* recurse into right subtree *)
+            let%lwt new_right_cid =
+              add_incremental_raw t right_cid key value key_layer
+            in
+            (* check if layer changed *)
+            let%lwt new_right_raw_opt = retrieve_node_raw t new_right_cid in
+            let%lwt new_right_layer =
+              match new_right_raw_opt with
+              | Some r ->
+                  get_layer_raw t r
+              | None ->
+                  Lwt.return 0
+            in
+            if new_right_layer >= root_layer then
+              let%lwt pre_leaves =
+                match raw.l with
+                | Some cid ->
+                    collect_subtree_leaves t cid
+                | None ->
+                    Lwt.return []
+              in
+              let%lwt entry_leaves =
+                Lwt_list.mapi_s
+                  (fun j (k, e) ->
+                    let%lwt right_leaves =
+                      if j = i then collect_subtree_leaves t new_right_cid
+                      else
+                        match e.t with
+                        | Some cid ->
+                            collect_subtree_leaves t cid
+                        | None ->
+                            Lwt.return []
+                    in
+                    Lwt.return ((k, e.v) :: right_leaves) )
+                  (List.combine keys raw.e)
+              in
+              let all_leaves = pre_leaves @ List.concat entry_leaves in
+              let%lwt result = of_assoc t.blockstore all_leaves in
+              Lwt.return result.root
+            else
+              (* wrap if needed and update *)
+              let%lwt wrapped =
+                wrap_to_layer t.blockstore new_right_cid new_right_layer
+                  (root_layer - 1)
+              in
+              let entries =
+                List.mapi
+                  (fun j e -> if j = i then {e with t= Some wrapped} else e)
+                  raw.e
+              in
+              persist_node_raw t.blockstore {raw with e= entries} )
+
+  (* insert or replace an entry *)
+  let add (t : t) (key : string) (value : Cid.t) : t Lwt.t =
+    Util.ensure_valid_key key ;
+    let key_layer = Util.leading_zeros_on_hash key in
+    match%lwt retrieve_node_raw t t.root with
+    | None ->
+        failwith "root cid not found"
+    | Some raw when raw.l = None && raw.e = [] ->
+        let entries = compress_entries [(key, value, None)] in
+        let%lwt new_root =
+          persist_node_raw t.blockstore {l= None; e= entries}
+        in
+        Lwt.return {t with root= new_root}
+    | Some _ ->
+        let%lwt new_root = add_incremental_raw t t.root key value key_layer in
+        Lwt.return {t with root= new_root}
+
+  (* delete an entry
+     returns (new_cid option, layer) where layer is the layer of the returned subtree
+     None means the subtree is now empty *)
+  let rec delete_incremental_raw (t : t) (root_cid : Cid.t) (key : string)
+      (key_layer : int) : (Cid.t * int) option Lwt.t =
+    match%lwt retrieve_node_raw t root_cid with
+    | None ->
+        Lwt.return_none
+    | Some raw ->
+        let%lwt root_layer = get_layer_raw t raw in
+        if key_layer > root_layer then
+          (* key can't exist above root *)
+          Lwt.return_some (root_cid, root_layer)
+        else if key_layer = root_layer then
+          delete_at_level t raw root_cid root_layer key
+        else delete_below_level t raw root_cid root_layer key key_layer
+
+  (* delete entry at current level
+     returns (cid, layer) or None if empty *)
+  and delete_at_level (t : t) (raw : node_raw) (node_cid : Cid.t) (layer : int)
+      (key : string) : (Cid.t * int) option Lwt.t =
+    let keys = decompress_keys raw in
+    let pos = find_position keys key in
+    match pos with
+    | PEntry i ->
+        let entry_i = List.nth raw.e i in
+        (* merge adjacent subtrees *)
+        let%lwt left_leaves =
+          if i = 0 then
+            match raw.l with
+            | Some cid ->
+                collect_subtree_leaves t cid
+            | None ->
+                Lwt.return []
+          else
+            let prev_entry = List.nth raw.e (i - 1) in
+            match prev_entry.t with
+            | Some cid ->
+                collect_subtree_leaves t cid
+            | None ->
+                Lwt.return []
+        in
+        let%lwt right_leaves =
+          match entry_i.t with
+          | Some cid ->
+              collect_subtree_leaves t cid
+          | None ->
+              Lwt.return []
+        in
+        let merged_leaves = left_leaves @ right_leaves in
+        let remaining_entries =
+          List.filteri (fun j _ -> j <> i) (List.combine keys raw.e)
+        in
+        if remaining_entries = [] then
+          match merged_leaves with
+          | [] ->
+              Lwt.return_none
+          | _ ->
+              let%lwt result = of_assoc t.blockstore merged_leaves in
+              let%lwt result_layer =
+                match%lwt retrieve_node_raw t result.root with
+                | Some r ->
+                    get_layer_raw t r
+                | None ->
+                    Lwt.return 0
+              in
+              Lwt.return_some (result.root, result_layer)
+        else
+          let%lwt merged_cid_opt, merged_layer =
+            rebuild_subtree t.blockstore merged_leaves
+          in
+          let%lwt merged_wrapped =
+            match merged_cid_opt with
+            | Some cid ->
+                let%lwt w =
+                  wrap_to_layer t.blockstore cid merged_layer (layer - 1)
+                in
+                Lwt.return_some w
+            | None ->
+                Lwt.return_none
+          in
+          let new_left, entries_tuples =
+            if i = 0 then
+              let entries =
+                List.map (fun (k, e) -> (k, e.v, e.t)) remaining_entries
+              in
+              (merged_wrapped, entries)
+            else
+              let entries =
+                List.mapi
+                  (fun j (k, e) ->
+                    if j = i - 1 then (k, e.v, merged_wrapped) else (k, e.v, e.t) )
+                  remaining_entries
+              in
+              (raw.l, entries)
+          in
+          let compressed = compress_entries entries_tuples in
+          let%lwt new_cid =
+            persist_node_raw t.blockstore {l= new_left; e= compressed}
+          in
+          Lwt.return_some (new_cid, layer)
+    | PLeft | PRight _ ->
+        (* key not at this level -> doesn't exist *)
+        Lwt.return_some (node_cid, layer)
+
+  (* delete in a subtree, wrapping if subtree layer changes *)
+  and delete_below_level (t : t) (raw : node_raw) (root_cid : Cid.t)
+      (root_layer : int) (key : string) (key_layer : int) :
+      (Cid.t * int) option Lwt.t =
+    let keys = decompress_keys raw in
+    let pos = find_position keys key in
+    match pos with
+    | PEntry _ ->
+        (* key layer < root layer -> key doesn't exist *)
+        Lwt.return_some (root_cid, root_layer)
+    | PLeft -> (
+      match raw.l with
+      | None ->
+          (* key doesn't exist *)
+          Lwt.return_some (root_cid, root_layer)
+      | Some left_cid -> (
+          let%lwt result = delete_incremental_raw t left_cid key key_layer in
+          match result with
+          | None ->
+              (* subtree became empty *)
+              let%lwt cid = persist_node_raw t.blockstore {raw with l= None} in
+              Lwt.return_some (cid, root_layer)
+          | Some (new_left_cid, new_left_layer) ->
+              if Cid.equal new_left_cid left_cid then
+                Lwt.return_some (root_cid, root_layer)
+              else
+                (* wrap if layer changed *)
+                let%lwt wrapped =
+                  wrap_to_layer t.blockstore new_left_cid new_left_layer
+                    (root_layer - 1)
+                in
+                let%lwt cid =
+                  persist_node_raw t.blockstore {raw with l= Some wrapped}
+                in
+                Lwt.return_some (cid, root_layer) ) )
+    | PRight i -> (
+        let entry_i = List.nth raw.e i in
+        match entry_i.t with
+        | None ->
+            (* no right subtree -> key doesn't exist *)
+            Lwt.return_some (root_cid, root_layer)
+        | Some right_cid -> (
+            let%lwt result = delete_incremental_raw t right_cid key key_layer in
+            match result with
+            | None ->
+                (* subtree became empty *)
+                let entries =
+                  List.mapi
+                    (fun j e -> if j = i then {e with t= None} else e)
+                    raw.e
+                in
+                let%lwt cid =
+                  persist_node_raw t.blockstore {raw with e= entries}
+                in
+                Lwt.return_some (cid, root_layer)
+            | Some (new_right_cid, new_right_layer) ->
+                if Cid.equal new_right_cid right_cid then
+                  Lwt.return_some (root_cid, root_layer)
+                else
+                  (* wrap if layer changed *)
+                  let%lwt wrapped =
+                    wrap_to_layer t.blockstore new_right_cid new_right_layer
+                      (root_layer - 1)
+                  in
+                  let entries =
+                    List.mapi
+                      (fun j e -> if j = i then {e with t= Some wrapped} else e)
+                      raw.e
+                  in
+                  let%lwt cid =
+                    persist_node_raw t.blockstore {raw with e= entries}
+                  in
+                  Lwt.return_some (cid, root_layer) ) )
+
+  (* delete an entry *)
+  let delete (t : t) (key : string) : t Lwt.t =
+    Util.ensure_valid_key key ;
+    let key_layer = Util.leading_zeros_on_hash key in
+    match%lwt delete_incremental_raw t t.root key key_layer with
+    | None -> (
+      (* Tree became empty *)
+      match%lwt
+        create_empty t.blockstore
+      with
+      | Ok empty ->
+          Lwt.return empty
+      | Error e ->
+          raise e )
+    | Some (new_root, _layer) ->
+        Lwt.return {t with root= new_root}
 
   (* produces a diff from an empty mst to the current one *)
   let null_diff curr : data_diff Lwt.t =
