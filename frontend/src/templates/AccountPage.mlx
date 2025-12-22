@@ -461,6 +461,7 @@ let[@react.component] make
                 name="handle"
                 label="Handle"
                 showIndicator=false
+                placeholder=handle
               />
               <Input
                 name="password"

@@ -9,7 +9,7 @@ type handle_status =
   | Invalid of string
 
 let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
-    ?(required = false) ?(showIndicator = true) ?(subdomainOnly = false) ?hostname ?value ?onChange () =
+    ?(required = false) ?(showIndicator = true) ?(subdomainOnly = false) ?placeholder ?hostname ?value ?onChange () =
   let internalValue, setInternalValue = useState (fun () -> "") in
   let handleValue = Option.value value ~default:internalValue in
   let handleStatus, setHandleStatus = useState (fun () -> Idle) in
@@ -101,6 +101,7 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
       onChange=onHandleChange
       required
       showIndicator
+      ?placeholder
       ?trailing
     />
     ( match handleStatus with
