@@ -80,12 +80,15 @@ let get_handler =
                           let scopes = String.split_on_char ' ' req.scope in
                           let csrf_token = Dream.csrf_token ctx.req in
                           let client_id_uri =
-                            Uri.of_string metadata.client_id
+                            Option.map Uri.of_string metadata.client_id
                           in
                           let host, path =
-                            ( Uri.host_with_default client_id_uri
-                                ~default:"unknown"
-                            , Uri.path client_id_uri )
+                            match client_id_uri with
+                            | None ->
+                                ("unknown", "/")
+                            | Some uri ->
+                                ( Uri.host_with_default uri ~default:"unknown"
+                                , Uri.path uri )
                           in
                           let client_url = (host, path) in
                           let client_name = metadata.client_name in

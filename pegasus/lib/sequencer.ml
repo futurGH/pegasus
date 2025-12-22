@@ -503,7 +503,7 @@ module Bus = struct
                            [("Content-Type", "application/json")] )
                       ~body:
                         (Printf.ksprintf Cohttp_lwt.Body.of_string
-                           {|{ "hostname": "%s" |} Env.hostname )
+                           {|{ "hostname": "%s" }|} Env.hostname )
                       uri
                   in
                   match res.status with

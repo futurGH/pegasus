@@ -17,9 +17,11 @@ let fetch_client_metadata client_id : client_metadata Lwt.t =
       | Error err ->
           failwith err
     in
-    if metadata.client_id <> client_id then failwith "client_id mismatch"
+    if metadata.client_id <> Some client_id then failwith "client_id mismatch"
     else
-      let scopes = String.split_on_char ' ' metadata.scope in
+      let scopes =
+        String.split_on_char ' ' (Option.value metadata.scope ~default:"")
+      in
       if not (List.mem "atproto" scopes) then
         failwith "scope must include 'atproto'"
       else

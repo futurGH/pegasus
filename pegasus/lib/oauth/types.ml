@@ -25,17 +25,29 @@ type token_request =
 [@@deriving yojson {strict= false}]
 
 type client_metadata =
-  { client_id: string
+  { client_id: string option [@default None]
   ; client_name: string option [@default None]
-  ; client_uri: string
+  ; client_uri: string option [@default None]
+  ; policy_uri: string option [@default None]
+  ; tos_uri: string option [@default None]
+  ; logo_uri: string option [@default None]
   ; redirect_uris: string list
-  ; grant_types: string list
-  ; response_types: string list
-  ; scope: string
-  ; token_endpoint_auth_method: string
+  ; grant_types: string list [@default ["authorization_code"]]
+  ; response_types: string list [@default ["code"]]
+  ; scope: string option [@default None]
+  ; token_endpoint_auth_method: string [@default "client_secret_basic"]
   ; token_endpoint_auth_signing_alg: string option [@default None]
-  ; application_type: string
-  ; dpop_bound_access_tokens: bool
+  ; userinfo_signed_response_alg: string option [@default None]
+  ; userinfo_encrypted_response_alg: string option [@default None]
+  ; application_type: string [@default "web"]
+  ; subject_type: string [@default "public"]
+  ; request_object_signing_alg: string option [@default None]
+  ; id_token_signed_response_alg: string option [@default None]
+  ; authorization_signed_response_alg: string [@default "RS256"]
+  ; authorization_encrypted_response_enc: string option [@default None]
+  ; authorization_encrypted_response_alg: string option [@default None]
+  ; authorization_details_types: string list option [@default None]
+  ; dpop_bound_access_tokens: bool option [@default None]
   ; jwks_uri: string option [@default None]
   ; jwks: Yojson.Safe.t option [@default None] }
 [@@deriving yojson {strict= false}]

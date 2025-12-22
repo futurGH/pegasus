@@ -150,8 +150,30 @@ let parse_query (req : Dream.request)
 let parse_body (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a Lwt.t =
   try%lwt
-    let%lwt body = Dream.body req in
-    match body |> Yojson.Safe.from_string |> of_yojson with
+    let%lwt body_assoc =
+      match Dream.header req "content-type" with
+      | None ->
+          Lwt.return (`Assoc [])
+      | Some content_type -> (
+        match String.split_on_char ';' content_type with
+        | "application/x-www-form-urlencoded" :: _ -> (
+          match%lwt Dream.form ~csrf:false req with
+          | `Ok form ->
+              Lwt.return
+                (`Assoc
+                   (List.map
+                      (fun (k, v) ->
+                        (k, try Yojson.Safe.from_string v with _ -> `String v) )
+                      form ) )
+          | _ ->
+              Errors.internal_error () )
+        | "application/json" :: _ ->
+            let%lwt body = Dream.body req in
+            Lwt.return @@ Yojson.Safe.from_string body
+        | _ ->
+            Lwt.return (`Assoc []) )
+    in
+    match of_yojson body_assoc with
     | Error e ->
         Dream.debug (fun log -> log "error parsing body: %s" e) ;
         Errors.internal_error ()
