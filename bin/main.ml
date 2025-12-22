@@ -98,6 +98,9 @@ let handlers =
     , "/xrpc/com.atproto.server.deleteSession"
     , Api.Server.DeleteSession.handler )
   ; ( get
+    , "/xrpc/com.atproto.server.getServiceAuth"
+    , Api.Server.GetServiceAuth.handler )
+  ; ( get
     , "/xrpc/com.atproto.server.checkAccountStatus"
     , Api.Server.CheckAccountStatus.handler )
   ; ( post
@@ -118,9 +121,6 @@ let handlers =
   ; ( post
     , "/xrpc/com.atproto.server.resetPassword"
     , Api.Server.ResetPassword.handler )
-  ; ( post
-    , "/xrpc/com.atproto.server.getServiceAuth"
-    , Api.Server.GetServiceAuth.handler )
   ; ( post
     , "/xrpc/com.atproto.server.reserveSigningKey"
     , Api.Server.ReserveSigningKey.handler )
