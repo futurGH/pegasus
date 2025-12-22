@@ -94,4 +94,5 @@
   (action
    (with-stdout-to
     %{target}
-    (bash "echo 'let commit_hash = \"'${GIT_REV:=$(git rev-parse --short HEAD 2>/dev/null || echo 'dev')}'\"'")))))
+    (bash
+     "echo 'let commit_hash = \"'${GIT_REV:=$(git rev-parse --short HEAD 2>/dev/null || echo 'dev')}'\"'")))))
