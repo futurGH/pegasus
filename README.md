@@ -70,7 +70,7 @@ To start developing, you'll need:
 Start by creating an opam switch; similar to a Python virtual environment, storing the dependencies for this project and a specific compiler version. After that, install [`dune`](https://dune.build), the build system/package manager pegasus uses.
 
 ```
-opam switch create . 5.2.1
+opam switch create . 5.2.1 --no-install
 opam install dune
 ```
 

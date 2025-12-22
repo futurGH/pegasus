@@ -28,7 +28,8 @@ let host_endpoint = "https://" ^ hostname
 
 let did = getenv_opt "PDS_DID" ~default:("did:web:" ^ hostname)
 
-let invite_required = getenv "PDS_INVITE_CODE_REQUIRED" = "true"
+let invite_required =
+  getenv_opt "PDS_INVITE_CODE_REQUIRED" ~default:"true" = "true"
 
 let rotation_key =
   getenv "PDS_ROTATION_KEY_MULTIBASE" |> Kleidos.parse_multikey_str
