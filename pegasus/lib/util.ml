@@ -33,23 +33,6 @@ module Syntax = struct
   let ( let$! ) m f =
     match%lwt m with Ok x -> f x | Error e -> raise (Caqti_error.Exn e)
 
-  (* let$! but for an array of results *)
-  let ( let$!* ) m f =
-    let%lwt results =
-      match%lwt m with
-      | xs ->
-          Lwt.return @@ List.rev
-          @@ List.fold_left
-               (fun acc x ->
-                 match x with
-                 | Ok x ->
-                     x :: acc
-                 | Error e ->
-                     raise (Caqti_error.Exn e) )
-               [] xs
-    in
-    f results
-
   (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( >$! ) m f =
     match%lwt m with
