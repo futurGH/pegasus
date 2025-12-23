@@ -328,13 +328,11 @@ let cors_middleware inner_handler req =
   Lwt.return res
 
 let resolve_repo_did ctx repo =
-  if String.starts_with ~prefix:"did:" repo then Lwt.return repo
-  else
-    match%lwt Data_store.get_actor_by_identifier repo ctx.db with
-    | Some {did; _} ->
-        Lwt.return did
-    | None ->
-        Errors.invalid_request "target repository not found"
+  match%lwt Data_store.get_actor_by_identifier repo ctx.db with
+  | Some {did; _} ->
+      Lwt.return did
+  | None ->
+      Errors.invalid_request "target repository not found"
 
 let resolve_repo_did_authed ctx repo =
   let%lwt input_did = resolve_repo_did ctx repo in

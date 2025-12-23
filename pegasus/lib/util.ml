@@ -395,7 +395,15 @@ let request_ip req =
   |> String.trim
 
 let rec http_get ?(max_redirects = 5) ?headers uri =
-  let%lwt ans = Cohttp_lwt_unix.Client.get ?headers uri in
+  let ua = "pegasus (" ^ Env.host_endpoint ^ ")" in
+  let headers =
+    match headers with
+    | Some headers ->
+        Http.Header.add_unless_exists headers "User-Agent" ua
+    | None ->
+        Http.Header.of_list [("User-Agent", ua)]
+  in
+  let%lwt ans = Cohttp_lwt_unix.Client.get ~headers uri in
   follow_redirect ~max_redirects uri ans
 
 and follow_redirect ~max_redirects request_uri (response, body) =
