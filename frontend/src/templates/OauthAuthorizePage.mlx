@@ -562,7 +562,8 @@ let[@react.component] make
   in
   let add_account_url = "/account/login" ^ query_string in
   let favicon_url, set_favicon_url =
-    useState (fun () -> (Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico")) )
+    useState (fun () ->
+        Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico") )
   in
   <form className="w-full h-auto max-w-lg px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">

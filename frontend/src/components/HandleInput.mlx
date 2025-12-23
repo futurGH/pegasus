@@ -2,14 +2,11 @@
 
 open React
 
-type handle_status =
-  | Idle
-  | Checking
-  | Valid
-  | Invalid of string
+type handle_status = Idle | Checking | Valid | Invalid of string
 
 let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
-    ?(required = false) ?(showIndicator = true) ?(subdomainOnly = false) ?placeholder ?hostname ?value ?onChange () =
+    ?(required = false) ?(showIndicator = true) ?(subdomainOnly = false)
+    ?placeholder ?hostname ?value ?onChange () =
   let internalValue, setInternalValue = useState (fun () -> "") in
   let handleValue = Option.value value ~default:internalValue in
   let handleStatus, setHandleStatus = useState (fun () -> Idle) in
@@ -20,16 +17,17 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
         setHandleStatus (fun _ -> Checking) ;
         let fullHandle =
           match hostname with
-          | Some host -> handle ^ "." ^ host
-          | None -> handle
+          | Some host ->
+              handle ^ "." ^ host
+          | None ->
+              handle
         in
         let _ =
           Fetch.fetch
-            ("/account/signup/check-handle?handle="
+            ( "/account/signup/check-handle?handle="
             ^ Js.Global.encodeURIComponent handle )
           |> Js.Promise.then_ (fun response ->
-                 if Fetch.Response.ok response then
-                   Fetch.Response.json response
+                 if Fetch.Response.ok response then Fetch.Response.json response
                  else Js.Promise.reject (Js.Exn.raiseError "Request failed") )
           |> Js.Promise.then_ (fun json ->
                  let valid =
@@ -42,18 +40,18 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
                    |> Option.map Obj.magic
                    |> Option.value ~default:false
                  in
-                 let error = Option.bind
-                 	(Js.Dict.get (Obj.magic json) "error"
-                        |> Option.map Obj.magic)
-                    (fun x ->
-                        if Js.Nullable.isNullable (Obj.magic x) then None
-                        else Some x )
+                 let error =
+                   Option.bind
+                     ( Js.Dict.get (Obj.magic json) "error"
+                     |> Option.map Obj.magic )
+                     (fun x ->
+                       if Js.Nullable.isNullable (Obj.magic x) then None
+                       else Some x )
                  in
-                 ( if valid && available then setHandleStatus (fun _ -> Valid)
-                   else
-                     setHandleStatus (fun _ ->
-                         Invalid (Option.value error ~default:"Invalid handle")
-                     ) ) ;
+                 if valid && available then setHandleStatus (fun _ -> Valid)
+                 else
+                   setHandleStatus (fun _ ->
+                       Invalid (Option.value error ~default:"Invalid handle") ) ;
                  Js.Promise.resolve () )
           |> Js.Promise.catch (fun _ ->
                  setHandleStatus (fun _ ->
@@ -67,8 +65,10 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
       fun e ->
         let inputValue = (Event.Form.target e)##value in
         ( match onChange with
-        | Some f -> f e
-        | None -> setInternalValue (fun _ -> inputValue) ) ;
+        | Some f ->
+            f e
+        | None ->
+            setInternalValue (fun _ -> inputValue) ) ;
         ( match checkTimeoutRef.current with
         | Some id ->
             Js.Global.clearTimeout id
@@ -84,12 +84,12 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
   let trailing =
     match hostname with
     | Some h ->
-        Some (
+        Some
           <span className="font-serif text-mist-80 whitespace-nowrap">
             (string ("." ^ h))
           </span>
-        )
-    | _ -> None
+    | _ ->
+        None
   in
   <div>
     <Input
@@ -110,16 +110,14 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
           (string "Checking availability...")
         </span>
     | Valid ->
-        <span
-          className="inline-flex items-center text-mana-100 text-sm mt-1">
+        <span className="inline-flex items-center text-mana-100 text-sm mt-1">
           <CheckmarkIcon className="w-4 h-4 mr-1" />
           (string "Handle is available")
         </span>
     | Invalid msg ->
         <span
           className="inline-flex items-center text-phoenix-100 text-sm mt-1">
-          <CircleAlertIcon className="w-4 h-4 mr-1" />
-          (string msg)
+          <CircleAlertIcon className="w-4 h-4 mr-1" /> (string msg)
         </span>
     | Idle ->
         null )

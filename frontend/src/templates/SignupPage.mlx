@@ -23,11 +23,7 @@ let[@react.component] make
       <input type_="hidden" name="dream.csrf" value=csrf_token />
       ( if invite_required then
           <Input
-            sr_only=true
-            name="invite_code"
-            type_="text"
-            label="invite code"
-          />
+            sr_only=true name="invite_code" type_="text" label="invite code" />
         else null )
       <HandleInput sr_only=true name="handle" hostname />
       <Input sr_only=true name="email" type_="email" label="email" />
