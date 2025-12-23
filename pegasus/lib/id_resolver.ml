@@ -150,6 +150,18 @@ module Did = struct
             (fun (s : service) ->
               if s.id = fragment then Some (get_service_endpoint s) else None )
             services
+
+    let get_verification_key t fragment =
+      match t.verification_method with
+      | None ->
+          None
+      | Some methods ->
+          List.find_map
+            (fun (vm : verification_method) ->
+              if vm.id = fragment || vm.id = t.id ^ fragment then
+                vm.public_key_multibase
+              else None )
+            methods
   end
 
   type document = Document.t
