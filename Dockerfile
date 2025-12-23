@@ -1,4 +1,4 @@
-FROM ocaml/opam:alpine-3.22-ocaml-5.2 AS build
+FROM ocaml/opam:debian-12-ocaml-5.2 AS build
 
 ARG NODE_VERSION=v24.11.1
 ARG OPAM_VERSION=2.5.0
@@ -8,10 +8,10 @@ ARG GIT_REV
 ENV GIT_REV=$GIT_REV
 
 USER root
-RUN apk add --no-cache cmake git libev-dev libffi-dev gmp-dev openssl-dev sqlite-dev pcre-dev pkgconfig
+RUN apt-get update && apt-get install -y cmake git libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config
 
 RUN bash -c "curl -fsSL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh | bash -s -- --version $OPAM_VERSION"
-RUN bash -c "chown opam:opam /usr/bin/opam"
+RUN bash -c "chown opam:opam /bin/opam"
 USER opam
 
 WORKDIR /home/opam/pegasus
@@ -32,17 +32,17 @@ RUN opam install dune.$DUNE_VERSION
 RUN opam exec dune pkg lock
 RUN bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
 
-FROM alpine:3.22 AS run
+FROM debian:12 AS run
 
-RUN apk add --no-cache ca-certificates cmake git libev-dev libffi-dev gmp-dev openssl-dev sqlite-dev pcre-dev pkgconfig
+RUN apt-get update && apt-get install -y ca-certificates cmake git libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config netbase
 
 RUN mkdir /data
 
-COPY --from=build /home/opam/pegasus/_build/default/bin/main.exe /usr/bin/pegasus
-COPY --from=build /home/opam/pegasus/_build/default/bin/gen_keys.exe /usr/bin/gen-keys
+COPY --from=build /home/opam/pegasus/_build/default/bin/main.exe /bin/pegasus
+COPY --from=build /home/opam/pegasus/_build/default/bin/gen_keys.exe /bin/gen-keys
 
-ENTRYPOINT ["/usr/bin/pegasus"]
+ENTRYPOINT ["/bin/pegasus"]
 
-LABEL org.opencontainers.image.source=https://tangled.org/futur.blue/pegasus
+LABEL org.opencontainers.image.source="https://github.com/futurgh/pegasus"
 LABEL org.opencontainers.image.description="pegasus, an atproto pds"
 LABEL org.opencontainers.image.licenses=MPL-2.0
