@@ -17,6 +17,7 @@ services:
             - PDS_ADMIN_PASSWORD=${PDS_ADMIN_PASSWORD:?}
             - PDS_CRAWLERS=${PDS_CRAWLERS:-https://bsky.network}
             - PDS_DPOP_NONCE_SECRET=${PDS_DPOP_NONCE_SECRET:-}
+            - PDS_FAVICON_URL=${PDS_FAVICON_URL:-}
 
             - PDS_SMTP_STARTTLS=${PDS_SMTP_STARTTLS:-false}
             - PDS_SMTP_AUTH_URI=${PDS_SMTP_AUTH_URI:-}

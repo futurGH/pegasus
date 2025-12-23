@@ -468,7 +468,7 @@ let render_html ?status ?title (type props)
   let props_json = Template.props_to_json props |> Yojson.Basic.to_string in
   let page_data = Printf.sprintf "window.__PAGE__ = {props: %s};" props_json in
   let app = Template.make ~props () in
-  let page = Frontend.Layout.make ?title ~children:app () in
+  let page = Frontend.Layout.make ?title ~favicon:Env.favicon_url ~children:app () in
   Dream.stream ?status
     ~headers:[("Content-Type", "text/html")]
     (fun stream ->

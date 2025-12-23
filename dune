@@ -44,6 +44,7 @@
   (deps
    (file ../public/client.js)
    (file ../public/index.css)
+   (file ../public/favicon.ico)
    (source_tree ../public/fonts))
   (action
    (with-stdout-to
@@ -58,6 +59,8 @@
      js
      -e
      css
+     -e
+     ico
      -m
      plain
      ../public
