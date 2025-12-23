@@ -48,7 +48,7 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
         <Aria.Popover
           style=
             (ReactDOM.Style.make
-               ~minWidth:"calc(var(--trigger-width) + var(--spacing) * 3)" () )
+               ~minWidth:"max(var(--spacing) * 32, calc(var(--trigger-width) + var(--spacing) * 3))" () )
           className="focus-visible:outline-none">
           <Aria.ListBox
             className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \

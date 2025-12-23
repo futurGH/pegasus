@@ -23,6 +23,18 @@ type props =
   ; success: string option [@default None] }
 [@@deriving json]
 
+let contains_str s1 s2 =
+  let len2 = String.length s2 in
+  let len1 = String.length s1 in
+  if len2 = 0 then true
+  else
+    try
+      for i = 0 to len1 - len2 do
+        if String.sub s1 i len2 = s2 then raise Exit
+      done;
+      false
+    with Exit -> true
+
 let admin_pages =
   [ ("Users", "/admin/users")
   ; ("Invite codes", "/admin/invites") ]
@@ -31,13 +43,14 @@ let[@react.component] make
     ~props:
       ({ actors
        ; csrf_token
-       ; filter
+       ; filter=initial_filter
        ; cursor
        ; next_cursor
        ; hostname
        ; error
        ; success } :
         props ) () =
+  let filter, setFilter = useState (fun () -> initial_filter) in
   (* create account modal state *)
   let createModalOpen, setCreateModalOpen = useState (fun () -> false) in
   let newEmail, setNewEmail = useState (fun () -> "") in
@@ -59,14 +72,13 @@ let[@react.component] make
         (string "Enter a DID, handle, or email to filter the list by.")
       </p>
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <form className="flex-1">
-          <Input
-            name="filter"
-            placeholder="filter users"
-            value=filter
-            showIndicator=false
-          />
-        </form>
+        <Input
+          name="filter"
+          placeholder="filter users"
+          showIndicator=false
+          value=filter
+          onChange=(fun e -> setFilter (fun _ -> (Obj.magic (Event.Form.target e))##value))
+        />
         <ClientOnly fallback=(
           <Button kind=`Primary className="w-full sm:max-w-64">
             (string "create account")
@@ -169,6 +181,10 @@ let[@react.component] make
           <tbody>
             ( List.map
                 (fun (actor : actor) ->
+                  if filter <> ""
+                  && not (contains_str actor.handle filter)
+                  && not (contains_str actor.did filter)
+                  && not (contains_str actor.email filter) then null else
                   let handleClasses = "font-medium truncate " ^
                   	(if actor.deactivated then "text-phoenix-100" else "text-mana-100") in
                   <tr key=actor.did className="border-t border-mist-60/50">

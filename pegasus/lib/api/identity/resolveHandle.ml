@@ -18,5 +18,5 @@ let handler =
         | Ok did ->
             Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {did}
         | Error e ->
-            Errors.log_exn (Failure e) ;
+            Dream.error (fun log -> log "%s" e) ;
             Errors.internal_error ~msg:"could not resolve handle" () ) )
