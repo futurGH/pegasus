@@ -4,7 +4,7 @@ let handler =
           let cursor =
             match Dream.query req "cursor" with
             | Some s ->
-                Option.value (int_of_string_opt s) ~default:0
+                max 0 (Option.value (int_of_string_opt s) ~default:0)
             | None ->
                 0
           in

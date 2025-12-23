@@ -518,6 +518,7 @@ module Bus = struct
                         (Uri.to_string crawler) (Printexc.to_string exn) ) ) )
             Env.crawlers
         end ;
+        let to_remove = ref [] in
         Hashtbl.iter
           (fun _ s ->
             if not s.closed then (
@@ -525,10 +526,11 @@ module Bus = struct
               if Queue.length s.q > queue_max then (
                 s.closed <- true ;
                 s.close_reason <- Some "ConsumerTooSlow" ;
-                Hashtbl.remove subs s.id ;
+                to_remove := s.id :: !to_remove ;
                 Lwt_condition.broadcast s.cond () )
               else Lwt_condition.broadcast s.cond () ) )
           subs ;
+        List.iter (Hashtbl.remove subs) !to_remove ;
         Lwt.return_unit )
 
   let latest_seq () = !head_seq
@@ -552,19 +554,22 @@ module Bus = struct
         Hashtbl.remove subs s.id ;
         Lwt.return_unit )
 
-  let ring_after (after : int) : item list =
-    if !head_seq <= after then []
-    else
-      let first = max (!head_seq - !count + 1) (after + 1) in
-      if first > !head_seq then []
-      else
-        let rec collect acc seq =
-          if seq > !head_seq then List.rev acc
+  let ring_after (after : int) : item list Lwt.t =
+    Lwt_mutex.with_lock lock (fun () ->
+        let head = !head_seq in
+        let cnt = !count in
+        if head <= after then Lwt.return []
+        else
+          let first = max (head - cnt + 1) (after + 1) in
+          if first > head then Lwt.return []
           else
-            let it = ring.(seq mod ring_size) in
-            collect (it :: acc) (seq + 1)
-        in
-        collect [] first
+            let rec collect acc seq =
+              if seq > head then List.rev acc
+              else
+                let it = ring.(seq mod ring_size) in
+                collect (it :: acc) (seq + 1)
+            in
+            Lwt.return (collect [] first) )
 
   let rec wait_next (s : subscriber) : item Lwt.t =
     if s.closed then failwith "subscriber closed"
@@ -634,7 +639,7 @@ module Live = struct
         let%lwt head_db = DB.latest_seq conn in
         let cutoff = head_db in
         (* try backfill from buffer first *)
-        let ring = Bus.ring_after cursor in
+        let%lwt ring = Bus.ring_after cursor in
         let ring_covers =
           match ring with
           | [] ->
