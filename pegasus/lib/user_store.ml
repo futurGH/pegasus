@@ -635,4 +635,39 @@ module Bulk = struct
                 Lwt.return_error e )
       in
       process_chunks chunks
+
+  let put_blob_refs (refs : (string * Cid.t) list) conn =
+    if List.is_empty refs then Lwt.return_ok ()
+    else
+      let module C = (val conn : Caqti_lwt.CONNECTION) in
+      let chunks = chunk_list 200 refs in
+      let rec process_chunks = function
+        | [] ->
+            Lwt.return_ok ()
+        | chunk :: rest -> (
+            let values =
+              List.map
+                (fun (path, cid) ->
+                  Printf.sprintf "('%s', '%s')" (escape_sql_string path)
+                    (escape_sql_string (Cid.to_string cid)) )
+                chunk
+              |> String.concat ", "
+            in
+            let sql =
+              Printf.sprintf
+                "INSERT INTO blobs_records (record_path, blob_cid) VALUES %s \
+                 ON CONFLICT DO NOTHING"
+                values
+            in
+            let query =
+              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+            in
+            let%lwt result = C.exec query () in
+            match result with
+            | Ok () ->
+                process_chunks rest
+            | Error e ->
+                Lwt.return_error e )
+      in
+      process_chunks chunks
 end

@@ -33,6 +33,23 @@ module Syntax = struct
   let ( let$! ) m f =
     match%lwt m with Ok x -> f x | Error e -> raise (Caqti_error.Exn e)
 
+  (* let$! but for an array of results *)
+  let ( let$!* ) m f =
+    let%lwt results =
+      match%lwt m with
+      | xs ->
+          Lwt.return @@ List.rev
+          @@ List.fold_left
+               (fun acc x ->
+                 match x with
+                 | Ok x ->
+                     x :: acc
+                 | Error e ->
+                     raise (Caqti_error.Exn e) )
+               [] xs
+    in
+    f results
+
   (* unwraps an Lwt result, raising an exception if there's an error *)
   let ( >$! ) m f =
     match%lwt m with
@@ -468,7 +485,9 @@ let render_html ?status ?title (type props)
   let props_json = Template.props_to_json props |> Yojson.Basic.to_string in
   let page_data = Printf.sprintf "window.__PAGE__ = {props: %s};" props_json in
   let app = Template.make ~props () in
-  let page = Frontend.Layout.make ?title ~favicon:Env.favicon_url ~children:app () in
+  let page =
+    Frontend.Layout.make ?title ~favicon:Env.favicon_url ~children:app ()
+  in
   Dream.stream ?status
     ~headers:[("Content-Type", "text/html")]
     (fun stream ->

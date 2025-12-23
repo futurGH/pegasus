@@ -620,12 +620,19 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
     in
     (* collect record data for insert *)
     let since = Tid.now () in
+    let blob_refs : (string * Cid.t) list ref = ref [] in
     let record_data =
-      List.filter_map
+      List.map
         (fun (path, cid) ->
           match Block_map.get cid all_blocks with
           | Some data ->
-              Some (path, cid, data, since)
+              let record = Lex.of_cbor data in
+              let record_refs =
+                Util.find_blob_refs record
+                |> List.map (fun (br : Mist.Blob_ref.t) -> (path, br.ref))
+              in
+              blob_refs := record_refs @ !blob_refs ;
+              (path, cid, data, since)
           | None ->
               failwith ("missing record block: " ^ Cid.to_string cid) )
         leaves
@@ -639,7 +646,11 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
               let$! () =
                 [%rapper execute {sql| DELETE FROM records |sql}] () conn
               in
-              let$! () = User_store.Bulk.put_records record_data conn in
+              let$!* _ =
+                Lwt.all
+                  [ User_store.Bulk.put_records record_data conn
+                  ; User_store.Bulk.put_blob_refs !blob_refs conn ]
+              in
               Lwt.return_ok () ) )
     in
     (* clear cached block_map so it's rebuilt on next access *)
