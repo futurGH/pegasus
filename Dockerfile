@@ -28,9 +28,13 @@ ADD . .
 RUN bash -c "source $NVM_DIR/nvm.sh && pnpm install --frozen-lockfile"
 
 ENV DUNE_CACHE="enabled"
-RUN opam install dune.$DUNE_VERSION
-RUN opam exec dune pkg lock
-RUN bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
+RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
+    --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
+    opam install dune.$DUNE_VERSION
+RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
+    opam exec dune pkg lock
+RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
+    bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
 
 FROM debian:12 AS run
 
