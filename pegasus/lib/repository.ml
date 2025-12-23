@@ -607,42 +607,39 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
       |> List.filter (fun cid ->
           (not (Cid.equal cid root)) && not (Cid.Set.mem cid leaf_cids) )
     in
+    (* collect mst node blocks for insert *)
+    let mst_blocks =
+      List.filter_map
+        (fun cid ->
+          match Block_map.get cid all_blocks with
+          | Some block ->
+              Some (cid, block)
+          | None ->
+              None )
+        mst_node_cids
+    in
+    (* collect record data for insert *)
+    let since = Tid.now () in
+    let record_data =
+      List.filter_map
+        (fun (path, cid) ->
+          match Block_map.get cid all_blocks with
+          | Some data ->
+              Some (path, cid, data, since)
+          | None ->
+              failwith ("missing record block: " ^ Cid.to_string cid) )
+        leaves
+    in
     let%lwt _ =
       Util.use_pool t.db.db (fun conn ->
           Util.transact conn (fun () ->
-              (* store commit *)
               let$! _ = User_store.Queries.put_commit root commit_bytes conn in
-              (* store mst nodes *)
-              let%lwt () =
-                Lwt_list.iter_s
-                  (fun cid ->
-                    match Block_map.get cid all_blocks with
-                    | Some block ->
-                        let$! _ = User_store.Queries.put_block cid block conn in
-                        Lwt.return_unit
-                    | None ->
-                        Lwt.return_unit )
-                  mst_node_cids
-              in
-              (* delete existing records *)
+              let$! () = User_store.Queries.clear_mst conn in
+              let$! () = User_store.Bulk.put_blocks mst_blocks conn in
               let$! () =
                 [%rapper execute {sql| DELETE FROM records |sql}] () conn
               in
-              (* store records *)
-              let%lwt () =
-                Lwt_list.iter_s
-                  (fun (path, cid) ->
-                    match Block_map.get cid all_blocks with
-                    | Some data ->
-                        let$! _ =
-                          User_store.Queries.put_record ~path ~cid ~data
-                            ~since:(Tid.now ()) conn
-                        in
-                        Lwt.return_unit
-                    | None ->
-                        failwith ("missing record block: " ^ Cid.to_string cid) )
-                  leaves
-              in
+              let$! () = User_store.Bulk.put_records record_data conn in
               Lwt.return_ok () ) )
     in
     (* clear cached block_map so it's rebuilt on next access *)
