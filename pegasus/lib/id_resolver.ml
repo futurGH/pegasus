@@ -1,9 +1,5 @@
 open Cohttp_lwt
 
-let did_regex =
-  Re.Pcre.re {|^did:([a-z]+):([a-zA-Z0-9._:%\-]*[a-zA-Z0-9._\-])$|}
-  |> Re.compile
-
 module Handle = struct
   let dns_client = Dns_client_unix.create ()
 
@@ -26,21 +22,17 @@ module Handle = struct
     try%lwt
       match
         Dns_client_unix.getaddrinfo dns_client Dns.Rr_map.Txt
-          (Domain_name.of_string_exn handle)
+          (Domain_name.of_string_exn ("_atproto." ^ handle))
       with
       | Ok (_, t) -> (
           let txt = Dns.Rr_map.Txt_set.choose t in
-          match Re.exec_opt did_regex txt with
-          | Some groups -> (
-              let method_name = Re.Group.get groups 1 in
-              let id = Re.Group.get groups 2 in
-              match method_name with
-              | "web" | "plc" ->
-                  Lwt.return_ok ("did:" ^ method_name ^ ":" ^ id)
-              | _ ->
-                  Lwt.return_error ("unsupported method" ^ method_name) )
-          | None ->
-              Lwt.return_error "invalid txt record" )
+          match String.split_on_char '=' txt with
+          | ["did"; did]
+            when String.starts_with ~prefix:"did:plc:" did
+                 || String.starts_with ~prefix:"did:web:" did ->
+              Lwt.return_ok did
+          | _ ->
+              Lwt.return_error "invalid did in dns record" )
       | Error (`Msg e) ->
           Lwt.return_error e
     with exn -> Lwt.return_error (Printexc.to_string exn)
