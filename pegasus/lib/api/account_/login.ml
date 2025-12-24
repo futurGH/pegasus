@@ -11,6 +11,39 @@ let get_handler =
         (module Frontend.LoginPage)
         ~props:{redirect_url; csrf_token; error= None} )
 
+type switch_account_response =
+  {success: bool; error: string option [@default None]}
+[@@deriving yojson {strict= false}]
+
+let switch_account_handler =
+  Xrpc.handler (fun ctx ->
+      match%lwt Dream.form ctx.req with
+      | `Ok fields -> (
+          let did = List.assoc_opt "did" fields in
+          match did with
+          | Some did ->
+              let%lwt logged_in_dids = Session.Raw.get_logged_in_dids ctx.req in
+              if List.mem did logged_in_dids then
+                let%lwt () = Session.Raw.set_current_did ctx.req did in
+                Dream.json @@ Yojson.Safe.to_string
+                @@ switch_account_response_to_yojson {success= true; error= None}
+              else
+                Dream.json ~status:`Bad_Request
+                @@ Yojson.Safe.to_string
+                @@ switch_account_response_to_yojson
+                     { success= false
+                     ; error= Some "not logged in as this account" }
+          | None ->
+              Dream.json ~status:`Bad_Request
+              @@ Yojson.Safe.to_string
+              @@ switch_account_response_to_yojson
+                   {success= false; error= Some "missing did parameter"} )
+      | _ ->
+          Dream.json ~status:`Bad_Request
+          @@ Yojson.Safe.to_string
+          @@ switch_account_response_to_yojson
+               {success= false; error= Some "invalid form submission"} )
+
 let post_handler =
   Xrpc.handler (fun ctx ->
       let csrf_token = Dream.csrf_token ctx.req in

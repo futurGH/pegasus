@@ -24,6 +24,32 @@ let fallback handle avatar =
 
 let[@react.component] make ~current_user ~logged_in_users ~add_account_url
     ?(name = "did") ?(inline = false) ?onChange () =
+  let handleAccountSwitch =
+    [%browser_only
+      fun newDid ->
+        if newDid <> current_user.did then
+          let formData = Fetch.FormData.make () in
+          Fetch.FormData.set "did" newDid formData ;
+          let _ =
+            Fetch.fetchWithInit "/account/switch"
+              (Fetch.RequestInit.make ~method_:Fetch.Post
+                 ~body:(Fetch.BodyInit.makeWithFormData formData)
+                 () )
+            |> Js.Promise.then_ (fun response ->
+                   if Fetch.Response.ok response then (
+                     ignore ([%mel.raw {| window.location.reload() |}] : unit) ;
+                     Js.Promise.resolve () )
+                   else Js.Promise.resolve () )
+            |> Js.Promise.catch (fun _ -> Js.Promise.resolve ())
+          in
+          () ;
+          ( match onChange with
+          | Some f ->
+              f newDid
+          | None ->
+              () )
+        else ()]
+  in
   let button_class =
     if inline then
       "group inline-flex flex-row items-center px-1.5 py-1 -mx-0.75 -my-1 \
@@ -41,7 +67,7 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
   <ClientOnly fallback=(fallback current_user.handle current_user.avatar_data_uri)>
   [%browser_only
     (fun () ->
-      <Aria.Select name className="inline" defaultValue=current_user.did placeholder="select account" ?onChange>
+      <Aria.Select name className="inline" defaultValue=current_user.did placeholder="select account" onChange=handleAccountSwitch>
         <Aria.Button className=button_class>
           <Aria.SelectValue className=value_class />
         </Aria.Button>
