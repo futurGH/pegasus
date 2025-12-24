@@ -576,7 +576,7 @@ module Bulk = struct
                 (fun (cid, data) ->
                   let cid_str = escape_sql_string (Cid.to_string cid) in
                   let hex_data = bytes_to_hex data in
-                  Printf.sprintf "('%s', X'%s')" cid_str hex_data )
+                  Printf.sprintf "('%s', CAST(X'%s' AS TEXT))" cid_str hex_data )
                 chunk
               |> String.concat ", "
             in
@@ -610,7 +610,7 @@ module Bulk = struct
               List.map
                 (fun (path, cid, data, since) ->
                   let hex_data = bytes_to_hex data in
-                  Printf.sprintf "('%s', '%s', X'%s', '%s')"
+                  Printf.sprintf "('%s', '%s', CAST(X'%s' AS TEXT), '%s')"
                     (escape_sql_string path)
                     (escape_sql_string (Cid.to_string cid))
                     hex_data (escape_sql_string since) )
