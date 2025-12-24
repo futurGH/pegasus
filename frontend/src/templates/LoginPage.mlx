@@ -39,6 +39,12 @@ let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
         className="text-mana-100 underline hover:text-mana-200">
         (string "create an account")
       </a>
+      (string " or ")
+      <a
+        href="/account/migrate"
+        className="text-mana-100 underline hover:text-mana-200">
+        (string "migrate from another PDS")
+      </a>
       (string ".")
     </span>
   </main>

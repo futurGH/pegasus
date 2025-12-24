@@ -1,0 +1,377 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type migration_step =
+  | EnterCredentials
+  | Authenticating
+  | CreatingAccount
+  | ImportingRepo
+  | ImportingBlobs
+  | UpdatingIdentity
+  | Activating
+  | Complete
+  | Error
+
+let step_of_string = function
+  | "enter_credentials" -> EnterCredentials
+  | "authenticating" -> Authenticating
+  | "creating_account" -> CreatingAccount
+  | "importing_repo" -> ImportingRepo
+  | "importing_blobs" -> ImportingBlobs
+  | "updating_identity" -> UpdatingIdentity
+  | "activating" -> Activating
+  | "complete" -> Complete
+  | "error" -> Error
+  | _ -> EnterCredentials
+
+let step_to_string = function
+  | EnterCredentials -> "enter_credentials"
+  | Authenticating -> "authenticating"
+  | CreatingAccount -> "creating_account"
+  | ImportingRepo -> "importing_repo"
+  | ImportingBlobs -> "importing_blobs"
+  | UpdatingIdentity -> "updating_identity"
+  | Activating -> "activating"
+  | Complete -> "complete"
+  | Error -> "error"
+
+let step_to_label = function
+  | EnterCredentials -> "Enter Credentials"
+  | Authenticating -> "Authenticating"
+  | CreatingAccount -> "Creating Account"
+  | ImportingRepo -> "Importing Repository"
+  | ImportingBlobs -> "Importing Blobs"
+  | UpdatingIdentity -> "Updating Identity"
+  | Activating -> "Activating Account"
+  | Complete -> "Migration Complete"
+  | Error -> "Error"
+
+let step_to_number = function
+  | EnterCredentials -> 1
+  | Authenticating -> 2
+  | CreatingAccount -> 3
+  | ImportingRepo -> 4
+  | ImportingBlobs -> 5
+  | UpdatingIdentity -> 6
+  | Activating -> 7
+  | Complete -> 8
+  | Error -> 0
+
+type props =
+  { csrf_token: string
+  ; invite_required: bool
+  ; hostname: string
+  ; step: string [@default "enter_credentials"]
+  ; did: string option [@default None]
+  ; handle: string option [@default None]
+  ; old_pds: string option [@default None]
+  ; plc_operation: string option [@default None]
+  ; blobs_imported: int [@default 0]
+  ; blobs_total: int [@default 0]
+  ; blobs_failed: int [@default 0]
+  ; error: string option [@default None]
+  ; message: string option [@default None] }
+[@@deriving json]
+
+let[@react.component] make
+    ~props:
+      ({ csrf_token
+       ; invite_required
+       ; hostname
+       ; step
+       ; did
+       ; handle
+       ; old_pds
+       ; plc_operation
+       ; blobs_imported
+       ; blobs_total
+       ; blobs_failed
+       ; error
+       ; message } :
+        props ) () =
+  let current_step = step_of_string step in
+  let step_number = step_to_number current_step in
+  <main className="w-full h-auto max-w-md px-4 sm:px-0">
+    <h1 className="text-2xl font-serif text-mana-200 mb-2">
+      (string "migrate account")
+    </h1>
+    (* Progress indicator *)
+    ( if current_step <> EnterCredentials && current_step <> Error && current_step <> Complete then
+        <div className="mb-6">
+          <div className="flex items-center gap-2 text-sm text-mist-100 mb-2">
+            <span>(string ("Step " ^ string_of_int step_number ^ " of 7: "))</span>
+            <span className="font-medium text-mana-100">
+              (string (step_to_label current_step))
+            </span>
+          </div>
+          <div className="w-full bg-mist-60 rounded-full h-1.5">
+            <div
+              className="bg-mana-100 h-1.5 rounded-full transition-all duration-300"
+              style=(ReactDOM.Style.make
+                ~width:(string_of_int (step_number * 100 / 7) ^ "%") ())
+            />
+          </div>
+        </div>
+      else null )
+    (* Error display *)
+    ( match error with
+    | Some err ->
+        <div className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 rounded-lg">
+          <span className="inline-flex items-start text-phoenix-100 text-sm">
+            <CircleAlertIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+            <span>(string err)</span>
+          </span>
+        </div>
+    | None -> null )
+    (* Message display *)
+    ( match message with
+    | Some msg when current_step <> Complete ->
+        <div className="mb-4 p-3 bg-mana-100/10 border border-mana-100/30 rounded-lg">
+          <span className="inline-flex items-start text-mana-100 text-sm">
+            <CheckmarkIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+            <span>(string msg)</span>
+          </span>
+        </div>
+    | _ -> null )
+    (* Step content *)
+    ( match current_step with
+    | EnterCredentials ->
+        <>
+          <p className="w-full text-balance text-mist-100 mb-4">
+            (string
+               "Migrate your existing ATProto account to this PDS. You'll need \
+                your account credentials from your current PDS." )
+          </p>
+          <form className="w-full flex flex-col gap-y-3">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="start_migration" />
+            ( if invite_required then
+                <Input
+                  name="invite_code"
+                  type_="text"
+                  label="Invite Code"
+                  placeholder="pds-xxxxx-xxxxx"
+                  required=true
+                  showIndicator=false
+                />
+              else null )
+            <Input
+              name="identifier"
+              type_="text"
+              label="Handle or DID"
+              placeholder="you.bsky.social or did:plc:..."
+              required=true
+              showIndicator=false
+            />
+            <Input
+              name="password"
+              type_="password"
+              label="Password"
+              required=true
+              showIndicator=false
+            />
+            <p className="text-xs text-mist-80 -mt-1">
+              (string
+                 "Use your actual account password, not an app password. Your \
+                  password is only used to authenticate with your current PDS \
+                  and is never stored." )
+            </p>
+            <Button type_="submit" formMethod="post" className="mt-2">
+              (string "start migration")
+            </Button>
+          </form>
+          <div className="mt-4 pt-4 border-t border-mist-60/50">
+            <span className="text-sm text-mist-100">
+              (string "Don't have an account? ")
+              <a
+                href="/account/signup"
+                className="text-mana-100 underline hover:text-mana-200">
+                (string "sign up")
+              </a>
+              (string " instead.")
+            </span>
+          </div>
+        </>
+    | Authenticating | CreatingAccount | ImportingRepo ->
+        <div className="flex flex-col items-center py-8">
+          <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
+          <p className="text-mist-100 text-center">
+            ( string
+            @@ match current_step with
+               | Authenticating -> "Authenticating with your current PDS..."
+               | CreatingAccount -> "Creating your account on this PDS..."
+               | ImportingRepo -> "Importing your repository data..."
+               | _ -> "Processing..." )
+          </p>
+          (* Auto-submit to continue the process *)
+          <form className="hidden">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="continue" />
+            ( match did with
+            | Some d -> <input type_="hidden" name="did" value=d />
+            | None -> null )
+          </form>
+          <noscript>
+            <form className="mt-4">
+              <input type_="hidden" name="dream.csrf" value=csrf_token />
+              <input type_="hidden" name="action" value="continue" />
+              ( match did with
+              | Some d -> <input type_="hidden" name="did" value=d />
+              | None -> null )
+              <Button type_="submit" formMethod="post">
+                (string "continue")
+              </Button>
+            </form>
+          </noscript>
+        </div>
+    | ImportingBlobs ->
+        <div className="py-4">
+          <p className="text-mist-100 mb-4">
+            (string "Importing blobs (images, videos, etc.)...")
+          </p>
+          <div className="w-full bg-mist-60 rounded-full h-2 mb-2">
+            <div
+              className="bg-mana-100 h-2 rounded-full transition-all duration-300"
+              style=(ReactDOM.Style.make
+                ~width:(
+                  if blobs_total > 0 then
+                    string_of_int (blobs_imported * 100 / blobs_total) ^ "%"
+                  else "0%"
+                ) ())
+            />
+          </div>
+          <p className="text-sm text-mist-80">
+            ( string
+            @@ Printf.sprintf "%d of %d blobs imported" blobs_imported
+                 blobs_total )
+            ( if blobs_failed > 0 then
+                <span className="text-phoenix-100">
+                  (string (Printf.sprintf " (%d failed)" blobs_failed))
+                </span>
+              else null )
+          </p>
+          <form className="mt-4">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="continue_blobs" />
+            ( match did with
+            | Some d -> <input type_="hidden" name="did" value=d />
+            | None -> null )
+            <Button type_="submit" formMethod="post" kind=`Secondary>
+              (string "continue importing")
+            </Button>
+          </form>
+        </div>
+    | UpdatingIdentity ->
+        <div className="py-4">
+          <p className="text-mist-100 mb-4">
+            (string
+               "Your account has been created and your data imported. Now you \
+                need to update your identity to point to this PDS." )
+          </p>
+          <div className="bg-mist-60/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-medium text-mana-100 mb-2">
+              (string "Instructions")
+            </h3>
+            <ol className="text-sm text-mist-100 space-y-2 list-decimal list-inside">
+              <li>
+                (string
+                   "Check your email for a PLC operation signature request from \
+                    your old PDS" )
+              </li>
+              <li>(string "Approve the signature request")</li>
+              <li>(string "Click the button below to complete the migration")</li>
+            </ol>
+          </div>
+          ( match did with
+          | Some d ->
+              <p className="text-xs text-mist-80 mb-4">
+                (string "Your DID: ")
+                <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
+              </p>
+          | None -> null )
+          <form className="flex gap-3">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="check_identity" />
+            ( match did with
+            | Some d -> <input type_="hidden" name="did" value=d />
+            | None -> null )
+            <Button type_="submit" formMethod="post">
+              (string "check identity status")
+            </Button>
+          </form>
+          <p className="text-xs text-mist-80 mt-3">
+            (string
+               "If you haven't received an email, you may need to request a PLC \
+                operation signature from your old PDS manually." )
+          </p>
+        </div>
+    | Activating ->
+        <div className="flex flex-col items-center py-8">
+          <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
+          <p className="text-mist-100 text-center">
+            (string "Activating your account...")
+          </p>
+        </div>
+    | Complete ->
+        <div className="py-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-mana-100/20 rounded-full flex items-center justify-center">
+              <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+            </div>
+            <div>
+              <h2 className="text-lg font-serif text-mana-200">
+                (string "Migration complete!")
+              </h2>
+              <p className="text-sm text-mist-100">
+                (string "Your account is now on this PDS.")
+              </p>
+            </div>
+          </div>
+          ( match handle with
+          | Some h ->
+              <p className="text-mist-100 mb-4">
+                (string "Your handle: ")
+                <span className="font-medium text-mana-100">(string ("@" ^ h))</span>
+              </p>
+          | None -> null )
+          ( if blobs_failed > 0 then
+              <div className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 rounded-lg">
+                <p className="text-sm text-phoenix-100">
+                  ( string
+                  @@ Printf.sprintf
+                       "%d blob(s) failed to import. You can re-upload them \
+                        later."
+                       blobs_failed )
+                </p>
+              </div>
+            else null )
+          <div className="flex gap-3">
+            <a href="/account">
+              <Button>(string "go to account")</Button>
+            </a>
+          </div>
+          <p className="text-xs text-mist-80 mt-4">
+            (string
+               "Remember to deactivate your account on your old PDS to avoid \
+                confusion." )
+          </p>
+        </div>
+    | Error ->
+        <div className="py-4">
+          <p className="text-mist-100 mb-4">
+            (string
+               "Something went wrong during migration. You can try again or \
+                contact the PDS administrator for help." )
+          </p>
+          <div className="flex gap-3">
+            <a href="/account/migrate">
+              <Button>(string "start over")</Button>
+            </a>
+            <a href="/account/login">
+              <Button kind=`Secondary>(string "back to login")</Button>
+            </a>
+          </div>
+        </div> )
+  </main>
