@@ -17,7 +17,7 @@ type switch_account_response =
 
 let switch_account_handler =
   Xrpc.handler (fun ctx ->
-      match%lwt Dream.form ctx.req with
+      match%lwt Dream.form ~csrf:false ctx.req with
       | `Ok fields -> (
           let did = List.assoc_opt "did" fields in
           match did with
