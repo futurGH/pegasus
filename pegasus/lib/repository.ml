@@ -636,7 +636,7 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                 [%rapper execute {sql| DELETE FROM records |sql}] () conn
               in
               let$! () = User_store.Bulk.put_records record_data conn in
-              let$! () = User_store.Bulk.put_blob_refs !blob_refs conn in
+              let$! () = User_store.Bulk.put_blob_refs blob_refs conn in
               Lwt.return_ok () ) )
     in
     (* clear cached block_map so it's rebuilt on next access *)
