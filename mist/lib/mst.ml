@@ -118,6 +118,86 @@ let ( >>? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
 
+(* extracts leaves from a block map *)
+let leaves_from_blocks (blocks : Block_map.t) (root : Cid.t) :
+    (string * Cid.t) list =
+  let leaves = ref [] in
+  let stack = Stack.create () in
+  Stack.push (root, "") stack ;
+  while not (Stack.is_empty stack) do
+    let cid, prefix = Stack.pop stack in
+    match Block_map.get cid blocks with
+    | None ->
+        () (* missing block probably a record *)
+    | Some bytes -> (
+      try
+        let node = decode_block_raw bytes in
+        (* proess left subtree *)
+        ( match node.l with
+        | Some left_cid ->
+            Stack.push (left_cid, prefix) stack
+        | None ->
+            () ) ;
+        (* process entries in reverse order so they come out in correct order *)
+        let last_key = ref prefix in
+        List.iter
+          (fun (entry : entry_raw) ->
+            let key_prefix =
+              if entry.p = 0 then ""
+              else if entry.p <= String.length !last_key then
+                String.sub !last_key 0 entry.p
+              else !last_key
+            in
+            let full_key = key_prefix ^ Bytes.to_string entry.k in
+            last_key := full_key ;
+            leaves := (full_key, entry.v) :: !leaves ;
+            (* push right subtree to stack *)
+            match entry.t with
+            | Some right_cid ->
+                Stack.push (right_cid, full_key) stack
+            | None ->
+                () )
+          node.e
+      with Invalid_argument _ -> () )
+  done ;
+  List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) !leaves
+
+(* extracts just mst node cids (non-leaf blocks) from a block map *)
+let mst_node_cids_from_blocks (blocks : Block_map.t) (root : Cid.t) : Cid.t list
+    =
+  let nodes = ref [] in
+  let visited = ref Cid.Set.empty in
+  let stack = Stack.create () in
+  Stack.push root stack ;
+  while not (Stack.is_empty stack) do
+    let cid = Stack.pop stack in
+    if not (Cid.Set.mem cid !visited) then (
+      visited := Cid.Set.add cid !visited ;
+      match Block_map.get cid blocks with
+      | None ->
+          ()
+      | Some bytes -> (
+        try
+          let node = decode_block_raw bytes in
+          nodes := cid :: !nodes ;
+          (* add all children to stack *)
+          ( match node.l with
+          | Some left_cid ->
+              Stack.push left_cid stack
+          | None ->
+              () ) ;
+          List.iter
+            (fun (entry : entry_raw) ->
+              match entry.t with
+              | Some right_cid ->
+                  Stack.push right_cid stack
+              | None ->
+                  () )
+            node.e
+        with Invalid_argument _ -> () ) )
+  done ;
+  !nodes
+
 module type Intf = sig
   module Store : Writable_blockstore
 

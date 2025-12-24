@@ -592,20 +592,9 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
           failwith ("invalid commit: " ^ e)
     in
     if commit.did <> t.did then failwith "did does not match commit did" ;
-    (* create in-memory mst to walk *)
-    let mem_bs = Mist.Storage.Memory_blockstore.create ~blocks:all_blocks () in
-    let mem_mst : Mem_mst.t = {blockstore= mem_bs; root= commit.data} in
-    let%lwt leaves = Mem_mst.leaves_of_root mem_mst in
-    let leaf_cids =
-      List.fold_left
-        (fun acc (_, cid) -> Cid.Set.add cid acc)
-        Cid.Set.empty leaves
-    in
-    (* get mst nodes by filtering out leaves and commit from all blocks *)
+    let leaves = Mist.Mst.leaves_from_blocks all_blocks commit.data in
     let mst_node_cids =
-      Block_map.keys all_blocks
-      |> List.filter (fun cid ->
-          (not (Cid.equal cid root)) && not (Cid.Set.mem cid leaf_cids) )
+      Mist.Mst.mst_node_cids_from_blocks all_blocks commit.data
     in
     (* collect mst node blocks for insert *)
     let mst_blocks =
@@ -620,10 +609,9 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
     in
     (* collect record data for insert *)
     let since = Tid.now () in
-    let blob_refs : (string * Cid.t) list ref = ref [] in
-    let record_data =
-      List.map
-        (fun (path, cid) ->
+    let record_data, blob_refs =
+      List.fold_left
+        (fun (acc_data, acc_refs) (path, cid) ->
           match Block_map.get cid all_blocks with
           | Some data ->
               let record = Lex.of_cbor data in
@@ -631,12 +619,13 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                 Util.find_blob_refs record
                 |> List.map (fun (br : Mist.Blob_ref.t) -> (path, br.ref))
               in
-              blob_refs := record_refs @ !blob_refs ;
-              (path, cid, data, since)
+              ( (path, cid, data, since) :: acc_data
+              , List.rev_append record_refs acc_refs )
           | None ->
               failwith ("missing record block: " ^ Cid.to_string cid) )
-        leaves
+        ([], []) leaves
     in
+    let record_data = List.rev record_data in
     let%lwt _ =
       Util.use_pool t.db.db (fun conn ->
           Util.transact conn (fun () ->
@@ -645,7 +634,7 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
               let$! () = User_store.Bulk.put_blocks mst_blocks conn in
               let$! () =
                 [%rapper execute {sql| DELETE FROM records |sql}] () conn
-                in
+              in
               let$! () = User_store.Bulk.put_records record_data conn in
               let$! () = User_store.Bulk.put_blob_refs !blob_refs conn in
               Lwt.return_ok () ) )
