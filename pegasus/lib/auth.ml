@@ -34,7 +34,7 @@ let verify_bearer_jwt t token expected_scope =
           else if jwt.sub = "" then Lwt.return_error "missing sub"
           else if now_s < jwt.iat then
             Lwt.return_error "token issued in the future"
-          else if now_s > jwt.exp then Lwt.return_error "expired token"
+          else if now_s > jwt.exp then Lwt.return_error "ExpiredToken"
           else if jwt.scope <> expected_scope then
             Lwt.return_error "invalid scope"
           else if jwt.jti = "" then Lwt.return_error "missing jti"
@@ -42,7 +42,7 @@ let verify_bearer_jwt t token expected_scope =
             let%lwt revoked_at =
               Data_store.is_token_revoked t ~did:jwt.sub ~jti:jwt.jti
             in
-            if revoked_at <> None then Lwt.return_error "token revoked"
+            if revoked_at <> None then Lwt.return_error "ExpiredToken"
             else Lwt.return_ok jwt
     with _ -> Lwt.return_error "invalid token format" )
 
@@ -219,7 +219,7 @@ module Verifiers = struct
       | "admin", p when p = Env.admin_password ->
           Lwt.return_ok Admin
       | _ ->
-          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+          Lwt.return_error @@ Errors.invalid_request "invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
@@ -234,12 +234,17 @@ module Verifiers = struct
             Lwt.return_ok (Access {did})
         | Some {deactivated_at= Some _; _} ->
             Lwt.return_error
-            @@ Errors.auth_required ~name:"AccountDeactivated"
+            @@ Errors.invalid_request ~name:"AccountDeactivated"
                  "account is deactivated"
         | None ->
-            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+            Lwt.return_error
+            @@ Errors.internal_error ~msg:"invalid credentials" () )
+      | Error "ExpiredToken" ->
+          Lwt.return_error
+          @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
       | Error _ ->
-          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+          Lwt.return_error
+          @@ Errors.invalid_request ~name:"InvalidToken" "invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
@@ -297,12 +302,13 @@ module Verifiers = struct
               let scopes = Oauth.Scopes.of_string scope_str in
               let now = int_of_float (Unix.gettimeofday ()) in
               if jkt_claim <> proof.jkt then
-                Lwt.return_error @@ Errors.auth_required "dpop key mismatch"
+                Lwt.return_error @@ Errors.invalid_request "dpop key mismatch"
               else if exp < now then
-                Lwt.return_error @@ Errors.auth_required "token expired"
+                Lwt.return_error
+                @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
               else if not (Oauth.Scopes.has_atproto scopes) then
                 Lwt.return_error
-                @@ Errors.auth_required ~name:"InvalidToken"
+                @@ Errors.invalid_request ~name:"InvalidToken"
                      "oauth token missing 'atproto' scope"
               else
                 let%lwt session =
@@ -311,18 +317,18 @@ module Verifiers = struct
                     Lwt.return_ok sess
                   with _ ->
                     Lwt.return_error
-                    @@ Errors.auth_required "invalid credentials"
+                    @@ Errors.internal_error ~msg:"invalid credentials" ()
                 in
                 match session with
                 | Ok {active= Some true; _} ->
                     Lwt.return_ok (OAuth {did; proof; scopes})
                 | Ok _ ->
                     Lwt.return_error
-                    @@ Errors.auth_required ~name:"AccountDeactivated"
+                    @@ Errors.invalid_request ~name:"AccountDeactivated"
                          "account is deactivated"
                 | Error _ ->
                     Lwt.return_error
-                    @@ Errors.auth_required "invalid credentials"
+                    @@ Errors.internal_error ~msg:"invalid credentials" ()
             with _ ->
               Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
         ) )
@@ -341,11 +347,12 @@ module Verifiers = struct
           raise (Errors.Redirect "/account")
       | Some {deactivated_at= Some _; _} ->
           Lwt.return_error
-          @@ Errors.auth_required ~name:"AccountDeactivated"
+          @@ Errors.invalid_request ~name:"AccountDeactivated"
                "account is deactivated"
       | None ->
           let%lwt () = Session.Raw.clear_session req in
-          Lwt.return_error @@ Errors.auth_required "no active session" )
+          Lwt.return_error @@ Errors.internal_error ~msg:"no active session" ()
+      )
     | None ->
         Lwt.return_error @@ Errors.auth_required "no active session"
 
@@ -360,12 +367,17 @@ module Verifiers = struct
             Lwt.return_ok (Refresh {did; jti})
         | Some {deactivated_at= Some _; _} ->
             Lwt.return_error
-            @@ Errors.auth_required ~name:"AccountDeactivated"
+            @@ Errors.invalid_request ~name:"AccountDeactivated"
                  "account is deactivated"
         | None ->
-            Lwt.return_error @@ Errors.auth_required "invalid credentials" )
-      | Error "" | Error _ ->
-          Lwt.return_error @@ Errors.auth_required "invalid credentials" )
+            Lwt.return_error
+            @@ Errors.internal_error ~msg:"invalid credentials" () )
+      | Error "ExpiredToken" ->
+          Lwt.return_error
+          @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
+      | Error _ ->
+          Lwt.return_error
+          @@ Errors.invalid_request ~name:"InvalidToken" "invalid credentials" )
     | Error _ ->
         Lwt.return_error @@ Errors.auth_required "invalid authorization header"
 
@@ -376,22 +388,22 @@ module Verifiers = struct
           Lwt.return_ok (Access {did})
       | Some {deactivated_at= Some _; _} ->
           Lwt.return_error
-          @@ Errors.auth_required ~name:"AccountDeactivated"
+          @@ Errors.invalid_request ~name:"AccountDeactivated"
                "account is deactivated"
       | None ->
-          Lwt.return_error @@ Errors.auth_required "invalid credentials"
+          Lwt.return_error
+          @@ Errors.internal_error ~msg:"invalid credentials" ()
     in
     let verify_with_key token pubkey_multibase did db =
-      let pubkey =
-        Kleidos.parse_multikey_str pubkey_multibase
-      in
+      let pubkey = Kleidos.parse_multikey_str pubkey_multibase in
       match Jwt.verify_jwt token ~pubkey with
       | Ok _ ->
           check_actor_status did db
       | Error e ->
           Dream.debug (fun log -> log "service jwt verification failed: %s" e) ;
           Lwt.return_error
-          @@ Errors.auth_required "jwt signature does not match jwt issuer"
+          @@ Errors.invalid_request ~name:"InvalidToken"
+               "jwt signature does not match jwt issuer"
     in
     fun {req; db} ->
       match parse_bearer req with
@@ -410,20 +422,22 @@ module Verifiers = struct
             let lxm = payload |> member "lxm" |> to_string_option in
             let now = int_of_float (Unix.gettimeofday ()) in
             if exp < now then
-              Lwt.return_error @@ Errors.auth_required "jwt expired"
+              Lwt.return_error
+              @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
             else if aud <> Env.did then
               Lwt.return_error
-              @@ Errors.auth_required "jwt audience does not match service did"
+              @@ Errors.invalid_request ~name:"InvalidToken"
+                   "jwt audience does not match service did"
             else
               let nsid =
                 (Dream.path [@warning "-3"]) req |> List.rev |> List.hd
               in
-              ( match lxm with
+              match lxm with
               | Some l when l <> nsid && l <> "*" ->
                   Lwt.return_error
-                  @@ Errors.auth_required
+                  @@ Errors.invalid_request ~name:"InvalidToken"
                        ("jwt lxm " ^ l ^ " does not match " ^ nsid)
-              | _ ->
+              | _ -> (
                   let did =
                     match String.split_on_char '#' iss with
                     | did :: _ ->
@@ -431,12 +445,13 @@ module Verifiers = struct
                     | [] ->
                         iss
                   in
-                  ( match%lwt Id_resolver.Did.resolve did with
+                  match%lwt Id_resolver.Did.resolve did with
                   | Error e ->
                       Dream.debug (fun log ->
                           log "failed to resolve did %s: %s" did e ) ;
                       Lwt.return_error
-                      @@ Errors.auth_required "could not resolve issuer did"
+                      @@ Errors.internal_error
+                           ~msg:"could not resolve jwt issuer did" ()
                   | Ok did_doc -> (
                     match
                       Id_resolver.Did.Document.get_verification_key did_doc
@@ -444,40 +459,43 @@ module Verifiers = struct
                     with
                     | None ->
                         Lwt.return_error
-                        @@ Errors.auth_required
-                             "missing or bad key in issuer did doc"
+                        @@ Errors.internal_error
+                             ~msg:"missing or bad key in issuer did doc" ()
                     | Some pubkey_multibase -> (
-                      match%lwt verify_with_key token pubkey_multibase did db with
+                      match%lwt
+                        verify_with_key token pubkey_multibase did db
+                      with
                       | Ok creds ->
                           Lwt.return_ok creds
-                      | Error _ ->
-                          (* try again, skipping cache in case of key rotation *)
-                          ( match%lwt
-                              Id_resolver.Did.resolve ~skip_cache:true did
-                            with
-                          | Error _ ->
+                      | Error _ -> (
+                        (* try again, skipping cache in case of key rotation *)
+                        match%lwt
+                          Id_resolver.Did.resolve ~skip_cache:true did
+                        with
+                        | Error _ ->
+                            Lwt.return_error
+                            @@ Errors.invalid_request ~name:"InvalidToken"
+                                 "jwt signature does not match jwt issuer"
+                        | Ok fresh_doc -> (
+                          match
+                            Id_resolver.Did.Document.get_verification_key
+                              fresh_doc "#atproto"
+                          with
+                          | None ->
                               Lwt.return_error
-                              @@ Errors.auth_required
+                              @@ Errors.invalid_request ~name:"InvalidToken"
                                    "jwt signature does not match jwt issuer"
-                          | Ok fresh_doc -> (
-                            match
-                              Id_resolver.Did.Document.get_verification_key
-                                fresh_doc "#atproto"
-                            with
-                            | None ->
-                                Lwt.return_error
-                                @@ Errors.auth_required
-                                     "jwt signature does not match jwt issuer"
-                            | Some fresh_pubkey_multibase
-                              when fresh_pubkey_multibase = pubkey_multibase ->
-                                Lwt.return_error
-                                @@ Errors.auth_required
-                                     "jwt signature does not match jwt issuer"
-                            | Some fresh_pubkey_multibase ->
-                                verify_with_key token fresh_pubkey_multibase did
-                                  db ) ) ) ) ) )
+                          | Some fresh_pubkey_multibase
+                            when fresh_pubkey_multibase = pubkey_multibase ->
+                              Lwt.return_error
+                              @@ Errors.invalid_request ~name:"InvalidToken"
+                                   "jwt signature does not match jwt issuer"
+                          | Some fresh_pubkey_multibase ->
+                              verify_with_key token fresh_pubkey_multibase did
+                                db ) ) ) ) )
           with _ ->
-            Lwt.return_error @@ Errors.auth_required "malformed service jwt" ) )
+            Lwt.return_error @@ Errors.invalid_request "malformed service jwt" )
+        )
 
   let authorization : verifier =
    fun ctx ->
