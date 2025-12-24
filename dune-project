@@ -34,6 +34,12 @@
  (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
  (package (name ppx_rapper_lwt)))
 
+(pin ; applied fix from anmonteiro/gluten#85
+ (url "git+https://github.com/futurGH/gluten#956e753dc0ee81dbe53f0979fe89d57d960e7856")
+ (package
+  (name gluten-lwt)
+  (version 0.5.2)))
+
 (pin ; version on opam requires too high a melange version
  (url "git+https://github.com/melange-community/melange-webapi.git#80c6ededd06cc66b75445d1ed5c855e050b156a0")
  (package
