@@ -203,9 +203,17 @@ let static_routes =
 
 let serve () =
   Printexc.record_backtrace true ;
+  Dream.initialize_log ~level:Env.log_level () ;
+  List.iter (fun src ->
+      match Logs.Src.name src with
+      (* useless noise on debug level *)
+      | "cohttp.lwt.io" | "cohttp.lwt.server" | "tls.tracing" | "tls.config" ->
+          Logs.Src.set_level src None
+      | _ ->
+          () )
+  @@ Logs.Src.list () ;
   let%lwt db = Data_store.connect ~create:true () in
   S3.Backup.start () ;
-  Dream.initialize_log ~level:`Debug () ;
   Dream.serve ~interface:"0.0.0.0" ~port:8008
   @@ Dream.pipeline
        [ Dream.logger
