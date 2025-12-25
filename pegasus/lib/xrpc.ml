@@ -209,7 +209,7 @@ let service_proxy ?lxm ?aud (ctx : context) =
     | None ->
         Errors.invalid_request "invalid proxy header"
   in
-  let aud = Option.value aud ~default:service_did in
+  let aud = Option.value aud ~default:(service_did ^ "#" ^ service_type) in
   let lxm = Option.value lxm ~default:nsid in
   Auth.assert_rpc_scope ctx.auth ~aud ~lxm ;
   let fragment = "#" ^ service_type in
