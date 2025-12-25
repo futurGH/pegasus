@@ -1,0 +1,194 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type blob =
+  { did: string
+  ; handle: string
+  ; user_created_at: string
+  ; cid: string
+  ; mimetype: string
+  ; storage: string
+  ; size: string }
+[@@deriving json]
+
+type props =
+  { blobs: blob list
+  ; csrf_token: string
+  ; cursor: string
+  ; next_cursor: string option [@default None]
+  ; error: string option [@default None]
+  ; success: string option [@default None] }
+[@@deriving json]
+
+let admin_pages =
+  [ ("Users", "/admin/users")
+  ; ("Invite codes", "/admin/invites")
+  ; ("Blobs", "/admin/blobs") ]
+
+let[@react.component] make
+    ~props:
+      ({ blobs
+       ; csrf_token
+       ; cursor
+       ; next_cursor
+       ; error
+       ; success } :
+        props ) () =
+  (* delete confirmation state *)
+  let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : blob option)) in
+  <div className="w-full max-w-3xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+    <Sidebar pages=admin_pages active_page="/admin/blobs" />
+    <main className="flex-1 w-full max-w-2xl">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "blobs")
+      </h1>
+      <p className="text-mist-100 mb-4">
+        (string "View and manage all blobs stored on this PDS.")
+      </p>
+      ( match error with
+      | Some err ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-phoenix-100 text-sm">
+              <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+            </span>
+          </div>
+      | None -> null )
+      ( match success with
+      | Some msg ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-mana-100 text-sm">
+              <CheckmarkIcon className="w-4 h-4 mr-2" /> (string msg)
+            </span>
+          </div>
+      | None -> null )
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-xl text-sm">
+          <thead>
+            <tr className="text-left text-mist-80">
+              <th className="pb-2 font-normal">(string "User")</th>
+              <th className="pb-2 font-normal">(string "CID")</th>
+              <th className="pb-2 font-normal">(string "Type")</th>
+              <th className="pb-2 font-normal">(string "Size")</th>
+              <th className="pb-2 font-normal">(string "Storage")</th>
+              <th className="pb-2 font-normal w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ( List.map
+                (fun (blob : blob) ->
+                  <tr key=(blob.did ^ ":" ^ blob.cid) className="border-t border-mist-60/50">
+                    <td className="py-3 pr-4">
+                      <div className="max-w-40">
+                        <p className="font-medium text-mana-100 truncate" title=blob.handle>
+                          (string blob.handle)
+                        </p>
+                        <p className="text-xs text-mist-80 truncate" title=blob.did>
+                          (string blob.did)
+                        </p>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="max-w-32">
+                        <p className="font-mono text-xs text-mist-100 truncate" title=blob.cid>
+                          (string blob.cid)
+                        </p>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4 text-mist-100">
+                      <span className="text-xs">(string blob.mimetype)</span>
+                    </td>
+                    <td className="py-3 pr-4 text-mist-100">
+                      <span className="text-xs">(string blob.size)</span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="text-xs px-2 py-1 rounded-full bg-mist-60/30 text-mist-100">
+                        (string blob.storage)
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <button
+                        className="p-1 text-mist-80 hover:text-phoenix-100 cursor-pointer"
+                        onClick=(fun _ -> setDeleteConfirmFor (fun _ -> Some blob))>
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr> )
+                blobs
+            |> Array.of_list |> array )
+          </tbody>
+        </table>
+      </div>
+      ( if List.length blobs = 0 then
+          <div className="mt-8 text-center text-mist-80">
+            <p>(string "No blobs found.")</p>
+          </div>
+        else null )
+      ( match next_cursor with
+      | Some cursor ->
+          <div className="mt-4">
+            <a href=("?cursor=" ^ cursor)>
+              <Button kind=`Secondary>(string "Load more")</Button>
+            </a>
+          </div>
+      | None -> null )
+      (* delete confirmation modal *)
+      <ClientOnly fallback=null>
+      [%browser_only
+        (fun () ->
+          let module Aria = ReactAria in
+          <Aria.DialogTrigger
+            isOpen=(deleteConfirmFor <> None)
+            onOpenChange=(fun o -> if not o then setDeleteConfirmFor (fun _ -> None))>
+            <Aria.ModalOverlay
+              className="fixed inset-0 z-50 bg-mist-80/80 flex items-center justify-center"
+              isDismissable=true>
+              <Aria.Modal
+                className="bg-feather-100 border border-mist-60 rounded-xl px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
+                <Aria.Dialog className="outline-none">
+                  ( match deleteConfirmFor with
+                  | Some blob ->
+                      <form className="flex flex-col gap-y-3">
+                        <Aria.Heading
+                          slot="title"
+                          className="text-lg font-serif text-mana-200 mb-2">
+                          (string "delete blob")
+                        </Aria.Heading>
+                        <input type_="hidden" name="dream.csrf" value=csrf_token />
+                        <input type_="hidden" name="action" value="delete_blob" />
+                        <input type_="hidden" name="did" value=blob.did />
+                        <input type_="hidden" name="cid" value=blob.cid />
+                        <p className="text-mist-100 mb-2">
+                          (string ("Are you sure you want to delete this blob from " ^ blob.handle ^ "?"))
+                        </p>
+                        <div className="bg-mist-60/20 rounded p-3 mb-2">
+                          <p className="text-xs text-mist-80 mb-1">(string "CID")</p>
+                          <p className="font-mono text-xs text-mist-100 break-all">
+                            (string blob.cid)
+                          </p>
+                          <p className="text-xs text-mist-80 mt-2 mb-1">(string "Type")</p>
+                          <p className="text-xs text-mist-100">(string blob.mimetype)</p>
+                          <p className="text-xs text-mist-80 mt-2 mb-1">(string "Size")</p>
+                          <p className="text-xs text-mist-100">(string blob.size)</p>
+                        </div>
+                        <p className="text-xs text-phoenix-100">
+                          (string "This action cannot be undone and may break references to this blob.")
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <Button kind=`Danger formMethod="post" type_="submit">(string "delete")</Button>
+                          <Button
+                            kind=`Tertiary
+                            onClick=(fun _ -> setDeleteConfirmFor (fun _ -> None))>
+                            (string "cancel")
+                          </Button>
+                        </div>
+                      </form>
+                  | None -> null )
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger> )]
+      </ClientOnly>
+    </main>
+  </div>

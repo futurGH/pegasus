@@ -18,7 +18,8 @@ type props =
 
 let admin_pages =
   [ ("Users", "/admin/users")
-  ; ("Invite codes", "/admin/invites") ]
+  ; ("Invite codes", "/admin/invites")
+  ; ("Blobs", "/admin/blobs") ]
 
 let[@react.component] make
     ~props:
