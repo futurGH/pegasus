@@ -261,14 +261,21 @@ let fetch_preferences ~pds_endpoint ~access_jwt =
           with
         | Ok resp ->
             Lwt.return_ok resp.preferences
-        | Error _ ->
+        | Error e ->
+            Dream.warning (fun log ->
+                log "Failed to parse preferences response: %s" e ) ;
             (* Preferences may be empty or different format, that's okay *)
             Lwt.return_ok [] )
-    | _ ->
+    | status ->
         let%lwt () = Body.drain_body body in
+        Dream.warning (fun log ->
+            log "Failed to fetch preferences: %s" (Http.Status.to_string status) ) ;
         (* Preferences are optional, don't fail *)
         Lwt.return_ok []
-  with _ -> Lwt.return_ok []
+  with exn ->
+    Dream.warning (fun log ->
+        log "Exception fetching preferences: %s" (Printexc.to_string exn) ) ;
+    Lwt.return_ok []
 
 (* Create account on this PDS with existing DID *)
 let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
@@ -283,6 +290,7 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
         try
           let iss = payload |> member "iss" |> to_string in
           let aud = payload |> member "aud" |> to_string in
+          let lxm = payload |> member "lxm" |> to_string_option in
           let exp = payload |> member "exp" |> to_int in
           let now = int_of_float (Unix.gettimeofday ()) in
           (* Token must be issued by the DID (with optional fragment) *)
@@ -293,6 +301,8 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
             Lwt.return_error "Service auth token issuer does not match DID"
           else if aud <> Env.did then
             Lwt.return_error "Service auth token audience does not match this PDS"
+          else if lxm <> Some "com.atproto.server.createAccount" then
+            Lwt.return_error "Service auth token not authorized for account creation"
           else if exp < now then Lwt.return_error "Service auth token expired"
           else
             (* Verify signature against DID document *)
@@ -463,6 +473,12 @@ let import_preferences ~did ~preferences db =
     let prefs = `List preferences in
     Data_store.put_preferences ~did ~prefs db
 
+(* Normalize endpoint by removing trailing slash *)
+let normalize_endpoint s =
+  if String.length s > 0 && s.[String.length s - 1] = '/' then
+    String.sub s 0 (String.length s - 1)
+  else s
+
 (* Check if PLC identity has been updated to point to this PDS *)
 let check_identity_updated did =
   match%lwt Id_resolver.Did.resolve ~skip_cache:true did with
@@ -473,7 +489,9 @@ let check_identity_updated did =
     | None ->
         Lwt.return_error "DID document missing PDS service"
     | Some endpoint ->
-        if endpoint = Env.host_endpoint then Lwt.return_ok true
+        let normalized_endpoint = normalize_endpoint endpoint in
+        let normalized_host = normalize_endpoint Env.host_endpoint in
+        if normalized_endpoint = normalized_host then Lwt.return_ok true
         else Lwt.return_ok false )
 
 (* Activate the migrated account *)
@@ -501,7 +519,6 @@ let get_handler =
             ; did= None
             ; handle= None
             ; old_pds= None
-            ; plc_operation= None
             ; blobs_imported= 0
             ; blobs_total= 0
             ; blobs_failed= 0
@@ -515,7 +532,6 @@ let get_handler =
             ; did= Some state.did
             ; handle= Some state.handle
             ; old_pds= Some state.old_pds
-            ; plc_operation= None
             ; blobs_imported= state.blobs_imported
             ; blobs_total= state.blobs_total
             ; blobs_failed= state.blobs_failed
@@ -542,7 +558,6 @@ let post_handler =
         ; did
         ; handle
         ; old_pds
-        ; plc_operation= None
         ; blobs_imported
         ; blobs_total
         ; blobs_failed
@@ -642,15 +657,14 @@ let post_handler =
                                                 ~pds_endpoint:old_pds
                                                 ~access_jwt:session.access_jwt
                                             in
-                                            ( match prefs with
-                                            | Ok p when List.length p > 0 ->
-                                                let%lwt () =
+                                            let%lwt () =
+                                              match prefs with
+                                              | Ok p when List.length p > 0 ->
                                                   import_preferences ~did
                                                     ~preferences:p ctx.db
-                                                in
-                                                ()
-                                            | _ ->
-                                                () ) ;
+                                              | _ ->
+                                                  Lwt.return_unit
+                                            in
                                             (* Go to identity update step *)
                                             Util.render_html
                                               ~title:"Migrate Account"
@@ -676,15 +690,14 @@ let post_handler =
                                                   ~pds_endpoint:old_pds
                                                   ~access_jwt:session.access_jwt
                                               in
-                                              ( match prefs with
-                                              | Ok p when List.length p > 0 ->
-                                                  let%lwt () =
+                                              let%lwt () =
+                                                match prefs with
+                                                | Ok p when List.length p > 0 ->
                                                     import_preferences ~did
                                                       ~preferences:p ctx.db
-                                                  in
-                                                  ()
-                                              | _ ->
-                                                  () ) ;
+                                                | _ ->
+                                                    Lwt.return_unit
+                                              in
                                               Util.render_html
                                                 ~title:"Migrate Account"
                                                 (module Frontend.MigratePage)
@@ -716,12 +729,8 @@ let post_handler =
                                               in
                                               (* Store state for continuation *)
                                               let cursor =
-                                                if List.length batch < total
-                                                then
-                                                  List.nth_opt batch
-                                                    (List.length batch - 1)
-                                                  |> Option.value ~default:""
-                                                else ""
+                                                Option.value ~default:""
+                                                  blob_list.cursor
                                               in
                                               let%lwt () =
                                                 set_migration_state ctx.req
@@ -742,15 +751,14 @@ let post_handler =
                                                     ~access_jwt:
                                                       session.access_jwt
                                                 in
-                                                ( match prefs with
-                                                | Ok p when List.length p > 0 ->
-                                                    let%lwt () =
+                                                let%lwt () =
+                                                  match prefs with
+                                                  | Ok p when List.length p > 0 ->
                                                       import_preferences ~did
                                                         ~preferences:p ctx.db
-                                                    in
-                                                    ()
-                                                | _ ->
-                                                    () ) ;
+                                                  | _ ->
+                                                      Lwt.return_unit
+                                                in
                                                 let%lwt () =
                                                   clear_migration_state ctx.req
                                                 in

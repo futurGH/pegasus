@@ -67,7 +67,6 @@ type props =
   ; did: string option [@default None]
   ; handle: string option [@default None]
   ; old_pds: string option [@default None]
-  ; plc_operation: string option [@default None]
   ; blobs_imported: int [@default 0]
   ; blobs_total: int [@default 0]
   ; blobs_failed: int [@default 0]
@@ -84,7 +83,6 @@ let[@react.component] make
        ; did
        ; handle
        ; old_pds
-       ; plc_operation
        ; blobs_imported
        ; blobs_total
        ; blobs_failed
