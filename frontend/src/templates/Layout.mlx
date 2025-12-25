@@ -1,6 +1,7 @@
 open React
 
-let[@react.component] make ?(title = "Pegasus") ?(children = null) ?(favicon = "/public/favicon.ico") () =
+let[@react.component] make ?(title = "Pegasus") ?(children = null)
+    ?(favicon = "/public/favicon.ico") () =
   <html lang="en">
     <head>
       <meta charSet="utf-8" />
@@ -32,8 +33,6 @@ let[@react.component] make ?(title = "Pegasus") ?(children = null) ?(favicon = "
     </head>
     <body
       className="bg-feather-100 font-sans font-normal text-base tracking-normal">
-      <div id="root" className="flex justify-center min-h-screen">
-        children
-      </div>
+      <div id="root" className="flex justify-center min-h-screen">children</div>
     </body>
   </html>

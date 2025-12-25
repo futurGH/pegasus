@@ -67,7 +67,9 @@ let[@react.component] make
     ~props:
       ({current_user; logged_in_users; csrf_token; authorized_apps; devices} :
         props ) () =
-  <div className="w-auto h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+  <div
+    className="w-auto h-full max-w-full px-4 sm:px-0 pt-16 mx-auto flex \
+               flex-col md:flex-row gap-12">
     <AccountSidebar
       current_user logged_in_users active_page="/account/permissions"
     />
@@ -87,17 +89,24 @@ let[@react.component] make
             <ul className="space-y-2">
               ( List.map
                   (fun (app : authorized_app) ->
+                    let name = Option.value app.client_name ~default:app.client_host in
                     <li key=app.client_id className="flex items-center gap-x-2">
-                      <span className="font-serif text-mana-100">
-                        (string
-                           (Option.value app.client_name
-                              ~default:app.client_host ) )
+                      <span
+                        title=name
+                        className="flex-1 max-w-fit font-serif text-mana-100 \
+                                   truncate">
+                        (string name)
                       </span>
                       ( match app.client_name with
                       | Some _ ->
-                          <span className="text-mist-80">
-                            (string ("(" ^ app.client_host ^ ")"))
-                          </span>
+                          array
+                            [| <span className="text-mist-80">(string "-")</span>
+                             ; <span
+                                 title=app.client_host
+                                 className="flex-2 max-w-fit block \
+                                            text-mist-80 truncate">
+                                 (string app.client_host)
+                               </span> |]
                       | None ->
                           null )
                       <span className="text-mist-80">(string "-")</span>
@@ -112,7 +121,7 @@ let[@react.component] make
                           formMethod="post"
                           name="action"
                           value="revoke_app"
-                          className="text-mist-100 underline \
+                          className="text-mist-100 underline whitespace-nowrap \
                                      hover:text-mana-100">
                           (string "revoke access")
                         </button>
@@ -138,7 +147,7 @@ let[@react.component] make
                     let key = device.last_ip ^ "-" ^ string_of_int i in
                     <li key className="flex flex-col">
                       <div className="flex items-center gap-x-2">
-                        <span className="font-serif text-mana-100">
+                        <span className="font-serif text-mana-100 truncate">
                           (string (parse_user_agent device.last_user_agent))
                         </span>
                         ( if device.is_current then
@@ -165,13 +174,13 @@ let[@react.component] make
                             formMethod="post"
                             name="action"
                             value="sign_out_device"
-                            className="text-mist-100 underline \
+                            className="text-mist-100 underline whitespace-nowrap \
                                        hover:text-mana-100">
                             (string "sign out")
                           </button>
                         </form>
                       </div>
-                      <span className="text-sm text-mist-80">
+                      <span className="text-sm text-mist-80 truncate">
                         (string
                            ( "Last active " ^ device.last_refreshed_at
                            ^ {js| · |js} ^ device.last_ip ) )

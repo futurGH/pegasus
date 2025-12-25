@@ -61,7 +61,7 @@
 	--color-mist-100: #4f4f53;
 
 	--shadow-whisper: inset 0 0 1em #97baff8c;
-	--shadow-shimmer: inset 0 0 1em #79a7ed99;
-	--shadow-glow: inset 0 0 2em #2d37ba73;
-	--shadow-bleed: inset 0 0 2em #db4c6466;
+	--shadow-shimmer: inset 0 0 1em #90bbeea6;
+	--shadow-glow: inset 0 0 1.25em #2d37ba80;
+	--shadow-bleed: inset 0 0 1.25em #db4c6473;
 }

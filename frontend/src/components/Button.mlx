@@ -1,7 +1,6 @@
 let base_classes =
   "py-1 px-4 text-lg rounded-lg w-full flex items-center justify-center \
-   transition delay-50 duration-300 focus-visible:outline-none \
-   disabled:text-mist-80"
+   transition duration-300 focus-visible:outline-none disabled:text-mist-80"
 
 type kind = [`Primary | `Secondary | `Tertiary | `Danger]
 
@@ -9,13 +8,15 @@ let classes = function
   | `Primary ->
       base_classes
       ^ " bg-white font-serif text-mana-200 shadow-whisper \
-         hover:shadow-shimmer hover:bg-mist-20 focus-visible:shadow-shimmer \
-         focus-visible:bg-mist-20 active:shadow-glow disabled:bg-mana-40"
+         hover:shadow-shimmer hover:bg-mist-20 hover:text-mist-100 \
+         focus-visible:shadow-shimmer focus-visible:bg-mist-20 \
+         focus-visible:text-mist-100 active:shadow-glow active:text-mana-100 \
+         disabled:bg-mist-60 disabled:shadow-none"
   | `Secondary ->
       base_classes
       ^ " bg-feather font-serif underline text-mana-100 hover:no-underline \
          focus-visible:shadow-whisper active:shadow-whisper \
-         disabled:no-underline disabled:bg-mana-40"
+         disabled:no-underline disabled:bg-mist-60 disabled:shadow-none"
   | `Tertiary ->
       base_classes
       ^ " font-sans underline text-mana-100 hover:no-underline \
@@ -24,7 +25,8 @@ let classes = function
       base_classes
       ^ " bg-white font-serif text-phoenix-100 shadow-bleed hover:bg-mist-20 \
          focus:bg-mist-20 focus:text-phoenix-40 focus-visible:outline-none \
-         active:bg-phoenix-40 active:text-mist-20 disabled:bg-mana-40"
+         active:bg-phoenix-40 active:text-mist-20 disabled:bg-mist-60 \
+         disabled:shadow-none"
   | `Danger_secondary ->
       base_classes
       ^ " bg-feather font-serif underline text-phoenix-100 hover:no-underline \

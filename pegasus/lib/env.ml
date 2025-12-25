@@ -50,8 +50,7 @@ let crawlers =
       | _ ->
           Uri.make ~scheme:"https" ~host:u () )
 
-let favicon_url =
-  getenv_opt "PDS_FAVICON_URL" ~default:"/public/favicon.ico"
+let favicon_url = getenv_opt "PDS_FAVICON_URL" ~default:"/public/favicon.ico"
 
 let dpop_nonce_secret =
   match getenv_opt "PDS_DPOP_NONCE_SECRET" ~default:"" with
