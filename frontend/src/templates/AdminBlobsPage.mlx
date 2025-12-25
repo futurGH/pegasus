@@ -44,13 +44,13 @@ let[@react.component] make
         props ) () =
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : blob option)) in
-  <div className="w-full max-w-6xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+  <div className="w-full max-w-7xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
     <Sidebar pages=admin_pages active_page="/admin/blobs" />
     <main className="flex-1 w-full">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
         (string "blobs")
       </h1>
-      <p className="text-mist-100 mb-6">
+      <p className="text-mist-100 mb-4">
         (string "View and manage all blobs stored on this PDS.")
       </p>
       ( match error with
@@ -74,16 +74,19 @@ let[@react.component] make
             <p>(string "No blobs found.")</p>
           </div>
         else
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-6">
             ( List.map
                 (fun (blob : blob) ->
                   let view_url = "/admin/blobs/view?did=" ^ blob.did ^ "&cid=" ^ blob.cid in
-                  let download_url = view_url ^ "&download=true" in
                   let is_img = is_image blob.mimetype in
                   let is_vid = is_video blob.mimetype in
-                  <div key=(blob.did ^ ":" ^ blob.cid) className="border border-mist-60/50 rounded-lg overflow-hidden bg-feather-100 hover:border-mist-60 transition-colors">
-                    (* Preview area *)
-                    <div className="aspect-square bg-mist-60/20 relative flex items-center justify-center">
+                  <div key=(blob.did ^ ":" ^ blob.cid) className="group border border-mist-60/50 rounded-lg overflow-hidden bg-feather-100 hover:border-mana-100 hover:shadow-md transition-all">
+                    (* Preview area with 4:3 aspect ratio *)
+                    <a
+                      href=view_url
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block aspect-[4/3] bg-mist-60/20 relative overflow-hidden">
                       ( if is_img then
                           <img
                             src=view_url
@@ -92,55 +95,40 @@ let[@react.component] make
                             loading="lazy"
                           />
                         else if is_vid then
-                          <div className="w-full h-full flex flex-col items-center justify-center text-mist-100">
-                            <UploadIcon className="w-12 h-12 mb-2" />
+                          <div className="w-full h-full flex flex-col items-center justify-center text-mist-80">
+                            <UploadIcon className="w-8 h-8 mb-1" />
                             <span className="text-xs">(string "Video")</span>
                           </div>
                         else
-                          <div className="flex flex-col items-center justify-center text-mist-100">
-                            <UploadIcon className="w-12 h-12 mb-2" />
-                            <span className="text-xs text-center px-4">
+                          <div className="flex flex-col items-center justify-center text-mist-80 h-full px-2">
+                            <UploadIcon className="w-8 h-8 mb-1" />
+                            <span className="text-xs text-center break-all line-clamp-2">
                               (string blob.mimetype)
                             </span>
                           </div> )
-                    </div>
-                    (* Info area *)
-                    <div className="p-3">
-                      <div className="mb-2">
-                        <p className="text-xs text-mist-80 mb-1">(string "User")</p>
-                        <p className="text-sm text-mana-100 font-medium truncate" title=blob.handle>
-                          (string blob.handle)
-                        </p>
+                      (* Hover overlay with delete button *)
+                      <div className="absolute inset-0 bg-mist-80/0 group-hover:bg-mist-80/60 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <button
+                          onClick=(fun e ->
+                            (Obj.magic e)##preventDefault();
+                            (Obj.magic e)##stopPropagation();
+                            setDeleteConfirmFor (fun _ -> Some blob))
+                          className="px-3 py-2 bg-phoenix-100 hover:bg-phoenix-80 text-feather-100 rounded-lg shadow-lg transition-colors flex items-center gap-2">
+                          <TrashIcon className="w-4 h-4" />
+                          <span className="text-sm">(string "Delete")</span>
+                        </button>
                       </div>
-                      <div className="mb-2">
-                        <p className="text-xs text-mist-80 mb-1">(string "CID")</p>
-                        <p className="font-mono text-xs text-mist-100 truncate" title=blob.cid>
-                          (string blob.cid)
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-xs text-mist-80">(string "Size")</p>
-                          <p className="text-xs text-mist-100">(string blob.size)</p>
-                        </div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-mist-60/30 text-mist-100">
+                    </a>
+                    (* Compact info footer *)
+                    <div className="p-2 bg-feather-100">
+                      <p className="text-xs text-mana-100 font-medium truncate mb-1" title=blob.handle>
+                        (string blob.handle)
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-mist-80">
+                        <span>(string blob.size)</span>
+                        <span className="px-1.5 py-0.5 rounded bg-mist-60/30 text-mist-100">
                           (string blob.storage)
                         </span>
-                      </div>
-                      (* Actions *)
-                      <div className="flex gap-2">
-                        <a
-                          href=view_url
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 px-3 py-2 text-xs text-center bg-mana-100 hover:bg-mana-80 text-feather-100 rounded transition-colors">
-                          (string (if is_img || is_vid then "View" else "Download"))
-                        </a>
-                        <button
-                          onClick=(fun _ -> setDeleteConfirmFor (fun _ -> Some blob))
-                          className="px-3 py-2 text-xs bg-phoenix-100/10 hover:bg-phoenix-100/20 text-phoenix-100 rounded transition-colors">
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
                   </div> )
