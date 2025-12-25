@@ -133,6 +133,44 @@ let get_handler =
               ; error= None
               ; success= None } )
 
+let view_handler =
+  Xrpc.handler (fun ctx ->
+      match%lwt Session.is_admin_authenticated ctx.req with
+      | false ->
+          Dream.redirect ctx.req "/admin/login"
+      | true -> (
+          let did = Dream.query ctx.req "did" |> Option.value ~default:"" in
+          let cid_str =
+            Dream.query ctx.req "cid" |> Option.value ~default:""
+          in
+          let download =
+            Dream.query ctx.req "download" |> Option.is_some
+          in
+          match Cid.of_string cid_str with
+          | Ok cid -> (
+              try%lwt
+                let%lwt user_db = User_store.connect ~write:false did in
+                match%lwt User_store.get_blob user_db cid with
+                | Some blob ->
+                    let content_disposition =
+                      if download then
+                        "attachment; filename=\"" ^ Cid.to_string cid ^ "\""
+                      else "inline"
+                    in
+                    Dream.respond
+                      ~headers:
+                        [ ("Content-Type", blob.mimetype)
+                        ; ("Content-Disposition", content_disposition)
+                        ; ("Cache-Control", "public, max-age=31536000") ]
+                      (Blob.to_string blob.data)
+                | None ->
+                    Dream.respond ~status:`Not_Found "Blob not found"
+              with e ->
+                Dream.respond ~status:`Internal_Server_Error
+                  ("Error: " ^ Printexc.to_string e) )
+          | Error _ ->
+              Dream.respond ~status:`Bad_Request "Invalid CID" ) )
+
 let post_handler =
   Xrpc.handler (fun ctx ->
       match%lwt Session.is_admin_authenticated ctx.req with

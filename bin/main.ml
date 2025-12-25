@@ -52,6 +52,7 @@ let handlers =
   ; (post, "/admin/invites", Api.Admin_.Invites.post_handler)
   ; (get, "/admin/blobs", Api.Admin_.Blobs.get_handler)
   ; (post, "/admin/blobs", Api.Admin_.Blobs.post_handler)
+  ; (get, "/admin/blobs/view", Api.Admin_.Blobs.view_handler)
   ; (* unauthed *)
     ( get
     , "/xrpc/com.atproto.server.describeServer"

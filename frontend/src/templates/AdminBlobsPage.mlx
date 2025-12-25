@@ -27,6 +27,12 @@ let admin_pages =
   ; ("Invite codes", "/admin/invites")
   ; ("Blobs", "/admin/blobs") ]
 
+let is_image mimetype =
+  String.starts_with ~prefix:"image/" mimetype
+
+let is_video mimetype =
+  String.starts_with ~prefix:"video/" mimetype
+
 let[@react.component] make
     ~props:
       ({ blobs
@@ -38,13 +44,13 @@ let[@react.component] make
         props ) () =
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : blob option)) in
-  <div className="w-full max-w-3xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+  <div className="w-full max-w-6xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
     <Sidebar pages=admin_pages active_page="/admin/blobs" />
-    <main className="flex-1 w-full max-w-2xl">
+    <main className="flex-1 w-full">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
         (string "blobs")
       </h1>
-      <p className="text-mist-100 mb-4">
+      <p className="text-mist-100 mb-6">
         (string "View and manage all blobs stored on this PDS.")
       </p>
       ( match error with
@@ -63,71 +69,87 @@ let[@react.component] make
             </span>
           </div>
       | None -> null )
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-xl text-sm">
-          <thead>
-            <tr className="text-left text-mist-80">
-              <th className="pb-2 font-normal">(string "User")</th>
-              <th className="pb-2 font-normal">(string "CID")</th>
-              <th className="pb-2 font-normal">(string "Type")</th>
-              <th className="pb-2 font-normal">(string "Size")</th>
-              <th className="pb-2 font-normal">(string "Storage")</th>
-              <th className="pb-2 font-normal w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
+      ( if List.length blobs = 0 then
+          <div className="mt-12 text-center text-mist-80">
+            <p>(string "No blobs found.")</p>
+          </div>
+        else
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             ( List.map
                 (fun (blob : blob) ->
-                  <tr key=(blob.did ^ ":" ^ blob.cid) className="border-t border-mist-60/50">
-                    <td className="py-3 pr-4">
-                      <div className="max-w-40">
-                        <p className="font-medium text-mana-100 truncate" title=blob.handle>
+                  let view_url = "/admin/blobs/view?did=" ^ blob.did ^ "&cid=" ^ blob.cid in
+                  let download_url = view_url ^ "&download=true" in
+                  let is_img = is_image blob.mimetype in
+                  let is_vid = is_video blob.mimetype in
+                  <div key=(blob.did ^ ":" ^ blob.cid) className="border border-mist-60/50 rounded-lg overflow-hidden bg-feather-100 hover:border-mist-60 transition-colors">
+                    (* Preview area *)
+                    <div className="aspect-square bg-mist-60/20 relative flex items-center justify-center">
+                      ( if is_img then
+                          <img
+                            src=view_url
+                            alt="blob preview"
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        else if is_vid then
+                          <div className="w-full h-full flex flex-col items-center justify-center text-mist-100">
+                            <UploadIcon className="w-12 h-12 mb-2" />
+                            <span className="text-xs">(string "Video")</span>
+                          </div>
+                        else
+                          <div className="flex flex-col items-center justify-center text-mist-100">
+                            <UploadIcon className="w-12 h-12 mb-2" />
+                            <span className="text-xs text-center px-4">
+                              (string blob.mimetype)
+                            </span>
+                          </div> )
+                    </div>
+                    (* Info area *)
+                    <div className="p-3">
+                      <div className="mb-2">
+                        <p className="text-xs text-mist-80 mb-1">(string "User")</p>
+                        <p className="text-sm text-mana-100 font-medium truncate" title=blob.handle>
                           (string blob.handle)
                         </p>
-                        <p className="text-xs text-mist-80 truncate" title=blob.did>
-                          (string blob.did)
-                        </p>
                       </div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="max-w-32">
+                      <div className="mb-2">
+                        <p className="text-xs text-mist-80 mb-1">(string "CID")</p>
                         <p className="font-mono text-xs text-mist-100 truncate" title=blob.cid>
                           (string blob.cid)
                         </p>
                       </div>
-                    </td>
-                    <td className="py-3 pr-4 text-mist-100">
-                      <span className="text-xs">(string blob.mimetype)</span>
-                    </td>
-                    <td className="py-3 pr-4 text-mist-100">
-                      <span className="text-xs">(string blob.size)</span>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <span className="text-xs px-2 py-1 rounded-full bg-mist-60/30 text-mist-100">
-                        (string blob.storage)
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <button
-                        className="p-1 text-mist-80 hover:text-phoenix-100 cursor-pointer"
-                        onClick=(fun _ -> setDeleteConfirmFor (fun _ -> Some blob))>
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr> )
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-xs text-mist-80">(string "Size")</p>
+                          <p className="text-xs text-mist-100">(string blob.size)</p>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-mist-60/30 text-mist-100">
+                          (string blob.storage)
+                        </span>
+                      </div>
+                      (* Actions *)
+                      <div className="flex gap-2">
+                        <a
+                          href=view_url
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 px-3 py-2 text-xs text-center bg-mana-100 hover:bg-mana-80 text-feather-100 rounded transition-colors">
+                          (string (if is_img || is_vid then "View" else "Download"))
+                        </a>
+                        <button
+                          onClick=(fun _ -> setDeleteConfirmFor (fun _ -> Some blob))
+                          className="px-3 py-2 text-xs bg-phoenix-100/10 hover:bg-phoenix-100/20 text-phoenix-100 rounded transition-colors">
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div> )
                 blobs
             |> Array.of_list |> array )
-          </tbody>
-        </table>
-      </div>
-      ( if List.length blobs = 0 then
-          <div className="mt-8 text-center text-mist-80">
-            <p>(string "No blobs found.")</p>
-          </div>
-        else null )
+          </div> )
       ( match next_cursor with
       | Some cursor ->
-          <div className="mt-4">
+          <div className="mt-6 flex justify-center">
             <a href=("?cursor=" ^ cursor)>
               <Button kind=`Secondary>(string "Load more")</Button>
             </a>
@@ -149,6 +171,8 @@ let[@react.component] make
                 <Aria.Dialog className="outline-none">
                   ( match deleteConfirmFor with
                   | Some blob ->
+                      let view_url = "/admin/blobs/view?did=" ^ blob.did ^ "&cid=" ^ blob.cid in
+                      let is_img = is_image blob.mimetype in
                       <form className="flex flex-col gap-y-3">
                         <Aria.Heading
                           slot="title"
@@ -159,18 +183,27 @@ let[@react.component] make
                         <input type_="hidden" name="action" value="delete_blob" />
                         <input type_="hidden" name="did" value=blob.did />
                         <input type_="hidden" name="cid" value=blob.cid />
+                        ( if is_img then
+                            <div className="mb-2 rounded overflow-hidden border border-mist-60/50">
+                              <img
+                                src=view_url
+                                alt="blob preview"
+                                className="w-full h-auto"
+                              />
+                            </div>
+                          else null )
                         <p className="text-mist-100 mb-2">
-                          (string ("Are you sure you want to delete this blob from " ^ blob.handle ^ "?"))
+                          (string ("Delete this blob from " ^ blob.handle ^ "?"))
                         </p>
                         <div className="bg-mist-60/20 rounded p-3 mb-2">
+                          <p className="text-xs text-mist-80 mb-1">(string "Type")</p>
+                          <p className="text-xs text-mist-100 mb-2">(string blob.mimetype)</p>
+                          <p className="text-xs text-mist-80 mb-1">(string "Size")</p>
+                          <p className="text-xs text-mist-100 mb-2">(string blob.size)</p>
                           <p className="text-xs text-mist-80 mb-1">(string "CID")</p>
                           <p className="font-mono text-xs text-mist-100 break-all">
                             (string blob.cid)
                           </p>
-                          <p className="text-xs text-mist-80 mt-2 mb-1">(string "Type")</p>
-                          <p className="text-xs text-mist-100">(string blob.mimetype)</p>
-                          <p className="text-xs text-mist-80 mt-2 mb-1">(string "Size")</p>
-                          <p className="text-xs text-mist-100">(string blob.size)</p>
                         </div>
                         <p className="text-xs text-phoenix-100">
                           (string "This action cannot be undone and may break references to this blob.")
