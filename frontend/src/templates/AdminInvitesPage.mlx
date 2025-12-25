@@ -38,7 +38,7 @@ let[@react.component] make
   let editRemaining, setEditRemaining = useState (fun () -> "") in
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : invite option)) in
-  <div className="w-full max-w-3xl h-auto px-4 sm:px-0 flex flex-col md:flex-row gap-12">
+  <div className="w-full max-w-3xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
     <Sidebar pages=admin_pages active_page="/admin/invites" />
     <main className="flex-1 w-full max-w-2xl">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">

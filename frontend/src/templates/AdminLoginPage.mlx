@@ -5,7 +5,7 @@ type props = {csrf_token: string; error: string option [@default None]}
 [@@deriving json]
 
 let[@react.component] make ~props:({csrf_token; error} : props) () =
-  <main className="w-full h-auto max-w-xs px-4 sm:px-0">
+  <main className="w-full h-auto max-w-xs px-4 sm:px-0 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">(string "admin")</h1>
     <span className="w-full text-balance text-mist-100">
       (string "Enter the admin password to continue.")

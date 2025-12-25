@@ -4,13 +4,29 @@ open Melange_json.Primitives
 open React
 module Aria = ReactAria
 
+let button_class_inline =
+  "group inline-flex flex-row items-center px-1.5 py-1 -mx-0.75 -my-1 \
+   rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
+     active:bg-mist-20/40"
+
+let button_class_default =
+  "group min-w-48 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
+   rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
+     active:bg-mist-20/40"
+
+let value_class_inline = "text-mana-100 font-serif inline-flex items-center gap-x-1"
+
+let value_class_default = "text-mana-100 font-serif flex items-center gap-x-1"
+
 type actor =
   {did: string; handle: string; avatar_data_uri: string option [@default None]}
 [@@deriving json]
 
-let fallback handle avatar =
-  <button className="flex px-2 py-1.5 -mx-2 rounded-lg">
-    <span className="text-mana-100 font-serif flex items-center gap-x-1">
+let fallback handle avatar inline =
+  let button_class = if inline then button_class_inline else button_class_default in
+  let value_class = if inline then value_class_inline else value_class_default in
+  <button className=button_class>
+    <span className=value_class>
       (match avatar with
       | Some uri -> <img className="w-5 h-5 mr-1 rounded-md" src=uri />
       | None -> null)
@@ -50,21 +66,9 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
               () )
         else ()]
   in
-  let button_class =
-    if inline then
-      "group inline-flex flex-row items-center px-1.5 py-1 -mx-0.75 -my-1 \
-       rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
-       active:bg-mist-20/40"
-    else
-      "group min-w-48 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
-       rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
-       active:bg-mist-20/40"
-  in
-  let value_class =
-    if inline then "text-mana-100 font-serif inline-flex items-center gap-x-1"
-    else "text-mana-100 font-serif flex items-center gap-x-1"
-  in
-  <ClientOnly fallback=(fallback current_user.handle current_user.avatar_data_uri)>
+  let button_class = if inline then button_class_inline else button_class_default in
+  let value_class = if inline then value_class_inline else value_class_default in
+  <ClientOnly fallback=(fallback current_user.handle current_user.avatar_data_uri inline)>
   [%browser_only
     (fun () ->
       <Aria.Select name className="inline" defaultValue=current_user.did placeholder="select account" onChange=handleAccountSwitch>

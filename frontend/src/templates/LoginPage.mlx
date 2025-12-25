@@ -9,7 +9,7 @@ type props =
 
 let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
     =
-  <main className="w-full h-auto max-w-xs px-4 sm:px-0">
+  <main className="w-full h-auto max-w-xs px-4 sm:px-0 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string "sign in")
     </h1>

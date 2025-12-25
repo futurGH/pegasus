@@ -32,7 +32,7 @@ let pegasus =
 type props = unit [@@deriving json]
 
 let[@react.component] make ~props:(_ : props) () =
-  <main className="text-mist-100">
+  <main className="my-auto text-mist-100">
     <pre className="text-mana-100">pegasus</pre>
     <p>
       (string "this is ")

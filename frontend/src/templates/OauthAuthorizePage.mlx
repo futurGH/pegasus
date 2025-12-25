@@ -542,14 +542,14 @@ let[@react.component] make
   let rendered_name =
     match client_name with
     | Some client_name ->
-        <span className="text-mana-100 font-serif mr-1">
+        <span className="text-mana-100 font-serif">
           (string client_name)
           <span className="font-sans">(string (" (" ^ host ^ ")"))</span>
         </span>
     | None when String.length path = 0 ->
-        <span className="text-mana-100 font-serif mr-1">(string host)</span>
+        <span className="text-mana-100 font-serif">(string host)</span>
     | None ->
-        <span className="text-mana-100 font-serif mr-1">
+        <span className="text-mana-100 font-serif">
           (string host) <span className="text-mana-40">(string path)</span>
         </span>
   in
@@ -565,7 +565,7 @@ let[@react.component] make
     useState (fun () ->
         Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico") )
   in
-  <form className="w-full h-auto max-w-lg px-4 sm:px-0">
+  <form className="w-full h-auto max-w-lg px-4 sm:px-0 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string ("authorizing " ^ host))
     </h1>
