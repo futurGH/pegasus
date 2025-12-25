@@ -39,7 +39,9 @@ let fetch_client_metadata client_id : client_metadata Lwt.t =
           match Uri.scheme u with
           | Some "https" when host <> Some "localhost" ->
               ()
-          | Some "http" when host = Some "127.0.0.1" || host = Some "[::1]" ->
+          | Some "http"
+            when host = Some "127.0.0.1" || host = Some "localhost"
+                 || host = Some "[::1]" ->
               ()
           | _ ->
               failwith ("invalid redirect_uri: " ^ uri) )

@@ -73,11 +73,22 @@ let add_jti jti =
     if Hashtbl.length jti_cache mod 100 = 0 then cleanup_jti_cache () ;
     true )
 
+let is_loopback host =
+  host = "127.0.0.1" || host = "[::1]" || host = "localhost"
+
 let normalize_url url =
   let uri = Uri.of_string url in
-  Uri.make ~scheme:"https"
-    ~host:(Uri.host uri |> Option.value ~default:Env.hostname)
-    ~path:(Uri.path uri) ()
+  let host = Uri.host uri in
+  let scheme, normalized_host =
+    match host with
+    | Some h when is_loopback h ->
+        ("http", h)
+    | Some h ->
+        ("https", h)
+    | None ->
+        ("https", Env.hostname)
+  in
+  Uri.make ~scheme ~host:normalized_host ~path:(Uri.path uri) ()
   |> Uri.to_string
 
 let compute_jwk_thumbprint jwk =
