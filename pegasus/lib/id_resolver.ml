@@ -12,7 +12,11 @@ module Handle = struct
       match status with
       | `OK ->
           let%lwt did = Body.to_string body in
-          Lwt.return_ok did
+          if
+            String.starts_with ~prefix:"did:plc:" did
+            || String.starts_with ~prefix:"did:web:" did
+          then Lwt.return_ok did
+          else Lwt.return_error "invalid did in .well-known/atproto-did"
       | _ ->
           let%lwt () = Body.drain_body body in
           Lwt.return_error "failed to resolve"
