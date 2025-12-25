@@ -33,6 +33,8 @@ let handlers =
   ; (post, "/account", Api.Account_.Index.post_handler)
   ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
   ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
+  ; (get, "/account/identity", Api.Account_.Identity.get_handler)
+  ; (post, "/account/identity", Api.Account_.Identity.post_handler)
   ; (get, "/account/login", Api.Account_.Login.get_handler)
   ; (post, "/account/login", Api.Account_.Login.post_handler)
   ; (get, "/account/signup", Api.Account_.Signup.get_handler)

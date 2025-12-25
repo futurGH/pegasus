@@ -1,0 +1,523 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type actor = AccountSwitcher.actor =
+  {did: string; handle: string; avatar_data_uri: string option [@default None]}
+[@@deriving json]
+
+type dns_verification =
+  { record: string
+  ; value: string option [@default None]
+  ; valid_record: bool
+  ; valid_did: bool
+  ; resolvers_synced: bool
+  ; error: string option [@default None] }
+[@@deriving json]
+
+type http_verification =
+  { endpoint: string
+  ; value: string option [@default None]
+  ; valid_endpoint: bool
+  ; valid_did: bool
+  ; error: string option [@default None] }
+[@@deriving json]
+
+type handle_verification =
+  { handle: string
+  ; did: string
+  ; passed: bool
+  ; method_: string option [@default None] [@key "method"]
+  ; dns: dns_verification
+  ; http: http_verification }
+[@@deriving json]
+
+type rotation_key =
+  { key: string
+  ; is_pds_key: bool }
+[@@deriving json]
+
+type plc_service =
+  { id: string
+  ; type_: string [@key "type"]
+  ; endpoint: string }
+[@@deriving json]
+
+type verification_method =
+  { method_id: string
+  ; method_key: string }
+[@@deriving json]
+
+type plc_state =
+  { rotation_keys: rotation_key list
+  ; verification_methods: verification_method list
+  ; also_known_as: string list
+  ; services: plc_service list }
+[@@deriving json]
+
+type props =
+  { current_user: actor
+  ; logged_in_users: actor list
+  ; csrf_token: string
+  ; handle_verification: handle_verification
+  ; plc_state: plc_state
+  ; has_plc_token: bool [@default false]
+  ; plc_token_error: string option [@default None]
+  ; plc_submit_error: string option [@default None]
+  ; plc_submit_success: string option [@default None]
+  ; error: string option [@default None]
+  ; success: string option [@default None] }
+[@@deriving json]
+
+let[@react.component] make
+    ~props:
+      ({ current_user
+       ; logged_in_users
+       ; csrf_token
+       ; handle_verification
+       ; plc_state
+       ; has_plc_token
+       ; plc_token_error
+       ; plc_submit_error
+       ; plc_submit_success
+       ; error
+       ; success } :
+        props ) () =
+  let plcTokenPending, setPlcTokenPending = useState (fun () -> has_plc_token) in
+  let plcTokenInput, setPlcTokenInput = useState (fun () -> "") in
+  let plcTokenLoading, setPlcTokenLoading = useState (fun () -> false) in
+  let plcTokenError, setPlcTokenError = useState (fun () -> plc_token_error) in
+  let plcSubmitError, setPlcSubmitError = useState (fun () -> plc_submit_error) in
+  let plcSubmitSuccess, setPlcSubmitSuccess = useState (fun () -> plc_submit_success) in
+  let verificationLoading, setVerificationLoading = useState (fun () -> false) in
+  let headerBgClass =
+    if handle_verification.passed then "bg-mana-100"
+    else "bg-phoenix-100"
+  in
+  let statusText =
+    match handle_verification.method_ with
+    | Some "dns" -> "Passed verification via DNS"
+    | Some "http" -> "Passed verification via HTTP"
+    | Some "both" -> "Passed verification via DNS and HTTP"
+    | _ -> "Handle verification failed"
+  in
+  <div className="w-auto h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+    <AccountSidebar
+      current_user logged_in_users active_page="/account/identity"
+    />
+    <main className="flex-1 w-full max-w-2xl">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "identity")
+      </h1>
+      <p className="text-mist-100 mb-6">
+        (string "Manage your decentralized identity and verify your handle.")
+      </p>
+
+      (* Handle Verification Section *)
+      <section className="mb-8">
+        <div className=("rounded-t-xl py-4 px-6 text-center " ^ headerBgClass)>
+          <h2 className="text-xl font-serif text-white">
+            (string handle_verification.handle)
+          </h2>
+          <p className="text-white/90 text-sm">
+            (string statusText)
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-t-0 border-mist-60 rounded-b-xl">
+          (* DNS Verification *)
+          <div className="p-4 border-b md:border-b-0 md:border-r border-mist-60">
+            <h3 className="text-lg font-serif text-mana-200 mb-3 text-center">
+              (string "DNS Verification Method")
+            </h3>
+            <table className="w-full text-sm mb-4">
+              <tbody>
+                <tr className="border-b border-mist-60/50">
+                  <td className="py-2 pr-3 text-mist-80 font-medium">(string "Record (TXT)")</td>
+                  <td className="py-2 text-mist-100 font-mono text-xs break-all">
+                    (string handle_verification.dns.record)
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 text-mist-80 font-medium">(string "Value")</td>
+                  <td className="py-2 text-mist-100 font-mono text-xs break-all">
+                    (string (Option.value handle_verification.dns.value ~default:"None"))
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                ( if handle_verification.dns.valid_record then
+                    <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+                  else
+                    <XIcon className="w-5 h-5 text-mist-80" /> )
+                <span className=(if handle_verification.dns.valid_record then "text-mana-100" else "text-mist-80")>
+                  (string "Valid authoritative TXT record")
+                </span>
+              </div>
+              <hr className=(if handle_verification.dns.valid_record then "border-mana-100" else "border-mist-60") />
+              <p className="text-xs text-mist-80 uppercase">(string (if handle_verification.dns.valid_record then "PASS" else "FAIL"))</p>
+
+              <div className="flex items-center gap-2 mt-2">
+                ( if handle_verification.dns.valid_did then
+                    <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+                  else
+                    <XIcon className="w-5 h-5 text-mist-80" /> )
+                <span className=(if handle_verification.dns.valid_did then "text-mana-100" else "text-mist-80")>
+                  (string "Valid DID syntax")
+                </span>
+              </div>
+              <hr className=(if handle_verification.dns.valid_did then "border-mana-100" else "border-mist-60") />
+              <p className="text-xs text-mist-80 uppercase">(string (if handle_verification.dns.valid_did then "PASS" else "FAIL"))</p>
+
+              <div className="flex items-center gap-2 mt-2">
+                ( if handle_verification.dns.resolvers_synced then
+                    <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+                  else
+                    <XIcon className="w-5 h-5 text-mist-80" /> )
+                <span className=(if handle_verification.dns.resolvers_synced then "text-mana-100" else "text-mist-80")>
+                  (string "Public DNS resolvers synced")
+                </span>
+              </div>
+              <hr className=(if handle_verification.dns.resolvers_synced then "border-mana-100" else "border-mist-60") />
+              <p className="text-xs text-mist-80 uppercase">(string (if handle_verification.dns.resolvers_synced then "PASS" else "FAIL"))</p>
+            </div>
+            ( match handle_verification.dns.error with
+            | Some err ->
+                <p className="mt-3 text-xs text-phoenix-100">(string err)</p>
+            | None -> null )
+          </div>
+
+          (* HTTP Verification *)
+          <div className="p-4">
+            <h3 className="text-lg font-serif text-mana-200 mb-3 text-center">
+              (string "HTTP Verification Method")
+            </h3>
+            <table className="w-full text-sm mb-4">
+              <tbody>
+                <tr className="border-b border-mist-60/50">
+                  <td className="py-2 pr-3 text-mist-80 font-medium">(string "Endpoint (URL)")</td>
+                  <td className="py-2 text-mist-100 font-mono text-xs break-all">
+                    (string handle_verification.http.endpoint)
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 text-mist-80 font-medium">(string "Value")</td>
+                  <td className="py-2 text-mist-100 font-mono text-xs break-all">
+                    (string (Option.value handle_verification.http.value ~default:"None"))
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                ( if handle_verification.http.valid_endpoint then
+                    <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+                  else
+                    <XIcon className="w-5 h-5 text-mist-80" /> )
+                <span className=(if handle_verification.http.valid_endpoint then "text-mana-100" else "text-mist-80")>
+                  (string "Valid HTTPS endpoint")
+                </span>
+              </div>
+              <hr className=(if handle_verification.http.valid_endpoint then "border-mana-100" else "border-mist-60") />
+              <p className="text-xs text-mist-80 uppercase">(string (if handle_verification.http.valid_endpoint then "PASS" else "FAIL"))</p>
+
+              <div className="flex items-center gap-2 mt-2">
+                ( if handle_verification.http.valid_did then
+                    <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+                  else
+                    <XIcon className="w-5 h-5 text-mist-80" /> )
+                <span className=(if handle_verification.http.valid_did then "text-mana-100" else "text-mist-80")>
+                  (string "Valid DID syntax")
+                </span>
+              </div>
+              <hr className=(if handle_verification.http.valid_did then "border-mana-100" else "border-mist-60") />
+              <p className="text-xs text-mist-80 uppercase">(string (if handle_verification.http.valid_did then "PASS" else "FAIL"))</p>
+            </div>
+            ( match handle_verification.http.error with
+            | Some err ->
+                <p className="mt-3 text-xs text-phoenix-100">(string err)</p>
+            | None -> null )
+          </div>
+        </div>
+        <div className="mt-4">
+          <ClientOnly fallback=(
+            <Button kind=`Secondary className="max-w-48">
+              (string "refresh verification")
+            </Button>
+          )>
+          [%browser_only
+            (fun () ->
+              <Button
+                kind=`Secondary
+                className="max-w-48"
+                disabled=verificationLoading
+                onClick=(fun _ ->
+                  setVerificationLoading (fun _ -> true) ;
+                  Webapi.Dom.(location |> Location.reload))>
+                (string (if verificationLoading then "refreshing..." else "refresh verification"))
+              </Button> )]
+          </ClientOnly>
+        </div>
+      </section>
+
+      (* PLC Identity Section *)
+      <section className="mb-8">
+        <h2 className="text-xl font-serif text-mana-200 mb-1">
+          (string "PLC identity")
+        </h2>
+        <p className="text-mist-100 mb-4">
+          (string "Your identity is managed by a PLC (Public Ledger of Credentials) directory.")
+        </p>
+
+        (* Current State *)
+        <div className="mb-6">
+          <h3 className="text-lg font-serif text-mana-100 mb-2">
+            (string "rotation keys")
+          </h3>
+          <p className="text-sm text-mist-80 mb-2">
+            (string "These keys can authorize changes to your identity. Listed in priority order.")
+          </p>
+          <ul className="space-y-1">
+            ( List.mapi
+                (fun i (key : rotation_key) ->
+                  <li key=key.key className="flex items-center gap-2 text-sm">
+                    <span className="text-mist-80 w-4">(string (string_of_int (i + 1) ^ "."))</span>
+                    <code className="font-mono text-xs text-mist-100 break-all flex-1">
+                      (string key.key)
+                    </code>
+                    ( if key.is_pds_key then
+                        <span className="text-xs bg-mana-40/30 text-mana-100 px-2 py-0.5 rounded">
+                          (string "PDS")
+                        </span>
+                      else null )
+                  </li> )
+                plc_state.rotation_keys
+            |> Array.of_list |> array )
+          </ul>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-lg font-serif text-mana-100 mb-2">
+            (string "verification methods")
+          </h3>
+          <ul className="space-y-1">
+            ( List.map
+                (fun (vm : verification_method) ->
+                  <li key=vm.method_id className="flex items-start gap-2 text-sm">
+                    <span className="text-mist-80 font-medium">(string (vm.method_id ^ ":"))</span>
+                    <code className="font-mono text-xs text-mist-100 break-all">
+                      (string vm.method_key)
+                    </code>
+                  </li> )
+                plc_state.verification_methods
+            |> Array.of_list |> array )
+          </ul>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-lg font-serif text-mana-100 mb-2">
+            (string "also known as")
+          </h3>
+          <ul className="space-y-1">
+            ( List.map
+                (fun aka ->
+                  <li key=aka className="text-sm">
+                    <code className="font-mono text-xs text-mist-100">(string aka)</code>
+                  </li> )
+                plc_state.also_known_as
+            |> Array.of_list |> array )
+          </ul>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-lg font-serif text-mana-100 mb-2">
+            (string "services")
+          </h3>
+          <ul className="space-y-2">
+            ( List.map
+                (fun (svc : plc_service) ->
+                  <li key=svc.id className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-mist-80 font-medium">(string svc.id)</span>
+                      <span className="text-xs bg-mist-60/30 text-mist-80 px-1.5 py-0.5 rounded">
+                        (string svc.type_)
+                      </span>
+                    </div>
+                    <code className="font-mono text-xs text-mist-100">(string svc.endpoint)</code>
+                  </li> )
+                plc_state.services
+            |> Array.of_list |> array )
+          </ul>
+        </div>
+      </section>
+
+      (* PLC Operations Section *)
+      <section className="mb-8">
+        <h2 className="text-xl font-serif text-mana-200 mb-1">
+          (string "update identity")
+        </h2>
+        <p className="text-mist-100 mb-4">
+          (string "Request a signed PLC operation to update your identity. A verification code will be sent to your email.")
+        </p>
+
+        ( match plcSubmitSuccess with
+        | Some msg ->
+            <div className="mb-4">
+              <span className="inline-flex items-center text-mana-100 text-sm">
+                <CheckmarkIcon className="w-4 h-4 mr-2" /> (string msg)
+              </span>
+            </div>
+        | None -> null )
+
+        ( match plcSubmitError with
+        | Some err ->
+            <div className="mb-4">
+              <span className="inline-flex items-center text-phoenix-100 text-sm">
+                <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+              </span>
+            </div>
+        | None -> null )
+
+        <ClientOnly fallback=(
+          <div className="flex flex-col gap-y-3">
+            <Button kind=`Secondary className="max-w-64">
+              (string "request operation signature")
+            </Button>
+          </div>
+        )>
+        [%browser_only
+          (fun () ->
+            let module Aria = ReactAria in
+            let submitPlcAction action fields =
+              setPlcTokenLoading (fun _ -> true) ;
+              setPlcTokenError (fun _ -> None) ;
+              setPlcSubmitError (fun _ -> None) ;
+              setPlcSubmitSuccess (fun _ -> None) ;
+              let body =
+                Fetch.BodyInit.make
+                  (Webapi.Url.URLSearchParams.makeWithArray
+                     (Array.append
+                        [|("dream.csrf", csrf_token); ("action", action)|]
+                        fields )
+                  |> Webapi.Url.URLSearchParams.toString )
+              in
+              let _ =
+                Fetch.fetchWithInit "/account/identity"
+                  (Fetch.RequestInit.make ~method_:Post ~body
+                     ~headers:
+                       (Fetch.HeadersInit.makeWithArray
+                          [|("Content-Type", "application/x-www-form-urlencoded")|] )
+                     () )
+                |> Js.Promise.then_ (fun response ->
+                       setPlcTokenLoading (fun _ -> false) ;
+                       if Fetch.Response.ok response then
+                         match action with
+                         | "request_plc_token" ->
+                             setPlcTokenPending (fun _ -> true) ;
+                             Js.Promise.resolve ()
+                         | "sign_plc_operation" ->
+                             setPlcSubmitSuccess (fun _ -> Some "Operation signed and submitted successfully.") ;
+                             setPlcTokenPending (fun _ -> false) ;
+                             setPlcTokenInput (fun _ -> "") ;
+                             Js.Promise.resolve ()
+                         | "cancel_plc_token" ->
+                             setPlcTokenPending (fun _ -> false) ;
+                             setPlcTokenInput (fun _ -> "") ;
+                             Js.Promise.resolve ()
+                         | _ ->
+                             Js.Promise.resolve ()
+                       else (
+                         Fetch.Response.text response
+                         |> Js.Promise.then_ (fun text ->
+                             ( match action with
+                             | "sign_plc_operation" ->
+                                 setPlcSubmitError (fun _ -> Some ("Failed to submit operation: " ^ text))
+                             | _ ->
+                                 setPlcTokenError (fun _ -> Some "An error occurred. Please try again.") ) ;
+                             Js.Promise.resolve () ) ) )
+                |> Js.Promise.catch (fun _ ->
+                       setPlcTokenLoading (fun _ -> false) ;
+                       setPlcTokenError (fun _ -> Some "An error occurred. Please try again.") ;
+                       Js.Promise.resolve () )
+              in
+              ()
+            in
+            if plcTokenPending then
+              <div className="flex flex-col gap-y-3">
+                <p className="text-mist-100 text-sm">
+                  (string "Enter the verification code sent to your email to sign and submit a PLC operation.")
+                </p>
+                <Input
+                  name="token"
+                  label="Verification code"
+                  placeholder="plc-..."
+                  required=true
+                  showIndicator=false
+                  value=plcTokenInput
+                  onChange=(fun e ->
+                    setPlcTokenInput (fun _ -> (Event.Form.target e)##value))
+                />
+                ( match plcTokenError with
+                | Some err ->
+                    <span className="inline-flex items-center text-phoenix-100 text-sm">
+                      <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+                    </span>
+                | None -> null )
+                <div className="flex flex-row gap-x-3 mt-2">
+                  <Button
+                    type_="button"
+                    disabled=plcTokenLoading
+                    onClick=(fun _ ->
+                      submitPlcAction "sign_plc_operation" [|("token", plcTokenInput)|])>
+                    (string (if plcTokenLoading then "submitting..." else "sign & submit"))
+                  </Button>
+                  <Button
+                    kind=`Secondary
+                    type_="button"
+                    disabled=plcTokenLoading
+                    onClick=(fun _ -> submitPlcAction "cancel_plc_token" [||])>
+                    (string "cancel")
+                  </Button>
+                </div>
+              </div>
+            else
+              <div className="flex flex-col gap-y-3">
+                <Button
+                  kind=`Secondary
+                  className="max-w-64"
+                  disabled=plcTokenLoading
+                  onClick=(fun _ -> submitPlcAction "request_plc_token" [||])>
+                  (string (if plcTokenLoading then "sending..." else "request operation signature"))
+                </Button>
+                ( match plcTokenError with
+                | Some err ->
+                    <span className="inline-flex items-center text-phoenix-100 text-sm">
+                      <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+                    </span>
+                | None -> null )
+              </div> )]
+        </ClientOnly>
+      </section>
+
+      (* Error/Success Messages *)
+      ( match error with
+      | Some err ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-phoenix-100 text-sm">
+              <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+            </span>
+          </div>
+      | None -> null )
+
+      ( match success with
+      | Some msg ->
+          <div className="mb-4">
+            <span className="inline-flex items-center text-mana-100 text-sm">
+              <CheckmarkIcon className="w-4 h-4 mr-2" /> (string msg)
+            </span>
+          </div>
+      | None -> null )
+    </main>
+  </div>
