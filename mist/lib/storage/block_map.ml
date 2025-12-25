@@ -18,16 +18,12 @@ let remove = Cid_map.remove
 
 let get_many cids m =
   let blocks, missing =
-    List.fold_left
-      (fun (b, mis) cid ->
-        match get cid m with
-        | Some bytes ->
-            (Cid_map.add cid bytes b, mis)
-        | None ->
-            (b, mis @ [cid]) )
-      (Cid_map.empty, []) cids
+    List.partition_map
+      (fun cid ->
+        match get cid m with Some data -> Left (cid, data) | None -> Right cid )
+      cids
   in
-  {blocks; missing= List.rev missing}
+  {blocks= Cid_map.of_list blocks; missing}
 
 let has = Cid_map.mem
 

@@ -233,8 +233,6 @@ module type Intf = sig
 
   val create_empty : Store.t -> (t, exn) Lwt_result.t
 
-  val get_cid : t -> string -> Cid.t option Lwt.t
-
   val of_assoc : Store.t -> (string * Cid.t) list -> t Lwt.t
 
   val add : t -> string -> Cid.t -> t Lwt.t
@@ -251,8 +249,6 @@ module type Intf = sig
   val leaves_of_node : node -> (string * Cid.t) list Lwt.t
 
   val leaves_of_root : t -> (string * Cid.t) list Lwt.t
-
-  val null_diff : t -> data_diff Lwt.t
 
   val equal : t -> t -> bool Lwt.t
 end
@@ -789,53 +785,6 @@ struct
     Lwt_result.bind (Store.put_block blockstore cid encoded) (fun _ ->
         Lwt.return_ok {blockstore; root= cid} )
 
-  (* returns the cid for a given key, if it exists *)
-  let get_cid t key : Cid.t option Lwt.t =
-    let rec get_in_node (n : node) : Cid.t option Lwt.t =
-      let sorted_entries =
-        List.sort
-          (fun (a : entry) (b : entry) -> String.compare a.key b.key)
-          n.entries
-      in
-      let rec scan (prev : entry option) (entries : entry list) :
-          Cid.t option Lwt.t =
-        match entries with
-        | [] -> (
-          match prev with
-          | Some p -> (
-              p.right
-              >>? function Some r -> get_in_node r | None -> Lwt.return_none )
-          | None -> (
-              n.left
-              >>? function Some l -> get_in_node l | None -> Lwt.return_none ) )
-        | e :: rest ->
-            if key = e.key then Lwt.return_some e.value
-            else if key < e.key then
-              match prev with
-              | Some p -> (
-                  p.right
-                  >>? function
-                  | Some r ->
-                      get_in_node r
-                  | None ->
-                      Lwt.return_none )
-              | None -> (
-                  n.left
-                  >>? function
-                  | Some l ->
-                      get_in_node l
-                  | None ->
-                      Lwt.return_none )
-            else scan (Some e) rest
-      in
-      scan None sorted_entries
-    in
-    match%lwt retrieve_node t t.root with
-    | None ->
-        Lwt.fail (Invalid_argument "root cid not found in repo store")
-    | Some root ->
-        get_in_node root
-
   (* builds and persists a canonical mst from sorted leaves *)
   let of_assoc blockstore assoc : t Lwt.t =
     let open Lwt.Infix in
@@ -975,25 +924,6 @@ struct
     let%lwt _ = Store.put_block blockstore cid encoded in
     Lwt.return cid
 
-  (* returns the layer a raw node belongs to *)
-  let rec get_layer_raw (t : t) (raw : node_raw) : int Lwt.t =
-    match (raw.l, raw.e) with
-    | None, [] ->
-        Lwt.return 0
-    | Some left_cid, [] -> (
-      match%lwt retrieve_node_raw t left_cid with
-      | Some left_raw ->
-          let%lwt left_layer = get_layer_raw t left_raw in
-          Lwt.return (left_layer + 1)
-      | None ->
-          failwith ("couldn't find node " ^ Cid.to_string left_cid) )
-    | _, e :: _ -> (
-      match e.p with
-      | 0 ->
-          Lwt.return (Util.leading_zeros_on_hash (Bytes.to_string e.k))
-      | _ ->
-          failwith "first node entry has nonzero p value" )
-
   (* decompress entry keys from a raw node *)
   let decompress_keys (raw : node_raw) : string list =
     let last_key = ref "" in
@@ -1049,7 +979,7 @@ struct
         let t' = {blockstore; root= result.root} in
         match%lwt retrieve_node_raw t' result.root with
         | Some raw ->
-            let%lwt layer = get_layer_raw t' raw in
+            let%lwt layer = get_node_height t' raw in
             Lwt.return (Some result.root, layer)
         | None ->
             Lwt.return (Some result.root, 0) )
@@ -1077,7 +1007,7 @@ struct
     | None ->
         failwith ("couldn't find node " ^ Cid.to_string root_cid)
     | Some raw ->
-        let%lwt root_layer = get_layer_raw t raw in
+        let%lwt root_layer = get_node_height t raw in
         if key_layer > root_layer then
           add_above_root t root_cid root_layer key value key_layer
         else if key_layer = root_layer then
@@ -1295,7 +1225,7 @@ struct
           let%lwt new_left_layer =
             match new_left_raw_opt with
             | Some r ->
-                get_layer_raw t r
+                get_node_height t r
             | None ->
                 Lwt.return 0
           in
@@ -1360,7 +1290,7 @@ struct
             let%lwt new_right_layer =
               match new_right_raw_opt with
               | Some r ->
-                  get_layer_raw t r
+                  get_node_height t r
               | None ->
                   Lwt.return 0
             in
@@ -1429,7 +1359,7 @@ struct
     | None ->
         Lwt.return_none
     | Some raw ->
-        let%lwt root_layer = get_layer_raw t raw in
+        let%lwt root_layer = get_node_height t raw in
         if key_layer > root_layer then
           (* key can't exist above root *)
           Lwt.return_some (root_cid, root_layer)
@@ -1482,7 +1412,7 @@ struct
               let%lwt result_layer =
                 match%lwt retrieve_node_raw t result.root with
                 | Some r ->
-                    get_layer_raw t r
+                    get_node_height t r
                 | None ->
                     Lwt.return 0
               in
@@ -1616,19 +1546,6 @@ struct
     | Some (new_root, _layer) ->
         Lwt.return {t with root= new_root}
 
-  (* produces a diff from an empty mst to the current one *)
-  let null_diff curr : data_diff Lwt.t =
-    let%lwt curr_nodes, _, curr_leaf_set = collect_nodes_and_leaves curr in
-    let%lwt curr_leaves = leaves_of_root curr in
-    let adds = List.map (fun (key, cid) : diff_add -> {key; cid}) curr_leaves in
-    Lwt.return
-      { adds
-      ; updates= []
-      ; deletes= []
-      ; new_mst_blocks= curr_nodes
-      ; new_leaf_cids= curr_leaf_set
-      ; removed_cids= Cid.Set.empty }
-
   (* checks that two msts are identical by recursively comparing their entries *)
   let equal (t1 : t) (t2 : t) : bool Lwt.t =
     let rec nodes_equal (n1 : node) (n2 : node) : bool Lwt.t =
@@ -1700,78 +1617,6 @@ struct
         Lwt.return false
 end
 
-module Differ (Prev : Intf) (Curr : Intf) = struct
-  let diff ~(t_curr : Curr.t) ~(t_prev : Prev.t) : data_diff Lwt.t =
-    let%lwt curr_nodes, curr_node_set, curr_leaf_set =
-      Curr.collect_nodes_and_leaves t_curr
-    in
-    let%lwt _, prev_node_set, prev_leaf_set =
-      Prev.collect_nodes_and_leaves t_prev
-    in
-    (* just convenient to have these functions *)
-    let in_prev_nodes cid = Cid.Set.mem cid prev_node_set in
-    let in_curr_nodes cid = Cid.Set.mem cid curr_node_set in
-    let in_prev_leaves cid = Cid.Set.mem cid prev_leaf_set in
-    let in_curr_leaves cid = Cid.Set.mem cid curr_leaf_set in
-    (* new mst blocks are curr nodes that are not in prev *)
-    let new_mst_blocks =
-      List.filter (fun (cid, _) -> not (in_prev_nodes cid)) curr_nodes
-    in
-    (* removed cids are prev nodes not in curr plus prev leaves not in curr *)
-    let removed_node_cids =
-      Cid.Set.fold
-        (fun cid acc ->
-          if not (in_curr_nodes cid) then Cid.Set.add cid acc else acc )
-        prev_node_set Cid.Set.empty
-    in
-    let removed_leaf_cids =
-      Cid.Set.fold
-        (fun cid acc ->
-          if not (in_curr_leaves cid) then Cid.Set.add cid acc else acc )
-        prev_leaf_set Cid.Set.empty
-    in
-    let removed_cids = Cid.Set.union removed_node_cids removed_leaf_cids in
-    (* new leaf cids are curr leaves not in prev *)
-    let new_leaf_cids =
-      Cid.Set.fold
-        (fun cid acc ->
-          if not (in_prev_leaves cid) then Cid.Set.add cid acc else acc )
-        curr_leaf_set Cid.Set.empty
-    in
-    (* compute adds/updates/deletes by merging sorted leaves *)
-    let%lwt curr_leaves = Curr.leaves_of_root t_curr in
-    let%lwt prev_leaves = Prev.leaves_of_root t_prev in
-    let rec merge (pl : (string * Cid.t) list) (cl : (string * Cid.t) list)
-        (adds : diff_add list) (updates : diff_update list)
-        (deletes : diff_delete list) =
-      match (pl, cl) with
-      | [], [] ->
-          (* we prepend for speed, then reverse at the end *)
-          (List.rev adds, List.rev updates, List.rev deletes)
-      | [], (k, c) :: cr ->
-          (* more curr than prev, goes in adds *)
-          merge [] cr ({key= k; cid= c} :: adds) updates deletes
-      | (k, c) :: pr, [] ->
-          (* more prev than curr, goes in deletes *)
-          merge pr [] adds updates ({key= k; cid= c} :: deletes)
-      | (k1, c1) :: pr, (k2, c2) :: cr ->
-          if k1 = k2 then (* if key & value are the same, keep going *)
-            if Cid.equal c1 c2 then merge pr cr adds updates deletes
-            else (* same key, different value; update *)
-              merge pr cr adds ({key= k1; prev= c1; cid= c2} :: updates) deletes
-          else if k1 < k2 then
-            merge pr ((k2, c2) :: cr) adds updates
-              ({key= k1; cid= c1} :: deletes)
-          else
-            merge ((k1, c1) :: pr) cr
-              ({key= k2; cid= c2} :: adds)
-              updates deletes
-    in
-    let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
-    Lwt.return
-      {adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
-end
-
 module Inductive (M : Intf) = struct
   module Cache_bs = Cache_blockstore (Memory_blockstore)
   module Mem_mst = Make (Cache_bs)
@@ -1792,7 +1637,7 @@ module Inductive (M : Intf) = struct
           (String_map.bindings map)
       in
       (* save this now so we can read blocks from it later *)
-      let block_map = mem_mst.blockstore.bs.blocks in
+      let blockstore = mem_mst.blockstore in
       (* apply inverse of operations in reverse order,
          check that mst root matches prev_root *)
       let%lwt inverted_mst, added_cids =
@@ -1815,11 +1660,13 @@ module Inductive (M : Intf) = struct
              (Cid.to_string prev_root)
              (Cid.to_string inverted_mst.root) ) ;
       let proof_cids =
-        Cid.Set.union added_cids mem_mst.blockstore.reads
+        Cid.Set.union added_cids (Cache_bs.get_reads blockstore)
         |> Cid.Set.remove prev_root |> Cid.Set.add new_root
       in
       let {blocks= proof_bm; _} : Block_map.with_missing =
-        Block_map.get_many (Cid.Set.elements proof_cids) block_map
+        Block_map.get_many
+          (Cid.Set.elements proof_cids)
+          (Cache_bs.get_cache blockstore)
       in
       Lwt.return_ok proof_bm
     with e -> Lwt.return_error e

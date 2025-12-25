@@ -2,8 +2,73 @@ open Mist
 open Lwt.Infix
 open Lwt_result.Syntax
 module Mem_mst = Mst.Make (Storage.Memory_blockstore)
-module Mem_diff = Mst.Differ (Mem_mst) (Mem_mst)
 module String_map = Dag_cbor.String_map
+
+module Differ (Prev : Mst.Intf) (Curr : Mst.Intf) = struct
+  let diff ~(t_curr : Curr.t) ~(t_prev : Prev.t) : Mst.data_diff Lwt.t =
+    let%lwt curr_nodes, curr_node_set, curr_leaf_set =
+      Curr.collect_nodes_and_leaves t_curr
+    in
+    let%lwt _, prev_node_set, prev_leaf_set =
+      Prev.collect_nodes_and_leaves t_prev
+    in
+    let in_prev_nodes cid = Cid.Set.mem cid prev_node_set in
+    let in_curr_nodes cid = Cid.Set.mem cid curr_node_set in
+    let in_prev_leaves cid = Cid.Set.mem cid prev_leaf_set in
+    let in_curr_leaves cid = Cid.Set.mem cid curr_leaf_set in
+    let new_mst_blocks =
+      List.filter (fun (cid, _) -> not (in_prev_nodes cid)) curr_nodes
+    in
+    let removed_node_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_curr_nodes cid) then Cid.Set.add cid acc else acc )
+        prev_node_set Cid.Set.empty
+    in
+    let removed_leaf_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_curr_leaves cid) then Cid.Set.add cid acc else acc )
+        prev_leaf_set Cid.Set.empty
+    in
+    let removed_cids = Cid.Set.union removed_node_cids removed_leaf_cids in
+    let new_leaf_cids =
+      Cid.Set.fold
+        (fun cid acc ->
+          if not (in_prev_leaves cid) then Cid.Set.add cid acc else acc )
+        curr_leaf_set Cid.Set.empty
+    in
+    let%lwt curr_leaves = Curr.leaves_of_root t_curr in
+    let%lwt prev_leaves = Prev.leaves_of_root t_prev in
+    let rec merge (pl : (string * Cid.t) list) (cl : (string * Cid.t) list)
+        (adds : Mst.diff_add list) (updates : Mst.diff_update list)
+        (deletes : Mst.diff_delete list) =
+      match (pl, cl) with
+      | [], [] ->
+          (List.rev adds, List.rev updates, List.rev deletes)
+      | [], (k, c) :: cr ->
+          merge [] cr ({key= k; cid= c} :: adds) updates deletes
+      | (k, c) :: pr, [] ->
+          merge pr [] adds updates ({key= k; cid= c} :: deletes)
+      | (k1, c1) :: pr, (k2, c2) :: cr ->
+          if k1 = k2 then
+            if Cid.equal c1 c2 then merge pr cr adds updates deletes
+            else
+              merge pr cr adds ({key= k1; prev= c1; cid= c2} :: updates) deletes
+          else if k1 < k2 then
+            merge pr ((k2, c2) :: cr) adds updates
+              ({key= k1; cid= c1} :: deletes)
+          else
+            merge ((k1, c1) :: pr) cr
+              ({key= k2; cid= c2} :: adds)
+              updates deletes
+    in
+    let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
+    Lwt.return
+      {Mst.adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
+end
+
+module Mem_diff = Differ (Mem_mst) (Mem_mst)
 
 let cid_of_string_exn s =
   match Cid.of_string s with Ok c -> c | Error msg -> failwith msg
@@ -246,18 +311,14 @@ let test_adds () =
   let%lwt mst' =
     Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst shuffled
   in
-  let%lwt () =
-    Lwt_list.iter_s
-      (fun (k, v) ->
-        let%lwt got = Mem_mst.get_cid mst' k in
-        Alcotest.(check bool)
-          "added records retrievable" true
-          (Option.value
-             (Option.map (fun x -> Cid.equal v x) got)
-             ~default:false )
-        |> Lwt.return )
-      shuffled
-  in
+  let%lwt result_map = Mem_mst.build_map mst' in
+  List.iter
+    (fun (k, v) ->
+      let got = String_map.find_opt k result_map in
+      Alcotest.(check bool)
+        "added records retrievable" true
+        (Option.value (Option.map (fun x -> Cid.equal v x) got) ~default:false) )
+    shuffled ;
   let%lwt total = Mem_mst.leaf_count mst' in
   Alcotest.(check int) "leaf count after adds" 1000 total ;
   Lwt.return_ok ()
@@ -279,18 +340,14 @@ let test_edits () =
       (mst, []) to_edit
   in
   let edited = List.rev edited in
-  let%lwt () =
-    Lwt_list.iter_s
-      (fun (k, v) ->
-        let%lwt got = Mem_mst.get_cid edited_mst k in
-        Alcotest.(check bool)
-          "updated records retrievable" true
-          (Option.value
-             (Option.map (fun x -> Cid.equal v x) got)
-             ~default:false )
-        |> Lwt.return )
-      edited
-  in
+  let%lwt result_map = Mem_mst.build_map edited_mst in
+  List.iter
+    (fun (k, v) ->
+      let got = String_map.find_opt k result_map in
+      Alcotest.(check bool)
+        "updated records retrievable" true
+        (Option.value (Option.map (fun x -> Cid.equal v x) got) ~default:false) )
+    edited ;
   let%lwt total = Mem_mst.leaf_count edited_mst in
   Alcotest.(check int) "leaf count stable after edits" 1000 total ;
   Lwt.return_ok ()
@@ -320,26 +377,19 @@ let test_deletes () =
   in
   let%lwt total = Mem_mst.leaf_count deleted_mst in
   Alcotest.(check int) "leaf count after deletes" 900 total ;
-  let%lwt () =
-    Lwt_list.iter_s
-      (fun (k, _) ->
-        let%lwt got = Mem_mst.get_cid deleted_mst k in
-        Alcotest.(check bool) "deleted record missing" true (got = None)
-        |> Lwt.return )
-      to_delete
-  in
-  let%lwt () =
-    Lwt_list.iter_s
-      (fun (k, v) ->
-        let%lwt got = Mem_mst.get_cid deleted_mst k in
-        Alcotest.(check bool)
-          "remaining records intact" true
-          (Option.value
-             (Option.map (fun x -> Cid.equal v x) got)
-             ~default:false )
-        |> Lwt.return )
-      the_rest
-  in
+  let%lwt result_map = Mem_mst.build_map deleted_mst in
+  List.iter
+    (fun (k, _) ->
+      let got = String_map.find_opt k result_map in
+      Alcotest.(check bool) "deleted record missing" true (got = None) )
+    to_delete ;
+  List.iter
+    (fun (k, v) ->
+      let got = String_map.find_opt k result_map in
+      Alcotest.(check bool)
+        "remaining records intact" true
+        (Option.value (Option.map (fun x -> Cid.equal v x) got) ~default:false) )
+    the_rest ;
   Lwt.return_ok ()
 
 let test_order_independent () =
@@ -805,8 +855,8 @@ let test_incremental_edge_cases () =
   in
   let%lwt mst = Mem_mst.add mst "com.example/key1" cid1 in
   let%lwt mst = Mem_mst.add mst "com.example/key1" cid2 in
-  let%lwt got = Mem_mst.get_cid mst "com.example/key1" in
-  ( match got with
+  let%lwt result_map = Mem_mst.build_map mst in
+  ( match String_map.find_opt "com.example/key1" result_map with
   | Some cid ->
       Alcotest.(check bool) "update replaces value" true (Cid.equal cid cid2)
   | None ->

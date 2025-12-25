@@ -2,6 +2,8 @@ open User_store.Types
 module Block_map = User_store.Block_map
 module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
+module Cached_store = Mist.Storage.Cache_blockstore (User_store)
+module Cached_mst = Mist.Mst.Make (Cached_store)
 module Mem_mst = Mist.Mst.Make (Mist.Storage.Memory_blockstore)
 module String_map = Lex.String_map
 module Tid = Mist.Tid
@@ -257,7 +259,10 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
          (Cid.to_string (Option.get swap_commit))
          (match t.commit with Some (c, _) -> Cid.to_string c | None -> "null") ) ;
   let%lwt block_map = Lwt.map ref (get_map t) in
-  let mst : Mst.t ref = ref (Mst.create t.db prev_commit.data) in
+  let cached_store = Cached_store.create t.db in
+  let mst : Cached_mst.t ref =
+    ref (Cached_mst.create cached_store prev_commit.data)
+  in
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
   let commit_ops : commit_evt_op list ref = ref [] in
   let added_leaves = ref Block_map.empty in
@@ -291,7 +296,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             added_leaves := Block_map.set cid block !added_leaves ;
             commit_ops :=
               !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
-            let%lwt new_mst = Mst.add !mst path cid in
+            let%lwt new_mst = Cached_mst.add !mst path cid in
             mst := new_mst ;
             let refs =
               Util.find_blob_refs value
@@ -359,7 +364,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             commit_ops :=
               !commit_ops
               @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
-            let%lwt new_mst = Mst.add !mst path new_cid in
+            let%lwt new_mst = Cached_mst.add !mst path new_cid in
             mst := new_mst ;
             let refs =
               Util.find_blob_refs value
@@ -411,7 +416,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             block_map := String_map.remove path !block_map ;
             commit_ops :=
               !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
-            let%lwt new_mst = Mst.delete !mst path in
+            let%lwt new_mst = Cached_mst.delete !mst path in
             mst := new_mst ;
             Lwt.return
               (Delete {type'= "com.atproto.repo.applyWrites#deleteResult"}) )
