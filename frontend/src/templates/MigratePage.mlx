@@ -9,7 +9,7 @@ type migration_step =
   | CreatingAccount
   | ImportingRepo
   | ImportingBlobs
-  | UpdatingIdentity
+  | EnterPlcToken
   | Activating
   | Complete
   | Error
@@ -20,7 +20,7 @@ let step_of_string = function
   | "creating_account" -> CreatingAccount
   | "importing_repo" -> ImportingRepo
   | "importing_blobs" -> ImportingBlobs
-  | "updating_identity" -> UpdatingIdentity
+  | "enter_plc_token" -> EnterPlcToken
   | "activating" -> Activating
   | "complete" -> Complete
   | "error" -> Error
@@ -32,7 +32,7 @@ let step_to_string = function
   | CreatingAccount -> "creating_account"
   | ImportingRepo -> "importing_repo"
   | ImportingBlobs -> "importing_blobs"
-  | UpdatingIdentity -> "updating_identity"
+  | EnterPlcToken -> "enter_plc_token"
   | Activating -> "activating"
   | Complete -> "complete"
   | Error -> "error"
@@ -43,7 +43,7 @@ let step_to_label = function
   | CreatingAccount -> "Creating Account"
   | ImportingRepo -> "Importing Repository"
   | ImportingBlobs -> "Importing Blobs"
-  | UpdatingIdentity -> "Updating Identity"
+  | EnterPlcToken -> "Confirm Identity"
   | Activating -> "Activating Account"
   | Complete -> "Migration Complete"
   | Error -> "Error"
@@ -54,7 +54,7 @@ let step_to_number = function
   | CreatingAccount -> 3
   | ImportingRepo -> 4
   | ImportingBlobs -> 5
-  | UpdatingIdentity -> 6
+  | EnterPlcToken -> 6
   | Activating -> 7
   | Complete -> 8
   | Error -> 0
@@ -136,12 +136,12 @@ let[@react.component] make
     (* Step content *)
     ( match current_step with
     | EnterCredentials ->
-        <>
+        (array [|
           <p className="w-full text-balance text-mist-100 mb-4">
             (string
                "Migrate your existing ATProto account to this PDS. You'll need \
                 your account credentials from your current PDS." )
-          </p>
+          </p>;
           <form className="w-full flex flex-col gap-y-3">
             <input type_="hidden" name="dream.csrf" value=csrf_token />
             <input type_="hidden" name="action" value="start_migration" />
@@ -179,7 +179,7 @@ let[@react.component] make
             <Button type_="submit" formMethod="post" className="mt-2">
               (string "start migration")
             </Button>
-          </form>
+          </form>;
           <div className="mt-4 pt-4 border-t border-mist-60/50">
             <span className="text-sm text-mist-100">
               (string "Don't have an account? ")
@@ -191,7 +191,7 @@ let[@react.component] make
               (string " instead.")
             </span>
           </div>
-        </>
+        |])
     | Authenticating | CreatingAccount | ImportingRepo ->
         <div className="flex flex-col items-center py-8">
           <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
@@ -203,26 +203,6 @@ let[@react.component] make
                | ImportingRepo -> "Importing your repository data..."
                | _ -> "Processing..." )
           </p>
-          (* Auto-submit to continue the process *)
-          <form className="hidden">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="continue" />
-            ( match did with
-            | Some d -> <input type_="hidden" name="did" value=d />
-            | None -> null )
-          </form>
-          <noscript>
-            <form className="mt-4">
-              <input type_="hidden" name="dream.csrf" value=csrf_token />
-              <input type_="hidden" name="action" value="continue" />
-              ( match did with
-              | Some d -> <input type_="hidden" name="did" value=d />
-              | None -> null )
-              <Button type_="submit" formMethod="post">
-                (string "continue")
-              </Button>
-            </form>
-          </noscript>
         </div>
     | ImportingBlobs ->
         <div className="py-4">
@@ -261,49 +241,51 @@ let[@react.component] make
             </Button>
           </form>
         </div>
-    | UpdatingIdentity ->
+    | EnterPlcToken ->
         <div className="py-4">
           <p className="text-mist-100 mb-4">
             (string
-               "Your account has been created and your data imported. Now you \
-                need to update your identity to point to this PDS." )
+               "Your account has been created and your data imported. To \
+                complete the migration, enter the confirmation code that was \
+                sent to your email." )
           </p>
-          <div className="bg-mist-60/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-medium text-mana-100 mb-2">
-              (string "Instructions")
-            </h3>
-            <ol className="text-sm text-mist-100 space-y-2 list-decimal list-inside">
-              <li>
-                (string
-                   "Check your email for a PLC operation signature request from \
-                    your old PDS" )
-              </li>
-              <li>(string "Approve the signature request")</li>
-              <li>(string "Click the button below to complete the migration")</li>
-            </ol>
-          </div>
+          <form className="w-full flex flex-col gap-y-3">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="submit_plc_token" />
+            <Input
+              name="plc_token"
+              type_="text"
+              label="Confirmation Code"
+              placeholder="plc-xxxxxxxx"
+              required=true
+              showIndicator=false
+            />
+            <p className="text-xs text-mist-80 -mt-1">
+              (string
+                 "This code was sent to the email address associated with your \
+                  account on your old PDS." )
+            </p>
+            <Button type_="submit" formMethod="post" className="mt-2">
+              (string "complete migration")
+            </Button>
+          </form>
+          <form className="mt-3">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="resend_plc_token" />
+            <button
+              type_="submit"
+              formMethod="post"
+              className="text-sm text-mist-100 underline hover:text-mana-100">
+              (string "Resend confirmation code")
+            </button>
+          </form>
           ( match did with
           | Some d ->
-              <p className="text-xs text-mist-80 mb-4">
+              <p className="text-xs text-mist-80 mt-4">
                 (string "Your DID: ")
                 <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
               </p>
           | None -> null )
-          <form className="flex gap-3">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="check_identity" />
-            ( match did with
-            | Some d -> <input type_="hidden" name="did" value=d />
-            | None -> null )
-            <Button type_="submit" formMethod="post">
-              (string "check identity status")
-            </Button>
-          </form>
-          <p className="text-xs text-mist-80 mt-3">
-            (string
-               "If you haven't received an email, you may need to request a PLC \
-                operation signature from your old PDS manually." )
-          </p>
         </div>
     | Activating ->
         <div className="flex flex-col items-center py-8">
