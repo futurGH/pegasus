@@ -5,6 +5,7 @@ open React
 
 type migration_step =
   | EnterCredentials
+  | ResumeAvailable
   | Authenticating
   | CreatingAccount
   | ImportingRepo
@@ -16,6 +17,7 @@ type migration_step =
 
 let step_of_string = function
   | "enter_credentials" -> EnterCredentials
+  | "resume_available" -> ResumeAvailable
   | "authenticating" -> Authenticating
   | "creating_account" -> CreatingAccount
   | "importing_repo" -> ImportingRepo
@@ -28,6 +30,7 @@ let step_of_string = function
 
 let step_to_string = function
   | EnterCredentials -> "enter_credentials"
+  | ResumeAvailable -> "resume_available"
   | Authenticating -> "authenticating"
   | CreatingAccount -> "creating_account"
   | ImportingRepo -> "importing_repo"
@@ -39,6 +42,7 @@ let step_to_string = function
 
 let step_to_label = function
   | EnterCredentials -> "Enter Credentials"
+  | ResumeAvailable -> "Resume Migration"
   | Authenticating -> "Authenticating"
   | CreatingAccount -> "Creating Account"
   | ImportingRepo -> "Importing Repository"
@@ -50,6 +54,7 @@ let step_to_label = function
 
 let step_to_number = function
   | EnterCredentials -> 1
+  | ResumeAvailable -> 1
   | Authenticating -> 2
   | CreatingAccount -> 3
   | ImportingRepo -> 4
@@ -96,7 +101,7 @@ let[@react.component] make
       (string "migrate account")
     </h1>
     (* Progress indicator *)
-    ( if current_step <> EnterCredentials && current_step <> Error && current_step <> Complete then
+    ( if current_step <> EnterCredentials && current_step <> ResumeAvailable && current_step <> Error && current_step <> Complete then
         <div className="mb-6">
           <div className="flex items-center gap-2 text-sm text-mist-100 mb-2">
             <span>(string ("Step " ^ string_of_int step_number ^ " of 7: "))</span>
@@ -192,6 +197,65 @@ let[@react.component] make
             </span>
           </div>
         |])
+    | ResumeAvailable ->
+        <div className="py-4">
+          <div className="bg-mana-100/10 border border-mana-100/30 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <CheckmarkIcon className="w-5 h-5 text-mana-100 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="font-medium text-mana-100 mb-1">
+                  (string "Previous migration found")
+                </h3>
+                <p className="text-sm text-mist-100">
+                  (string
+                     "An incomplete migration exists for this account. Enter \
+                      your credentials again to continue where you left off." )
+                </p>
+              </div>
+            </div>
+          </div>
+          ( match did with
+          | Some d ->
+              <p className="text-xs text-mist-80 mb-4">
+                (string "Account DID: ")
+                <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
+              </p>
+          | None -> null )
+          <form className="w-full flex flex-col gap-y-3">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input type_="hidden" name="action" value="resume_migration" />
+            <Input
+              name="identifier"
+              type_="text"
+              label="Handle or DID"
+              placeholder="you.bsky.social or did:plc:..."
+              required=true
+              showIndicator=false
+            />
+            <Input
+              name="password"
+              type_="password"
+              label="Password"
+              required=true
+              showIndicator=false
+            />
+            <p className="text-xs text-mist-80 -mt-1">
+              (string
+                 "Enter your credentials from your original PDS to resume the \
+                  migration." )
+            </p>
+            <Button type_="submit" formMethod="post" className="mt-2">
+              (string "resume migration")
+            </Button>
+          </form>
+          <div className="mt-4 pt-4 border-t border-mist-60/50">
+            <a
+              href="/account/migrate"
+              className="text-sm text-mist-100 underline hover:text-mana-100">
+              (string "Start a new migration instead")
+            </a>
+          </div>
+        </div>
     | Authenticating | CreatingAccount | ImportingRepo ->
         <div className="flex flex-col items-center py-8">
           <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
@@ -342,12 +406,32 @@ let[@react.component] make
         <div className="py-4">
           <p className="text-mist-100 mb-4">
             (string
-               "Something went wrong during migration. You can try again or \
-                contact the PDS administrator for help." )
+               "Something went wrong during migration. Don't worry - your \
+                data on your original PDS is safe." )
           </p>
+          <div className="bg-mist-60/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-medium text-mana-100 mb-2">
+              (string "What you can do:")
+            </h3>
+            <ul className="text-sm text-mist-100 space-y-1 list-disc list-inside">
+              <li>
+                (string
+                   "Try again - if your migration was partially completed, \
+                    you'll be able to resume" )
+              </li>
+              <li>
+                (string
+                   "Check your internet connection and try again later" )
+              </li>
+              <li>
+                (string
+                   "Contact the PDS administrator if the problem persists" )
+              </li>
+            </ul>
+          </div>
           <div className="flex gap-3">
             <a href="/account/migrate">
-              <Button>(string "start over")</Button>
+              <Button>(string "try again")</Button>
             </a>
             <a href="/account/login">
               <Button kind=`Secondary>(string "back to login")</Button>

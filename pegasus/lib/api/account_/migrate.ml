@@ -487,8 +487,15 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
   | Ok () -> (
     (* Check if DID already exists *)
     match%lwt Data_store.get_actor_by_identifier did db with
+    | Some existing when existing.deactivated_at <> None ->
+        (* Account exists but is deactivated - this is a resumable migration *)
+        Lwt.return_error
+          "RESUMABLE: An incomplete migration exists for this account. Use \
+           'resume migration' to continue."
     | Some _ ->
-        Lwt.return_error "An account with this DID already exists on this PDS"
+        Lwt.return_error
+          "An account with this DID already exists and is active on this PDS. \
+           If you previously migrated here, try logging in instead."
     | None -> (
       (* Check if handle is available (may need different handle) *)
       match%lwt Data_store.get_actor_by_identifier handle db with
@@ -636,6 +643,36 @@ let activate_account did db =
     Sequencer.sequence_account db ~did ~active:true ~status:`Active ()
   in
   Lwt.return_unit
+
+(* Check what state an existing deactivated account is in for resume *)
+type resume_state =
+  | NeedsRepoImport  (* Account exists but no repo *)
+  | NeedsBlobImport  (* Repo exists, may need blobs *)
+  | NeedsPlcUpdate   (* Data imported, needs PLC update *)
+  | NeedsActivation  (* PLC points here, just needs activation *)
+  | AlreadyActive    (* Account is already active *)
+
+let check_resume_state ~did db =
+  match%lwt Data_store.get_actor_by_identifier did db with
+  | None ->
+      Lwt.return_error "Account not found"
+  | Some actor when actor.deactivated_at = None ->
+      Lwt.return_ok AlreadyActive
+  | Some _actor ->
+      (* Account is deactivated - check if identity already points here *)
+      match%lwt check_identity_updated did with
+      | Ok true ->
+          (* Identity points here, just needs activation *)
+          Lwt.return_ok NeedsActivation
+      | _ ->
+          (* Check if repo exists *)
+          let repo_path = Util.Constants.user_db_filepath did in
+          if Sys.file_exists repo_path then
+            (* Repo exists, assume we need PLC update (blobs are optional) *)
+            Lwt.return_ok NeedsPlcUpdate
+          else
+            (* No repo, need to start from repo import *)
+            Lwt.return_ok NeedsRepoImport
 
 (* GET handler - display the migrate page *)
 let get_handler =
@@ -839,6 +876,20 @@ let post_handler =
                           create_migrated_account ~email ~handle ~password ~did
                             ~service_auth_token ?invite_code ctx.db
                         with
+                        | Error e when String.starts_with ~prefix:"RESUMABLE:" e ->
+                            (* Account exists from previous attempt - show resume option *)
+                            Util.render_html ~title:"Migrate Account"
+                              (module Frontend.MigratePage)
+                              ~props:
+                                (make_props ~step:"resume_available"
+                                   ~did:(Some did) ~handle:(Some handle)
+                                   ~old_pds:(Some old_pds)
+                                   ~message:
+                                     (Some
+                                        "A previous migration attempt was found \
+                                         for this account. You can resume where \
+                                         you left off." )
+                                   () )
                         | Error e ->
                             render_error e
                         | Ok _signing_key_did -> (
@@ -1158,6 +1209,172 @@ let post_handler =
                          ~message:
                            (Some "Confirmation code resent! Check your email.")
                          () ) ) )
+          | "resume_migration" -> (
+              (* Resume a previously started migration *)
+              let identifier =
+                List.assoc_opt "identifier" fields
+                |> Option.value ~default:"" |> String.trim
+              in
+              let password =
+                List.assoc_opt "password" fields |> Option.value ~default:""
+              in
+              if String.length identifier = 0 then
+                render_error ~step:"resume_available"
+                  "Please enter your handle or DID"
+              else if String.length password = 0 then
+                render_error ~step:"resume_available"
+                  "Please enter your password"
+              else
+                match%lwt resolve_identity identifier with
+                | Error e ->
+                    render_error ~step:"resume_available" e
+                | Ok (did, handle, old_pds) -> (
+                  match%lwt
+                    authenticate_old_pds ~pds_endpoint:old_pds ~identifier
+                      ~password
+                  with
+                  | Error e ->
+                      render_error ~step:"resume_available" e
+                  | Ok session -> (
+                    (* Check what state the existing account is in *)
+                    match%lwt check_resume_state ~did ctx.db with
+                    | Error e ->
+                        render_error e
+                    | Ok AlreadyActive ->
+                        (* Account is already active - just log them in *)
+                        let%lwt () = Session.log_in_did ctx.req did in
+                        Util.render_html ~title:"Migrate Account"
+                          (module Frontend.MigratePage)
+                          ~props:
+                            (make_props ~step:"complete" ~did:(Some did)
+                               ~handle:(Some handle)
+                               ~message:
+                                 (Some
+                                    "Your account is already active! You have \
+                                     been logged in." )
+                               () )
+                    | Ok NeedsActivation ->
+                        (* Identity already points here, just activate *)
+                        let%lwt () = activate_account did ctx.db in
+                        let%lwt () = Session.log_in_did ctx.req did in
+                        Util.render_html ~title:"Migrate Account"
+                          (module Frontend.MigratePage)
+                          ~props:
+                            (make_props ~step:"complete" ~did:(Some did)
+                               ~handle:(Some handle)
+                               ~message:
+                                 (Some
+                                    "Your account has been activated! Your \
+                                     identity was already pointing to this PDS." )
+                               () )
+                    | Ok NeedsPlcUpdate ->
+                        (* Data is imported, need PLC update *)
+                        transition_to_plc_token_step ~did ~handle ~old_pds
+                          ~access_jwt:session.access_jwt ~blobs_imported:0
+                          ~blobs_total:0 ~blobs_failed:0
+                    | Ok NeedsRepoImport | Ok NeedsBlobImport -> (
+                      (* Need to re-import data *)
+                      match%lwt
+                        fetch_repo ~pds_endpoint:old_pds
+                          ~access_jwt:session.access_jwt ~did
+                      with
+                      | Error e ->
+                          render_error ("Failed to fetch repository: " ^ e)
+                      | Ok car_data -> (
+                        match%lwt import_repo ~did ~car_data ctx.db with
+                        | Error e ->
+                            render_error e
+                        | Ok () -> (
+                          match%lwt
+                            list_blobs ~pds_endpoint:old_pds
+                              ~access_jwt:session.access_jwt ~did ()
+                          with
+                          | Error _ ->
+                              let%lwt prefs =
+                                fetch_preferences ~pds_endpoint:old_pds
+                                  ~access_jwt:session.access_jwt
+                              in
+                              let%lwt () =
+                                match prefs with
+                                | Ok p when List.length p > 0 ->
+                                    import_preferences ~did ~preferences:p
+                                      ctx.db
+                                | _ ->
+                                    Lwt.return_unit
+                              in
+                              transition_to_plc_token_step ~did ~handle ~old_pds
+                                ~access_jwt:session.access_jwt ~blobs_imported:0
+                                ~blobs_total:0 ~blobs_failed:0
+                          | Ok blob_list ->
+                              let total = List.length blob_list.cids in
+                              if total = 0 then (
+                                let%lwt prefs =
+                                  fetch_preferences ~pds_endpoint:old_pds
+                                    ~access_jwt:session.access_jwt
+                                in
+                                let%lwt () =
+                                  match prefs with
+                                  | Ok p when List.length p > 0 ->
+                                      import_preferences ~did ~preferences:p
+                                        ctx.db
+                                  | _ ->
+                                      Lwt.return_unit
+                                in
+                                transition_to_plc_token_step ~did ~handle
+                                  ~old_pds ~access_jwt:session.access_jwt
+                                  ~blobs_imported:0 ~blobs_total:0
+                                  ~blobs_failed:0 )
+                              else
+                                let batch =
+                                  List.filteri (fun i _ -> i < 50) blob_list.cids
+                                in
+                                let%lwt imported, failed =
+                                  import_blobs_batch ~pds_endpoint:old_pds
+                                    ~access_jwt:session.access_jwt ~did
+                                    ~cids:batch
+                                in
+                                let cursor =
+                                  Option.value ~default:"" blob_list.cursor
+                                in
+                                let%lwt () =
+                                  set_migration_state ctx.req
+                                    { did
+                                    ; handle
+                                    ; old_pds
+                                    ; access_jwt= session.access_jwt
+                                    ; blobs_imported= imported
+                                    ; blobs_total= total
+                                    ; blobs_failed= failed
+                                    ; blobs_cursor= cursor
+                                    ; plc_requested= false }
+                                in
+                                if imported + failed >= total then (
+                                  let%lwt prefs =
+                                    fetch_preferences ~pds_endpoint:old_pds
+                                      ~access_jwt:session.access_jwt
+                                  in
+                                  let%lwt () =
+                                    match prefs with
+                                    | Ok p when List.length p > 0 ->
+                                        import_preferences ~did ~preferences:p
+                                          ctx.db
+                                    | _ ->
+                                        Lwt.return_unit
+                                  in
+                                  transition_to_plc_token_step ~did ~handle
+                                    ~old_pds ~access_jwt:session.access_jwt
+                                    ~blobs_imported:imported ~blobs_total:total
+                                    ~blobs_failed:failed )
+                                else
+                                  Util.render_html ~title:"Migrate Account"
+                                    (module Frontend.MigratePage)
+                                    ~props:
+                                      (make_props ~step:"importing_blobs"
+                                         ~did:(Some did) ~handle:(Some handle)
+                                         ~old_pds:(Some old_pds)
+                                         ~blobs_imported:imported
+                                         ~blobs_total:total ~blobs_failed:failed
+                                         () ) ) ) ) ) ) )
           | _ ->
               render_error "Invalid action" )
       | _ ->
