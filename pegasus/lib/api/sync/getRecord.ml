@@ -10,7 +10,7 @@ let handler =
       in
       let path = collection ^ "/" ^ rkey in
       let%lwt repo =
-        Repository.load did ~ensure_active:true ~write:false ~ds:ctx.db
+        Repository.load did ~ensure_active:true ~ds:ctx.db
       in
       match%lwt Repository.get_record repo path with
       | None ->

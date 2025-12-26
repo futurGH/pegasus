@@ -318,14 +318,25 @@ end
 
 type t = Util.caqti_pool
 
-let connect ?create ?write () : t Lwt.t =
-  if create = Some true then
-    Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
-  let%lwt db =
-    Util.connect_sqlite ?create ?write Util.Constants.pegasus_db_location
-  in
-  let%lwt () = Migrations.run_migrations Data_store db in
-  Lwt.return db
+let pool : t option ref = ref None
+
+let pool_mutex = Lwt_mutex.create ()
+
+let connect ?create () : t Lwt.t =
+  Lwt_mutex.with_lock pool_mutex (fun () ->
+      match !pool with
+      | Some pool ->
+          Lwt.return pool
+      | None ->
+          if create = Some true then
+            Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
+          let%lwt db =
+            Util.connect_sqlite ?create ~write:true
+              Util.Constants.pegasus_db_location
+          in
+          let%lwt () = Migrations.run_migrations Data_store db in
+          pool := Some db ;
+          Lwt.return db )
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in

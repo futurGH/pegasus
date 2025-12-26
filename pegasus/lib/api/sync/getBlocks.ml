@@ -5,7 +5,7 @@ let handler =
   Xrpc.handler (fun ctx ->
       let {did; cids} : query = Xrpc.parse_query ctx.req query_of_yojson in
       let%lwt {db; commit; _} =
-        Repository.load did ~ensure_active:true ~write:false ~ds:ctx.db
+        Repository.load did ~ensure_active:true ~ds:ctx.db
       in
       let commit_cid, commit_signed = Option.get commit in
       let commit_block =

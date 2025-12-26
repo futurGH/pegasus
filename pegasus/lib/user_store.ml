@@ -310,12 +310,24 @@ end
 
 type t = {did: string; db: Util.caqti_pool}
 
-let connect ?create ?write did : t Lwt.t =
-  let%lwt db =
-    Util.connect_sqlite ?create ?write (Util.Constants.user_db_location did)
-  in
-  let%lwt () = Migrations.run_migrations User_store db in
-  Lwt.return {did; db}
+let pool_cache : (string, t) Hashtbl.t = Hashtbl.create 64
+
+let pool_cache_mutex = Lwt_mutex.create ()
+
+let connect ?create did : t Lwt.t =
+  Lwt_mutex.with_lock pool_cache_mutex (fun () ->
+      match Hashtbl.find_opt pool_cache did with
+      | Some cached ->
+          Lwt.return cached
+      | None ->
+          let%lwt db =
+            Util.connect_sqlite ?create ~write:true
+              (Util.Constants.user_db_location did)
+          in
+          let%lwt () = Migrations.run_migrations User_store db in
+          let t = {did; db} in
+          Hashtbl.replace pool_cache did t ;
+          Lwt.return t )
 
 (* mst blocks; implements Writable_blockstore *)
 

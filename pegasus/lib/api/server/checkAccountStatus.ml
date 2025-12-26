@@ -18,7 +18,7 @@ let handler =
           Errors.internal_error ~msg:"actor not found" ()
       | Some actor -> (
           let%lwt {db= us; commit; _} =
-            Repository.load ~write:false ~ds:db did
+            Repository.load ~ds:db did
           in
           let%lwt cid, commit =
             match commit with

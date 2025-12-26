@@ -183,7 +183,7 @@ let post_handler =
                                     ~perm:0o644
                                 in
                                 let%lwt repo =
-                                  Repository.load ~write:true ~create:true
+                                  Repository.load ~create:true
                                     ~ds:ctx.db new_did
                                 in
                                 let%lwt _ =

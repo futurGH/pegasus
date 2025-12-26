@@ -120,7 +120,7 @@ let create_account ~email ~handle ~password ?invite_code ?did ?recovery_key db =
                       ~perm:0o644
                   in
                   let%lwt repo =
-                    Repository.load ~write:true ~create:true ~ds:db did
+                    Repository.load ~create:true ~ds:db did
                   in
                   let%lwt _ = Repository.put_initial_commit repo in
                   let%lwt _ = Sequencer.sequence_identity db ~did ~handle () in

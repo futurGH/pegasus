@@ -22,7 +22,7 @@ let handler =
             1000
       in
       let%lwt {db; _} =
-        Repository.load did ~ensure_active:true ~write:false ~ds:ctx.db
+        Repository.load did ~ensure_active:true ~ds:ctx.db
       in
       let%lwt cids = User_store.list_blobs db ~limit ~cursor ?since in
       let cids = List.map Cid.to_string cids in

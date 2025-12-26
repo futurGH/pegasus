@@ -183,23 +183,24 @@ let caqti_result_exn = function
   | Error caqti_err ->
       Error (Caqti_error.Exn caqti_err)
 
-let _init_connection conn =
-  match%lwt
-    [%rapper
-      execute
-        {sql|
-          PRAGMA journal_mode=WAL;
-          PRAGMA foreign_keys=ON;
-          PRAGMA synchronous=NORMAL;
-          PRAGMA busy_timeout=5000;
-        |sql}
-        syntax_off]
-      () conn
-  with
-  | Ok conn ->
-      Lwt.return conn
-  | Error e ->
-      raise (Caqti_error.Exn e)
+let _init_connection (module Db : Rapper_helper.CONNECTION) :
+    (unit, Caqti_error.t) Lwt_result.t =
+  let open Lwt_result.Syntax in
+  let open Caqti_request.Infix in
+  let open Caqti_type in
+  let* _ =
+    Db.find (((unit ->! string) ~oneshot:true) "PRAGMA journal_mode=WAL") ()
+  in
+  let* _ =
+    Db.exec (((unit ->. unit) ~oneshot:true) "PRAGMA foreign_keys=ON") ()
+  in
+  let* _ =
+    Db.exec (((unit ->. unit) ~oneshot:true) "PRAGMA synchronous=NORMAL") ()
+  in
+  let* _ =
+    Db.find (((unit ->! int) ~oneshot:true) "PRAGMA busy_timeout=5000") ()
+  in
+  Lwt.return_ok ()
 
 (* creates an sqlite pool *)
 let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
@@ -209,9 +210,7 @@ let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
   in
   let pool_config = Caqti_pool_config.create ~max_size:16 ~max_idle_size:4 () in
   match
-    Caqti_lwt_unix.connect_pool ~pool_config
-      ~post_connect:(fun conn -> Lwt_result.ok @@ _init_connection conn)
-      uri
+    Caqti_lwt_unix.connect_pool ~pool_config ~post_connect:_init_connection uri
   with
   | Ok pool ->
       Lwt.return pool
@@ -221,8 +220,11 @@ let connect_sqlite ?(create = false) ?(write = true) db_uri : caqti_pool Lwt.t =
 let with_connection db_uri f =
   match%lwt
     Caqti_lwt_unix.with_connection db_uri (fun conn ->
-        let%lwt _ = _init_connection conn in
-        f conn )
+        match%lwt _init_connection conn with
+        | Ok () ->
+            f conn
+        | Error e ->
+            Lwt.return_error e )
   with
   | Ok result ->
       Lwt.return result

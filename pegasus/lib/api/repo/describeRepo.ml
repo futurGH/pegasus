@@ -25,7 +25,7 @@ let handler =
           "at://%s"
           (fun h -> h)
       in
-      let%lwt repo = Repository.load ~write:false did in
+      let%lwt repo = Repository.load did in
       let%lwt collections = Repository.list_collections repo in
       Dream.json @@ Yojson.Safe.to_string
       @@ response_to_yojson
