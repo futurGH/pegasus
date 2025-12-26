@@ -212,10 +212,15 @@ let sign_plc_operation ~pds_endpoint ~access_jwt ~token
   let body =
     `Assoc
       [ ("token", `String token)
-      ; ("rotationKeys", `List (List.map (fun s -> `String s) credentials.rotation_keys))
+      ; ( "rotationKeys"
+        , `List (List.map (fun s -> `String s) credentials.rotation_keys) )
       ; ( "verificationMethods"
-        , `Assoc (List.map (fun (k, v) -> (k, `String v)) credentials.verification_methods) )
-      ; ("alsoKnownAs", `List (List.map (fun s -> `String s) credentials.also_known_as))
+        , `Assoc
+            (List.map
+               (fun (k, v) -> (k, `String v))
+               credentials.verification_methods ) )
+      ; ( "alsoKnownAs"
+        , `List (List.map (fun s -> `String s) credentials.also_known_as) )
       ; ("services", Plc.service_map_to_yojson credentials.services) ]
   in
   try%lwt
@@ -228,7 +233,8 @@ let sign_plc_operation ~pds_endpoint ~access_jwt ~token
     | `OK -> (
         let%lwt body_str = Body.to_string body in
         match
-          sign_plc_operation_response_of_yojson (Yojson.Safe.from_string body_str)
+          sign_plc_operation_response_of_yojson
+            (Yojson.Safe.from_string body_str)
         with
         | Ok resp ->
             Lwt.return_ok resp.operation
@@ -249,10 +255,11 @@ let get_recommended_did_credentials ~did ~handle db =
       Lwt.return_error "Actor not found"
   | Some actor ->
       let signing_did_key =
-        actor.signing_key |> Kleidos.parse_multikey_str
-        |> Kleidos.derive_pubkey |> Kleidos.pubkey_to_did_key
+        actor.signing_key |> Kleidos.parse_multikey_str |> Kleidos.derive_pubkey
+        |> Kleidos.pubkey_to_did_key
       in
-      Lwt.return_ok (Plc.create_did_credentials Env.rotation_key signing_did_key handle)
+      Lwt.return_ok
+        (Plc.create_did_credentials Env.rotation_key signing_did_key handle)
 
 (* Submit signed PLC operation to PLC directory *)
 let submit_plc_operation ~did ~(operation : Plc.signed_operation) db =
@@ -263,10 +270,10 @@ let submit_plc_operation ~did ~(operation : Plc.signed_operation) db =
   match operation with
   | Plc.Tombstone _ ->
       Lwt.return_error "Cannot submit tombstone operation during migration"
-  | Plc.Operation op ->
+  | Plc.Operation op -> (
       if not (List.mem pds_pubkey op.rotation_keys) then
         Lwt.return_error "Operation must include this PDS's rotation key"
-      else (
+      else
         match List.assoc_opt "atproto_pds" op.services with
         | Some {endpoint; _} when endpoint <> Env.host_endpoint ->
             Lwt.return_error "Operation must point to this PDS"
@@ -486,7 +493,9 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
       Lwt.return_error e
   | Ok () -> (
     (* Check if DID already exists *)
-    match%lwt Data_store.get_actor_by_identifier did db with
+    match%lwt
+      Data_store.get_actor_by_identifier did db
+    with
     | Some existing when existing.deactivated_at <> None ->
         (* Account exists but is deactivated - this is a resumable migration *)
         Lwt.return_error
@@ -498,7 +507,9 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
            If you previously migrated here, try logging in instead."
     | None -> (
       (* Check if handle is available (may need different handle) *)
-      match%lwt Data_store.get_actor_by_identifier handle db with
+      match%lwt
+        Data_store.get_actor_by_identifier handle db
+      with
       | Some _ ->
           Lwt.return_error
             ( "The handle @" ^ handle
@@ -506,7 +517,9 @@ let create_migrated_account ~email ~handle ~password ~did ~service_auth_token
                handle." )
       | None -> (
         (* Check if email is available *)
-        match%lwt Data_store.get_actor_by_identifier email db with
+        match%lwt
+          Data_store.get_actor_by_identifier email db
+        with
         | Some _ ->
             Lwt.return_error "An account with this email already exists"
         | None -> (
@@ -566,9 +579,9 @@ let bytes_to_car_stream (data : bytes) : Car.stream =
  fun () -> Lwt.return (Lwt_seq.Cons (data, fun () -> Lwt.return Lwt_seq.Nil))
 
 (* Import repo CAR data *)
-let import_repo ~did ~car_data db =
+let import_repo ~did ~car_data =
   try%lwt
-    let%lwt repo = Repository.load ~write:true ~create:true ~ds:db did in
+    let%lwt repo = Repository.load ~create:true did in
     let stream = bytes_to_car_stream car_data in
     match%lwt Repository.import_car repo stream with
     | Ok _ ->
@@ -580,7 +593,7 @@ let import_repo ~did ~car_data db =
 
 (* Import blobs in batches *)
 let import_blobs_batch ~pds_endpoint ~access_jwt ~did ~cids =
-  let%lwt user_db = User_store.connect ~create:true ~write:true did in
+  let%lwt user_db = User_store.connect ~create:true did in
   let%lwt results =
     Lwt_list.map_p
       (fun cid_str ->
@@ -646,11 +659,11 @@ let activate_account did db =
 
 (* Check what state an existing deactivated account is in for resume *)
 type resume_state =
-  | NeedsRepoImport  (* Account exists but no repo *)
-  | NeedsBlobImport  (* Repo exists, may need blobs *)
-  | NeedsPlcUpdate   (* Data imported, needs PLC update *)
-  | NeedsActivation  (* PLC points here, just needs activation *)
-  | AlreadyActive    (* Account is already active *)
+  | NeedsRepoImport (* Account exists but no repo *)
+  | NeedsBlobImport (* Repo exists, may need blobs *)
+  | NeedsPlcUpdate (* Data imported, needs PLC update *)
+  | NeedsActivation (* PLC points here, just needs activation *)
+  | AlreadyActive (* Account is already active *)
 
 let check_resume_state ~did db =
   match%lwt Data_store.get_actor_by_identifier did db with
@@ -658,21 +671,23 @@ let check_resume_state ~did db =
       Lwt.return_error "Account not found"
   | Some actor when actor.deactivated_at = None ->
       Lwt.return_ok AlreadyActive
-  | Some _actor ->
-      (* Account is deactivated - check if identity already points here *)
-      match%lwt check_identity_updated did with
-      | Ok true ->
-          (* Identity points here, just needs activation *)
-          Lwt.return_ok NeedsActivation
-      | _ ->
-          (* Check if repo exists *)
-          let repo_path = Util.Constants.user_db_filepath did in
-          if Sys.file_exists repo_path then
-            (* Repo exists, assume we need PLC update (blobs are optional) *)
-            Lwt.return_ok NeedsPlcUpdate
-          else
-            (* No repo, need to start from repo import *)
-            Lwt.return_ok NeedsRepoImport
+  | Some _actor -> (
+    (* Account is deactivated - check if identity already points here *)
+    match%lwt
+      check_identity_updated did
+    with
+    | Ok true ->
+        (* Identity points here, just needs activation *)
+        Lwt.return_ok NeedsActivation
+    | _ ->
+        (* Check if repo exists *)
+        let repo_path = Util.Constants.user_db_filepath did in
+        if Sys.file_exists repo_path then
+          (* Repo exists, assume we need PLC update (blobs are optional) *)
+          Lwt.return_ok NeedsPlcUpdate
+        else
+          (* No repo, need to start from repo import *)
+          Lwt.return_ok NeedsRepoImport )
 
 (* GET handler - display the migrate page *)
 let get_handler =
@@ -754,7 +769,7 @@ let post_handler =
           =
         Util.render_html ~status:`Bad_Request ~title:"Migrate Account"
           (module Frontend.MigratePage)
-          ~props:(make_props ~step ?did ?handle ?old_pds ~error () )
+          ~props:(make_props ~step ?did ?handle ?old_pds ~error ())
       in
       (* Helper to transition to PLC token step after data import *)
       let transition_to_plc_token_step ~did ~handle ~old_pds ~access_jwt
@@ -782,19 +797,16 @@ let post_handler =
             Util.render_html ~title:"Migrate Account"
               (module Frontend.MigratePage)
               ~props:
-                (make_props ~step:"enter_plc_token" ~did:(Some did)
-                   ~handle:(Some handle) ~old_pds:(Some old_pds)
+                (make_props ~step:"enter_plc_token" ~did ~handle ~old_pds
                    ~blobs_imported ~blobs_total ~blobs_failed
                    ~message:
-                     (Some
-                        "Data import complete! Check your email for a PLC \
-                         confirmation code." )
+                     "Data import complete! Check your email for a PLC \
+                      confirmation code."
                    ~error:
-                     (Some
-                        ( "Note: Could not automatically request PLC \
-                           signature: " ^ e
-                        ^ ". You may need to request it manually from your \
-                           old PDS." ) )
+                     ( "Note: Could not automatically request PLC signature: "
+                     ^ e
+                     ^ ". You may need to request it manually from your old \
+                        PDS." )
                    () )
         | Ok () ->
             let%lwt () =
@@ -812,13 +824,11 @@ let post_handler =
             Util.render_html ~title:"Migrate Account"
               (module Frontend.MigratePage)
               ~props:
-                (make_props ~step:"enter_plc_token" ~did:(Some did)
-                   ~handle:(Some handle) ~old_pds:(Some old_pds)
+                (make_props ~step:"enter_plc_token" ~did ~handle ~old_pds
                    ~blobs_imported ~blobs_total ~blobs_failed
                    ~message:
-                     (Some
-                        "Data import complete! Check your email for a PLC \
-                         confirmation code." )
+                     "Data import complete! Check your email for a PLC \
+                      confirmation code."
                    () )
       in
       match%lwt Dream.form ctx.req with
@@ -876,19 +886,18 @@ let post_handler =
                           create_migrated_account ~email ~handle ~password ~did
                             ~service_auth_token ?invite_code ctx.db
                         with
-                        | Error e when String.starts_with ~prefix:"RESUMABLE:" e ->
+                        | Error e when String.starts_with ~prefix:"RESUMABLE:" e
+                          ->
                             (* Account exists from previous attempt - show resume option *)
                             Util.render_html ~title:"Migrate Account"
                               (module Frontend.MigratePage)
                               ~props:
-                                (make_props ~step:"resume_available"
-                                   ~did:(Some did) ~handle:(Some handle)
-                                   ~old_pds:(Some old_pds)
+                                (make_props ~step:"resume_available" ~did
+                                   ~handle ~old_pds
                                    ~message:
-                                     (Some
-                                        "A previous migration attempt was found \
-                                         for this account. You can resume where \
-                                         you left off." )
+                                     "A previous migration attempt was found \
+                                      for this account. You can resume where \
+                                      you left off."
                                    () )
                         | Error e ->
                             render_error e
@@ -901,7 +910,7 @@ let post_handler =
                           | Error e ->
                               render_error ("Failed to fetch repository: " ^ e)
                           | Ok car_data -> (
-                            match%lwt import_repo ~did ~car_data ctx.db with
+                            match%lwt import_repo ~did ~car_data with
                             | Error e ->
                                 render_error e
                             | Ok () -> (
@@ -993,16 +1002,14 @@ let post_handler =
                                       in
                                       transition_to_plc_token_step ~did ~handle
                                         ~old_pds ~access_jwt:session.access_jwt
-                                        ~blobs_imported:imported ~blobs_total:total
-                                        ~blobs_failed:failed
+                                        ~blobs_imported:imported
+                                        ~blobs_total:total ~blobs_failed:failed
                                     else
                                       Util.render_html ~title:"Migrate Account"
                                         (module Frontend.MigratePage)
                                         ~props:
                                           (make_props ~step:"importing_blobs"
-                                             ~did:(Some did)
-                                             ~handle:(Some handle)
-                                             ~old_pds:(Some old_pds)
+                                             ~did ~handle ~old_pds
                                              ~blobs_imported:imported
                                              ~blobs_total:total
                                              ~blobs_failed:failed () ) ) ) ) ) )
@@ -1111,9 +1118,8 @@ let post_handler =
                         Util.render_html ~title:"Migrate Account"
                           (module Frontend.MigratePage)
                           ~props:
-                            (make_props ~step:"importing_blobs"
-                               ~did:(Some state.did) ~handle:(Some state.handle)
-                               ~old_pds:(Some state.old_pds)
+                            (make_props ~step:"importing_blobs" ~did:state.did
+                               ~handle:state.handle ~old_pds:state.old_pds
                                ~blobs_imported:new_imported
                                ~blobs_total:state.blobs_total
                                ~blobs_failed:new_failed () ) ) )
@@ -1121,24 +1127,24 @@ let post_handler =
             match get_migration_state ctx.req with
             | None ->
                 render_error "Migration state not found. Please start over."
-            | Some state ->
+            | Some state -> (
                 let plc_token =
                   List.assoc_opt "plc_token" fields
                   |> Option.value ~default:"" |> String.trim
                 in
                 if String.length plc_token = 0 then
-                  render_error ~step:"enter_plc_token" ~did:(Some state.did)
-                    ~handle:(Some state.handle) ~old_pds:(Some state.old_pds)
+                  render_error ~step:"enter_plc_token" ~did:state.did
+                    ~handle:state.handle ~old_pds:state.old_pds
                     "Please enter the PLC token from your email"
-                else (
+                else
                   (* Get recommended credentials for this PDS *)
                   match%lwt
                     get_recommended_did_credentials ~did:state.did
                       ~handle:state.handle ctx.db
                   with
                   | Error e ->
-                      render_error ~step:"enter_plc_token" ~did:(Some state.did)
-                        ~handle:(Some state.handle) ~old_pds:(Some state.old_pds)
+                      render_error ~step:"enter_plc_token" ~did:state.did
+                        ~handle:state.handle ~old_pds:state.old_pds
                         ("Failed to get credentials: " ^ e)
                   | Ok credentials -> (
                     (* Sign PLC operation on old PDS *)
@@ -1148,9 +1154,8 @@ let post_handler =
                         ~credentials
                     with
                     | Error e ->
-                        render_error ~step:"enter_plc_token"
-                          ~did:(Some state.did) ~handle:(Some state.handle)
-                          ~old_pds:(Some state.old_pds)
+                        render_error ~step:"enter_plc_token" ~did:state.did
+                          ~handle:state.handle ~old_pds:state.old_pds
                           ("Failed to sign PLC operation: " ^ e)
                     | Ok signed_operation -> (
                       (* Submit PLC operation *)
@@ -1159,9 +1164,8 @@ let post_handler =
                           ~operation:signed_operation ctx.db
                       with
                       | Error e ->
-                          render_error ~step:"enter_plc_token"
-                            ~did:(Some state.did) ~handle:(Some state.handle)
-                            ~old_pds:(Some state.old_pds)
+                          render_error ~step:"enter_plc_token" ~did:state.did
+                            ~handle:state.handle ~old_pds:state.old_pds
                             ("Failed to submit PLC operation: " ^ e)
                       | Ok () ->
                           (* Activate the account *)
@@ -1171,15 +1175,14 @@ let post_handler =
                           Util.render_html ~title:"Migrate Account"
                             (module Frontend.MigratePage)
                             ~props:
-                              (make_props ~step:"complete" ~did:(Some state.did)
-                                 ~handle:(Some state.handle)
+                              (make_props ~step:"complete" ~did:state.did
+                                 ~handle:state.handle
                                  ~blobs_imported:state.blobs_imported
                                  ~blobs_total:state.blobs_total
                                  ~blobs_failed:state.blobs_failed
                                  ~message:
-                                   (Some
-                                      "Your account has been successfully \
-                                       migrated!" )
+                                   "Your account has been successfully \
+                                    migrated!"
                                  () ) ) ) ) )
           | "resend_plc_token" -> (
             match get_migration_state ctx.req with
@@ -1194,20 +1197,16 @@ let post_handler =
                   Util.render_html ~title:"Migrate Account"
                     (module Frontend.MigratePage)
                     ~props:
-                      (make_props ~step:"enter_plc_token" ~did:(Some state.did)
-                         ~handle:(Some state.handle)
-                         ~old_pds:(Some state.old_pds)
-                         ~error:(Some ("Failed to resend: " ^ e))
-                         () )
+                      (make_props ~step:"enter_plc_token" ~did:state.did
+                         ~handle:state.handle ~old_pds:state.old_pds
+                         ~error:("Failed to resend: " ^ e) () )
               | Ok () ->
                   Util.render_html ~title:"Migrate Account"
                     (module Frontend.MigratePage)
                     ~props:
-                      (make_props ~step:"enter_plc_token" ~did:(Some state.did)
-                         ~handle:(Some state.handle)
-                         ~old_pds:(Some state.old_pds)
-                         ~message:
-                           (Some "Confirmation code resent! Check your email.")
+                      (make_props ~step:"enter_plc_token" ~did:state.did
+                         ~handle:state.handle ~old_pds:state.old_pds
+                         ~message:"Confirmation code resent! Check your email."
                          () ) ) )
           | "resume_migration" -> (
               (* Resume a previously started migration *)
@@ -1237,7 +1236,9 @@ let post_handler =
                       render_error ~step:"resume_available" e
                   | Ok session -> (
                     (* Check what state the existing account is in *)
-                    match%lwt check_resume_state ~did ctx.db with
+                    match%lwt
+                      check_resume_state ~did ctx.db
+                    with
                     | Error e ->
                         render_error e
                     | Ok AlreadyActive ->
@@ -1246,12 +1247,10 @@ let post_handler =
                         Util.render_html ~title:"Migrate Account"
                           (module Frontend.MigratePage)
                           ~props:
-                            (make_props ~step:"complete" ~did:(Some did)
-                               ~handle:(Some handle)
+                            (make_props ~step:"complete" ~did ~handle
                                ~message:
-                                 (Some
-                                    "Your account is already active! You have \
-                                     been logged in." )
+                                 "Your account is already active! You have \
+                                  been logged in."
                                () )
                     | Ok NeedsActivation ->
                         (* Identity already points here, just activate *)
@@ -1260,12 +1259,10 @@ let post_handler =
                         Util.render_html ~title:"Migrate Account"
                           (module Frontend.MigratePage)
                           ~props:
-                            (make_props ~step:"complete" ~did:(Some did)
-                               ~handle:(Some handle)
+                            (make_props ~step:"complete" ~did ~handle
                                ~message:
-                                 (Some
-                                    "Your account has been activated! Your \
-                                     identity was already pointing to this PDS." )
+                                 "Your account has been activated! Your \
+                                  identity was already pointing to this PDS."
                                () )
                     | Ok NeedsPlcUpdate ->
                         (* Data is imported, need PLC update *)
@@ -1281,7 +1278,7 @@ let post_handler =
                       | Error e ->
                           render_error ("Failed to fetch repository: " ^ e)
                       | Ok car_data -> (
-                        match%lwt import_repo ~did ~car_data ctx.db with
+                        match%lwt import_repo ~did ~car_data with
                         | Error e ->
                             render_error e
                         | Ok () -> (
@@ -1307,7 +1304,7 @@ let post_handler =
                                 ~blobs_total:0 ~blobs_failed:0
                           | Ok blob_list ->
                               let total = List.length blob_list.cids in
-                              if total = 0 then (
+                              if total = 0 then
                                 let%lwt prefs =
                                   fetch_preferences ~pds_endpoint:old_pds
                                     ~access_jwt:session.access_jwt
@@ -1323,10 +1320,12 @@ let post_handler =
                                 transition_to_plc_token_step ~did ~handle
                                   ~old_pds ~access_jwt:session.access_jwt
                                   ~blobs_imported:0 ~blobs_total:0
-                                  ~blobs_failed:0 )
+                                  ~blobs_failed:0
                               else
                                 let batch =
-                                  List.filteri (fun i _ -> i < 50) blob_list.cids
+                                  List.filteri
+                                    (fun i _ -> i < 50)
+                                    blob_list.cids
                                 in
                                 let%lwt imported, failed =
                                   import_blobs_batch ~pds_endpoint:old_pds
@@ -1348,7 +1347,7 @@ let post_handler =
                                     ; blobs_cursor= cursor
                                     ; plc_requested= false }
                                 in
-                                if imported + failed >= total then (
+                                if imported + failed >= total then
                                   let%lwt prefs =
                                     fetch_preferences ~pds_endpoint:old_pds
                                       ~access_jwt:session.access_jwt
@@ -1364,14 +1363,13 @@ let post_handler =
                                   transition_to_plc_token_step ~did ~handle
                                     ~old_pds ~access_jwt:session.access_jwt
                                     ~blobs_imported:imported ~blobs_total:total
-                                    ~blobs_failed:failed )
+                                    ~blobs_failed:failed
                                 else
                                   Util.render_html ~title:"Migrate Account"
                                     (module Frontend.MigratePage)
                                     ~props:
-                                      (make_props ~step:"importing_blobs"
-                                         ~did:(Some did) ~handle:(Some handle)
-                                         ~old_pds:(Some old_pds)
+                                      (make_props ~step:"importing_blobs" ~did
+                                         ~handle ~old_pds
                                          ~blobs_imported:imported
                                          ~blobs_total:total ~blobs_failed:failed
                                          () ) ) ) ) ) ) )

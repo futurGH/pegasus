@@ -3,6 +3,8 @@
 open Melange_json.Primitives
 open React
 
+(* Step types and utilities *)
+
 type migration_step =
   | EnterCredentials
   | ResumeAvailable
@@ -16,53 +18,426 @@ type migration_step =
   | Error
 
 let step_of_string = function
-  | "enter_credentials" -> EnterCredentials
-  | "resume_available" -> ResumeAvailable
-  | "authenticating" -> Authenticating
-  | "creating_account" -> CreatingAccount
-  | "importing_repo" -> ImportingRepo
-  | "importing_blobs" -> ImportingBlobs
-  | "enter_plc_token" -> EnterPlcToken
-  | "activating" -> Activating
-  | "complete" -> Complete
-  | "error" -> Error
-  | _ -> EnterCredentials
-
-let step_to_string = function
-  | EnterCredentials -> "enter_credentials"
-  | ResumeAvailable -> "resume_available"
-  | Authenticating -> "authenticating"
-  | CreatingAccount -> "creating_account"
-  | ImportingRepo -> "importing_repo"
-  | ImportingBlobs -> "importing_blobs"
-  | EnterPlcToken -> "enter_plc_token"
-  | Activating -> "activating"
-  | Complete -> "complete"
-  | Error -> "error"
+  | "enter_credentials" ->
+      EnterCredentials
+  | "resume_available" ->
+      ResumeAvailable
+  | "authenticating" ->
+      Authenticating
+  | "creating_account" ->
+      CreatingAccount
+  | "importing_repo" ->
+      ImportingRepo
+  | "importing_blobs" ->
+      ImportingBlobs
+  | "enter_plc_token" ->
+      EnterPlcToken
+  | "activating" ->
+      Activating
+  | "complete" ->
+      Complete
+  | "error" ->
+      Error
+  | _ ->
+      EnterCredentials
 
 let step_to_label = function
-  | EnterCredentials -> "Enter Credentials"
-  | ResumeAvailable -> "Resume Migration"
-  | Authenticating -> "Authenticating"
-  | CreatingAccount -> "Creating Account"
-  | ImportingRepo -> "Importing Repository"
-  | ImportingBlobs -> "Importing Blobs"
-  | EnterPlcToken -> "Confirm Identity"
-  | Activating -> "Activating Account"
-  | Complete -> "Migration Complete"
-  | Error -> "Error"
+  | EnterCredentials ->
+      "Enter Credentials"
+  | ResumeAvailable ->
+      "Resume Migration"
+  | Authenticating ->
+      "Authenticating"
+  | CreatingAccount ->
+      "Creating Account"
+  | ImportingRepo ->
+      "Importing Repository"
+  | ImportingBlobs ->
+      "Importing Blobs"
+  | EnterPlcToken ->
+      "Confirm Identity"
+  | Activating ->
+      "Activating Account"
+  | Complete ->
+      "Migration Complete"
+  | Error ->
+      "Error"
 
 let step_to_number = function
-  | EnterCredentials -> 1
-  | ResumeAvailable -> 1
-  | Authenticating -> 2
-  | CreatingAccount -> 3
-  | ImportingRepo -> 4
-  | ImportingBlobs -> 5
-  | EnterPlcToken -> 6
-  | Activating -> 7
-  | Complete -> 8
-  | Error -> 0
+  | EnterCredentials ->
+      1
+  | ResumeAvailable ->
+      1
+  | Authenticating ->
+      2
+  | CreatingAccount ->
+      3
+  | ImportingRepo ->
+      4
+  | ImportingBlobs ->
+      5
+  | EnterPlcToken ->
+      6
+  | Activating ->
+      7
+  | Complete ->
+      8
+  | Error ->
+      0
+
+(* Reusable UI Components *)
+
+module ProgressIndicator = struct
+  let[@react.component] make ~step_number ~label () =
+    <div className="mb-6">
+      <div className="flex items-center gap-2 text-sm text-mist-100 mb-2">
+        <span>(string ("Step " ^ string_of_int step_number ^ " of 7: "))</span>
+        <span className="font-medium text-mana-100">(string label)</span>
+      </div>
+      <div className="w-full bg-mist-60 rounded-full h-1.5">
+        <div
+          className="bg-mana-100 h-1.5 rounded-full transition-all duration-300"
+          style=(ReactDOM.Style.make
+                   ~width:(string_of_int (step_number * 100 / 7) ^ "%")
+                   () )
+        />
+      </div>
+    </div>
+end
+
+module AlertMessage = struct
+  let[@react.component] make ~message ~kind () =
+    let bg_class, text_class, icon =
+      match kind with
+      | `Error ->
+          ( "bg-phoenix-100/10 border-phoenix-100/30"
+          , "text-phoenix-100"
+          , <CircleAlertIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" /> )
+      | `Success ->
+          ( "bg-mana-100/10 border-mana-100/30"
+          , "text-mana-100"
+          , <CheckmarkIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" /> )
+    in
+    <div className=("mb-4 p-3 border rounded-lg " ^ bg_class)>
+      <span className=("inline-flex items-start text-sm " ^ text_class)>
+        icon <span>(string message)</span>
+      </span>
+    </div>
+end
+
+module LoadingSpinner = struct
+  let[@react.component] make ~message () =
+    <div className="flex flex-col items-center py-8">
+      <div
+        className="animate-spin w-8 h-8 border-2 border-mana-100 \
+                   border-t-transparent rounded-full mb-4"
+      />
+      <p className="text-mist-100 text-center">(string message)</p>
+    </div>
+end
+
+module DidDisplay = struct
+  let[@react.component] make ~did () =
+    <p className="text-xs text-mist-80 mb-4">
+      (string "Account DID: ")
+      <code className="bg-mist-60/50 px-1 rounded">(string did)</code>
+    </p>
+end
+
+(* Step-specific Components *)
+
+module CredentialsForm = struct
+  let[@react.component] make ~csrf_token ~invite_required () =
+    array
+      [| <p className="w-full text-balance text-mist-100 mb-4">
+           (string
+              "Migrate your existing atproto account to this PDS. You'll need \
+               your account credentials from your current PDS." )
+         </p>
+       ; <form className="w-full flex flex-col gap-y-3">
+           <input type_="hidden" name="dream.csrf" value=csrf_token />
+           <input type_="hidden" name="action" value="start_migration" />
+           ( if invite_required then
+               <Input
+                 name="invite_code"
+                 type_="text"
+                 label="Invite code"
+                 placeholder="a1b2c3d4"
+                 required=true
+                 showIndicator=false />
+             else null )
+           <Input
+             name="identifier"
+             type_="text"
+             label="Handle or DID"
+             placeholder="you.bsky.social or did:plc:..."
+             required=true
+             showIndicator=false
+           />
+           <Input
+             name="password"
+             type_="password"
+             label="Password"
+             required=true
+             showIndicator=false
+           />
+           <p className="text-xs text-mist-80 -mt-1">
+             (string
+                "Use your actual account password, not an app password. Your \
+                 password is only used to authenticate with your current PDS \
+                 and is never stored." )
+           </p>
+           <Button type_="submit" formMethod="post" className="mt-2">
+             (string "start migration")
+           </Button>
+         </form>
+       ; <div className="mt-4 pt-4 border-t border-mist-60/50">
+           <span className="text-sm text-mist-100">
+             (string "Don't have an account? ")
+             <a
+               href="/account/signup"
+               className="text-mana-100 underline hover:text-mana-200">
+               (string "sign up")
+             </a>
+             (string " instead.")
+           </span>
+         </div> |]
+end
+
+module ResumeForm = struct
+  let[@react.component] make ~csrf_token ~did () =
+    <div className="py-4">
+      <div
+        className="bg-mana-100/10 border border-mana-100/30 rounded-lg p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <CheckmarkIcon className="w-5 h-5 text-mana-100 mt-0.5 flex-shrink-0"
+          />
+          <div>
+            <h3 className="font-medium text-mana-100 mb-1">
+              (string "Previous migration found")
+            </h3>
+            <p className="text-sm text-mist-100">
+              (string
+                 "An incomplete migration exists for this account. Enter your \
+                  credentials again to continue where you left off." )
+            </p>
+          </div>
+        </div>
+      </div>
+      (match did with Some d -> <DidDisplay did=d /> | None -> null)
+      <form className="w-full flex flex-col gap-y-3">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="resume_migration" />
+        <Input
+          name="identifier"
+          type_="text"
+          label="Handle or DID"
+          placeholder="you.bsky.social or did:plc:..."
+          required=true
+          showIndicator=false
+        />
+        <Input
+          name="password"
+          type_="password"
+          label="Password"
+          required=true
+          showIndicator=false
+        />
+        <p className="text-xs text-mist-80 -mt-1">
+          (string
+             "Enter your credentials from your original PDS to resume the \
+              migration." )
+        </p>
+        <Button type_="submit" formMethod="post" className="mt-2">
+          (string "resume migration")
+        </Button>
+      </form>
+      <div className="mt-4 pt-4 border-t border-mist-60/50">
+        <a
+          href="/account/migrate"
+          className="text-sm text-mist-100 underline hover:text-mana-100">
+          (string "Start a new migration instead")
+        </a>
+      </div>
+    </div>
+end
+
+module BlobProgress = struct
+  let[@react.component] make ~csrf_token ~did ~blobs_imported ~blobs_total
+      ~blobs_failed () =
+    let progress_pct =
+      if blobs_total > 0 then
+        string_of_int (blobs_imported * 100 / blobs_total) ^ "%"
+      else "0%"
+    in
+    <div className="py-4">
+      <p className="text-mist-100 mb-4">
+        (string "Importing blobs (images, videos, etc.)...")
+      </p>
+      <div className="w-full bg-mist-60 rounded-full h-2 mb-2">
+        <div
+          className="bg-mana-100 h-2 rounded-full transition-all duration-300"
+          style=(ReactDOM.Style.make ~width:progress_pct ())
+        />
+      </div>
+      <p className="text-sm text-mist-80">
+        (string
+           (Printf.sprintf "%d of %d blobs imported" blobs_imported blobs_total) )
+        ( if blobs_failed > 0 then
+            <span className="text-phoenix-100">
+              (string (Printf.sprintf " (%d failed)" blobs_failed))
+            </span>
+          else null )
+      </p>
+      <form className="mt-4">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="continue_blobs" />
+        ( match did with
+        | Some d ->
+            <input type_="hidden" name="did" value=d />
+        | None ->
+            null )
+        <Button type_="submit" formMethod="post" kind=`Secondary>
+          (string "continue importing")
+        </Button>
+      </form>
+    </div>
+end
+
+module PlcTokenForm = struct
+  let[@react.component] make ~csrf_token ~did () =
+    <div className="py-4">
+      <p className="text-mist-100 mb-4">
+        (string
+           "Your account has been created and your data imported. To complete \
+            the migration, enter the confirmation code that was sent to your \
+            email." )
+      </p>
+      <form className="w-full flex flex-col gap-y-3">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="submit_plc_token" />
+        <Input
+          name="plc_token"
+          type_="text"
+          label="Confirmation Code"
+          placeholder="A1B2C-3D4E5"
+          required=true
+          showIndicator=false
+        />
+        <p className="text-xs text-mist-80 -mt-1">
+          (string
+             "This code was sent to the email address belonging to your \
+              account on your old PDS." )
+        </p>
+        <Button type_="submit" formMethod="post" className="mt-2">
+          (string "complete migration")
+        </Button>
+      </form>
+      <form className="mt-3">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="resend_plc_token" />
+        <button
+          type_="submit"
+          formMethod="post"
+          className="text-sm text-mist-100 underline hover:text-mana-100">
+          (string "Resend confirmation code")
+        </button>
+      </form>
+      ( match did with
+      | Some d ->
+          <p className="text-xs text-mist-80 mt-4">
+            (string "Your DID: ")
+            <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
+          </p>
+      | None ->
+          null )
+    </div>
+end
+
+module CompleteView = struct
+  let[@react.component] make ~handle ~blobs_failed () =
+    <div className="py-4">
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="w-10 h-10 bg-mana-100/20 rounded-full flex items-center \
+                     justify-center">
+          <CheckmarkIcon className="w-5 h-5 text-mana-100" />
+        </div>
+        <div>
+          <h2 className="text-lg font-serif text-mana-200">
+            (string "Migration complete!")
+          </h2>
+          <p className="text-sm text-mist-100">
+            (string "Your account is now on this PDS.")
+          </p>
+        </div>
+      </div>
+      ( match handle with
+      | Some h ->
+          <p className="text-mist-100 mb-4">
+            (string "Your handle: ")
+            <span className="font-medium text-mana-100">
+              (string ("@" ^ h))
+            </span>
+          </p>
+      | None ->
+          null )
+      ( if blobs_failed > 0 then
+          <div
+            className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 \
+                       rounded-lg">
+            <p className="text-sm text-phoenix-100">
+              (string
+                 (Printf.sprintf
+                    "%d blob(s) failed to import. This means some of your \
+                     content may appear to have missing media."
+                    blobs_failed ) )
+            </p>
+          </div>
+        else null )
+      <div className="flex gap-3">
+        <a href="/account"><Button>(string "go to account")</Button></a>
+      </div>
+      <p className="text-xs text-mist-80 mt-4">
+        (string
+           "Remember to deactivate your account on your old PDS to avoid \
+            confusion." )
+      </p>
+    </div>
+end
+
+module ErrorView = struct
+  let[@react.component] make () =
+    <div className="py-4">
+      <p className="text-mist-100 mb-4">
+        (string
+           "Something went wrong during migration. Don't worry, your data on your original PDS is safe." )
+      </p>
+      <div className="bg-mist-60/30 rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-medium text-mana-100 mb-2">
+          (string "What you can do:")
+        </h3>
+        <ul className="text-sm text-mist-100 space-y-1 list-disc list-inside">
+          <li>
+            (string
+               "Try again — you may be able to resume the migration and continue" )
+          </li>
+          <li>(string "Check your internet connection and try again later")</li>
+          <li>
+            (string "Contact the PDS administrator if the problem persists")
+          </li>
+        </ul>
+      </div>
+      <div className="flex gap-3">
+        <a href="/account/migrate"><Button>(string "try again")</Button></a>
+        <a href="/account/login">
+          <Button kind=`Secondary>(string "back to login")</Button>
+        </a>
+      </div>
+    </div>
+end
+
+(* Main page props and component *)
 
 type props =
   { csrf_token: string
@@ -83,11 +458,11 @@ let[@react.component] make
     ~props:
       ({ csrf_token
        ; invite_required
-       ; hostname
+       ; hostname= _
        ; step
        ; did
        ; handle
-       ; old_pds
+       ; old_pds= _
        ; blobs_imported
        ; blobs_total
        ; blobs_failed
@@ -96,346 +471,51 @@ let[@react.component] make
         props ) () =
   let current_step = step_of_string step in
   let step_number = step_to_number current_step in
+  let show_progress =
+    current_step <> EnterCredentials
+    && current_step <> ResumeAvailable
+    && current_step <> Error && current_step <> Complete
+  in
   <main className="w-full h-auto max-w-md px-4 sm:px-0">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string "migrate account")
     </h1>
     (* Progress indicator *)
-    ( if current_step <> EnterCredentials && current_step <> ResumeAvailable && current_step <> Error && current_step <> Complete then
-        <div className="mb-6">
-          <div className="flex items-center gap-2 text-sm text-mist-100 mb-2">
-            <span>(string ("Step " ^ string_of_int step_number ^ " of 7: "))</span>
-            <span className="font-medium text-mana-100">
-              (string (step_to_label current_step))
-            </span>
-          </div>
-          <div className="w-full bg-mist-60 rounded-full h-1.5">
-            <div
-              className="bg-mana-100 h-1.5 rounded-full transition-all duration-300"
-              style=(ReactDOM.Style.make
-                ~width:(string_of_int (step_number * 100 / 7) ^ "%") ())
-            />
-          </div>
-        </div>
+    ( if show_progress then
+        <ProgressIndicator step_number label=(step_to_label current_step) />
       else null )
     (* Error display *)
     ( match error with
     | Some err ->
-        <div className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 rounded-lg">
-          <span className="inline-flex items-start text-phoenix-100 text-sm">
-            <CircleAlertIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-            <span>(string err)</span>
-          </span>
-        </div>
-    | None -> null )
-    (* Message display *)
+        <AlertMessage message=err kind=`Error />
+    | None ->
+        null )
+    (* Success message display *)
     ( match message with
     | Some msg when current_step <> Complete ->
-        <div className="mb-4 p-3 bg-mana-100/10 border border-mana-100/30 rounded-lg">
-          <span className="inline-flex items-start text-mana-100 text-sm">
-            <CheckmarkIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-            <span>(string msg)</span>
-          </span>
-        </div>
-    | _ -> null )
+        <AlertMessage message=msg kind=`Success />
+    | _ ->
+        null )
     (* Step content *)
     ( match current_step with
     | EnterCredentials ->
-        (array [|
-          <p className="w-full text-balance text-mist-100 mb-4">
-            (string
-               "Migrate your existing ATProto account to this PDS. You'll need \
-                your account credentials from your current PDS." )
-          </p>;
-          <form className="w-full flex flex-col gap-y-3">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="start_migration" />
-            ( if invite_required then
-                <Input
-                  name="invite_code"
-                  type_="text"
-                  label="Invite Code"
-                  placeholder="pds-xxxxx-xxxxx"
-                  required=true
-                  showIndicator=false
-                />
-              else null )
-            <Input
-              name="identifier"
-              type_="text"
-              label="Handle or DID"
-              placeholder="you.bsky.social or did:plc:..."
-              required=true
-              showIndicator=false
-            />
-            <Input
-              name="password"
-              type_="password"
-              label="Password"
-              required=true
-              showIndicator=false
-            />
-            <p className="text-xs text-mist-80 -mt-1">
-              (string
-                 "Use your actual account password, not an app password. Your \
-                  password is only used to authenticate with your current PDS \
-                  and is never stored." )
-            </p>
-            <Button type_="submit" formMethod="post" className="mt-2">
-              (string "start migration")
-            </Button>
-          </form>;
-          <div className="mt-4 pt-4 border-t border-mist-60/50">
-            <span className="text-sm text-mist-100">
-              (string "Don't have an account? ")
-              <a
-                href="/account/signup"
-                className="text-mana-100 underline hover:text-mana-200">
-                (string "sign up")
-              </a>
-              (string " instead.")
-            </span>
-          </div>
-        |])
+        <CredentialsForm csrf_token invite_required />
     | ResumeAvailable ->
-        <div className="py-4">
-          <div className="bg-mana-100/10 border border-mana-100/30 rounded-lg p-4 mb-4">
-            <div className="flex items-start gap-3">
-              <CheckmarkIcon className="w-5 h-5 text-mana-100 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="font-medium text-mana-100 mb-1">
-                  (string "Previous migration found")
-                </h3>
-                <p className="text-sm text-mist-100">
-                  (string
-                     "An incomplete migration exists for this account. Enter \
-                      your credentials again to continue where you left off." )
-                </p>
-              </div>
-            </div>
-          </div>
-          ( match did with
-          | Some d ->
-              <p className="text-xs text-mist-80 mb-4">
-                (string "Account DID: ")
-                <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
-              </p>
-          | None -> null )
-          <form className="w-full flex flex-col gap-y-3">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="resume_migration" />
-            <Input
-              name="identifier"
-              type_="text"
-              label="Handle or DID"
-              placeholder="you.bsky.social or did:plc:..."
-              required=true
-              showIndicator=false
-            />
-            <Input
-              name="password"
-              type_="password"
-              label="Password"
-              required=true
-              showIndicator=false
-            />
-            <p className="text-xs text-mist-80 -mt-1">
-              (string
-                 "Enter your credentials from your original PDS to resume the \
-                  migration." )
-            </p>
-            <Button type_="submit" formMethod="post" className="mt-2">
-              (string "resume migration")
-            </Button>
-          </form>
-          <div className="mt-4 pt-4 border-t border-mist-60/50">
-            <a
-              href="/account/migrate"
-              className="text-sm text-mist-100 underline hover:text-mana-100">
-              (string "Start a new migration instead")
-            </a>
-          </div>
-        </div>
-    | Authenticating | CreatingAccount | ImportingRepo ->
-        <div className="flex flex-col items-center py-8">
-          <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
-          <p className="text-mist-100 text-center">
-            ( string
-            @@ match current_step with
-               | Authenticating -> "Authenticating with your current PDS..."
-               | CreatingAccount -> "Creating your account on this PDS..."
-               | ImportingRepo -> "Importing your repository data..."
-               | _ -> "Processing..." )
-          </p>
-        </div>
+        <ResumeForm csrf_token did />
+    | Authenticating ->
+        <LoadingSpinner message="Logging onto your current PDS..." />
+    | CreatingAccount ->
+        <LoadingSpinner message="Creating your account on this PDS..." />
+    | ImportingRepo ->
+        <LoadingSpinner message="Importing your repository data..." />
     | ImportingBlobs ->
-        <div className="py-4">
-          <p className="text-mist-100 mb-4">
-            (string "Importing blobs (images, videos, etc.)...")
-          </p>
-          <div className="w-full bg-mist-60 rounded-full h-2 mb-2">
-            <div
-              className="bg-mana-100 h-2 rounded-full transition-all duration-300"
-              style=(ReactDOM.Style.make
-                ~width:(
-                  if blobs_total > 0 then
-                    string_of_int (blobs_imported * 100 / blobs_total) ^ "%"
-                  else "0%"
-                ) ())
-            />
-          </div>
-          <p className="text-sm text-mist-80">
-            ( string
-            @@ Printf.sprintf "%d of %d blobs imported" blobs_imported
-                 blobs_total )
-            ( if blobs_failed > 0 then
-                <span className="text-phoenix-100">
-                  (string (Printf.sprintf " (%d failed)" blobs_failed))
-                </span>
-              else null )
-          </p>
-          <form className="mt-4">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="continue_blobs" />
-            ( match did with
-            | Some d -> <input type_="hidden" name="did" value=d />
-            | None -> null )
-            <Button type_="submit" formMethod="post" kind=`Secondary>
-              (string "continue importing")
-            </Button>
-          </form>
-        </div>
+        <BlobProgress csrf_token did blobs_imported blobs_total blobs_failed />
     | EnterPlcToken ->
-        <div className="py-4">
-          <p className="text-mist-100 mb-4">
-            (string
-               "Your account has been created and your data imported. To \
-                complete the migration, enter the confirmation code that was \
-                sent to your email." )
-          </p>
-          <form className="w-full flex flex-col gap-y-3">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="submit_plc_token" />
-            <Input
-              name="plc_token"
-              type_="text"
-              label="Confirmation Code"
-              placeholder="plc-xxxxxxxx"
-              required=true
-              showIndicator=false
-            />
-            <p className="text-xs text-mist-80 -mt-1">
-              (string
-                 "This code was sent to the email address associated with your \
-                  account on your old PDS." )
-            </p>
-            <Button type_="submit" formMethod="post" className="mt-2">
-              (string "complete migration")
-            </Button>
-          </form>
-          <form className="mt-3">
-            <input type_="hidden" name="dream.csrf" value=csrf_token />
-            <input type_="hidden" name="action" value="resend_plc_token" />
-            <button
-              type_="submit"
-              formMethod="post"
-              className="text-sm text-mist-100 underline hover:text-mana-100">
-              (string "Resend confirmation code")
-            </button>
-          </form>
-          ( match did with
-          | Some d ->
-              <p className="text-xs text-mist-80 mt-4">
-                (string "Your DID: ")
-                <code className="bg-mist-60/50 px-1 rounded">(string d)</code>
-              </p>
-          | None -> null )
-        </div>
+        <PlcTokenForm csrf_token did />
     | Activating ->
-        <div className="flex flex-col items-center py-8">
-          <div className="animate-spin w-8 h-8 border-2 border-mana-100 border-t-transparent rounded-full mb-4" />
-          <p className="text-mist-100 text-center">
-            (string "Activating your account...")
-          </p>
-        </div>
+        <LoadingSpinner message="Activating your account..." />
     | Complete ->
-        <div className="py-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-mana-100/20 rounded-full flex items-center justify-center">
-              <CheckmarkIcon className="w-5 h-5 text-mana-100" />
-            </div>
-            <div>
-              <h2 className="text-lg font-serif text-mana-200">
-                (string "Migration complete!")
-              </h2>
-              <p className="text-sm text-mist-100">
-                (string "Your account is now on this PDS.")
-              </p>
-            </div>
-          </div>
-          ( match handle with
-          | Some h ->
-              <p className="text-mist-100 mb-4">
-                (string "Your handle: ")
-                <span className="font-medium text-mana-100">(string ("@" ^ h))</span>
-              </p>
-          | None -> null )
-          ( if blobs_failed > 0 then
-              <div className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 rounded-lg">
-                <p className="text-sm text-phoenix-100">
-                  ( string
-                  @@ Printf.sprintf
-                       "%d blob(s) failed to import. You can re-upload them \
-                        later."
-                       blobs_failed )
-                </p>
-              </div>
-            else null )
-          <div className="flex gap-3">
-            <a href="/account">
-              <Button>(string "go to account")</Button>
-            </a>
-          </div>
-          <p className="text-xs text-mist-80 mt-4">
-            (string
-               "Remember to deactivate your account on your old PDS to avoid \
-                confusion." )
-          </p>
-        </div>
+        <CompleteView handle blobs_failed />
     | Error ->
-        <div className="py-4">
-          <p className="text-mist-100 mb-4">
-            (string
-               "Something went wrong during migration. Don't worry - your \
-                data on your original PDS is safe." )
-          </p>
-          <div className="bg-mist-60/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-medium text-mana-100 mb-2">
-              (string "What you can do:")
-            </h3>
-            <ul className="text-sm text-mist-100 space-y-1 list-disc list-inside">
-              <li>
-                (string
-                   "Try again - if your migration was partially completed, \
-                    you'll be able to resume" )
-              </li>
-              <li>
-                (string
-                   "Check your internet connection and try again later" )
-              </li>
-              <li>
-                (string
-                   "Contact the PDS administrator if the problem persists" )
-              </li>
-            </ul>
-          </div>
-          <div className="flex gap-3">
-            <a href="/account/migrate">
-              <Button>(string "try again")</Button>
-            </a>
-            <a href="/account/login">
-              <Button kind=`Secondary>(string "back to login")</Button>
-            </a>
-          </div>
-        </div> )
+        <ErrorView /> )
   </main>
