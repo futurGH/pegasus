@@ -207,11 +207,12 @@ module type Intf = sig
 
   val retrieve_node_raw : t -> Cid.t -> node_raw option Lwt.t
 
-  val retrieve_node : t -> Cid.t -> node option Lwt.t
+  val retrieve_node : ?layer_hint:int -> t -> Cid.t -> node option Lwt.t
 
-  val retrieve_node_lazy : t -> Cid.t -> node option Lwt.t lazy_t
+  val retrieve_node_lazy :
+    layer_hint:int -> t -> Cid.t -> node option Lwt.t lazy_t
 
-  val get_node_height : t -> node_raw -> int Lwt.t
+  val get_node_height : ?layer_hint:int -> t -> node_raw -> int Lwt.t
 
   val traverse : t -> (string -> Cid.t -> unit) -> unit Lwt.t
 
@@ -271,27 +272,40 @@ struct
     | None ->
         Lwt.return_none
 
-  (* retrieves & hydrates a node by cid *)
-  let rec retrieve_node t cid : node option Lwt.t =
-    match%lwt retrieve_node_raw t cid with
-    | Some raw ->
-        hydrate_node t raw |> Lwt.map Option.some
-    | None ->
-        Lwt.return_none
-
-  (* lazy version of retrieve_node *)
-  and retrieve_node_lazy t cid = lazy (retrieve_node t cid)
+  (* returns the layer of a node, using hint if provided *)
+  let rec get_node_height ?layer_hint t node : int Lwt.t =
+    match layer_hint with
+    | Some layer ->
+        Lwt.return layer
+    | None -> (
+      match (node.l, node.e) with
+      | None, [] ->
+          Lwt.return 0
+      | Some left, [] -> (
+        match%lwt retrieve_node_raw t left with
+        | Some node ->
+            let%lwt height = get_node_height t node in
+            Lwt.return (height + 1)
+        | None ->
+            failwith ("couldn't find node " ^ Cid.to_string left) )
+      | _, leaf :: _ -> (
+        match leaf.p with
+        | 0 ->
+            Lwt.return (Util.leading_zeros_on_hash (Bytes.to_string leaf.k))
+        | _ ->
+            failwith "first node entry has nonzero p value" ) )
 
   (* hydrates a raw node *)
-  and hydrate_node t node_raw : node Lwt.t =
+  let rec hydrate_node ?layer_hint t node_raw : node Lwt.t =
+    let%lwt layer = get_node_height ?layer_hint t node_raw in
+    let child_layer = layer - 1 in
     let left =
       match node_raw.l with
       | Some l ->
-          retrieve_node_lazy t l
+          retrieve_node_lazy ~layer_hint:child_layer t l
       | None ->
           lazy Lwt.return_none
     in
-    let%lwt layer = get_node_height t node_raw in
     let entries =
       List.fold_left
         (fun (entries : entry list) entry ->
@@ -307,7 +321,7 @@ struct
           let right =
             match entry.t with
             | Some r ->
-                retrieve_node_lazy t r
+                retrieve_node_lazy ~layer_hint:child_layer t r
             | None ->
                 lazy Lwt.return_none
           in
@@ -316,24 +330,16 @@ struct
     in
     Lwt.return {layer; left; entries}
 
-  (* returns the layer of a node *)
-  and get_node_height t node : int Lwt.t =
-    match (node.l, node.e) with
-    | None, [] ->
-        Lwt.return 0
-    | Some left, [] -> (
-      match%lwt retrieve_node_raw t left with
-      | Some node ->
-          let%lwt height = get_node_height t node in
-          Lwt.return (height + 1)
-      | None ->
-          failwith ("couldn't find node " ^ Cid.to_string left) )
-    | _, leaf :: _ -> (
-      match leaf.p with
-      | 0 ->
-          Lwt.return (Util.leading_zeros_on_hash (Bytes.to_string leaf.k))
-      | _ ->
-          failwith "first node entry has nonzero p value" )
+  (* retrieves & hydrates a node by cid *)
+  and retrieve_node ?layer_hint t cid : node option Lwt.t =
+    match%lwt retrieve_node_raw t cid with
+    | Some raw ->
+        hydrate_node ?layer_hint t raw |> Lwt.map Option.some
+    | None ->
+        Lwt.return_none
+
+  and retrieve_node_lazy ~layer_hint t cid =
+    lazy (retrieve_node ~layer_hint t cid)
 
   (* calls fn with each entry's key and cid *)
   let traverse t fn : unit Lwt.t =

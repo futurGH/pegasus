@@ -263,7 +263,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     : write_result Lwt.t =
   with_write_lock t.did (fun () ->
       let open Sequencer.Types in
-      let module Inductive = Mist.Mst.Inductive (Mst) in
       let%lwt prev_commit =
         match%lwt User_store.get_commit t.db with
         | Some (_, commit) ->
@@ -280,11 +279,11 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                  Cid.to_string c
              | None ->
                  "null" ) ) ;
-      let%lwt block_map = Lwt.map ref (get_map t) in
       let cached_store = Cached_store.create t.db in
       let mst : Cached_mst.t ref =
         ref (Cached_mst.create cached_store prev_commit.data)
       in
+      t.block_map <- None ;
       (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
       let commit_ops : commit_evt_op list ref = ref [] in
       let added_leaves = ref Block_map.empty in
@@ -297,7 +296,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                 let path = Format.sprintf "%s/%s" collection rkey in
                 let uri = Format.sprintf "at://%s/%s" t.did path in
                 let%lwt () =
-                  match String_map.find_opt path !block_map with
+                  match%lwt User_store.get_record_cid t.db path with
                   | Some cid ->
                       Errors.invalid_request ~name:"InvalidSwap"
                         (Format.sprintf
@@ -314,7 +313,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                 let%lwt cid, block =
                   User_store.put_record t.db (`LexMap record_with_type) path
                 in
-                block_map := String_map.add path cid !block_map ;
                 added_leaves := Block_map.set cid block !added_leaves ;
                 commit_ops :=
                   !commit_ops
@@ -340,7 +338,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             | Update {collection; rkey; value; swap_record; _} ->
                 let path = Format.sprintf "%s/%s" collection rkey in
                 let uri = Format.sprintf "at://%s/%s" t.did path in
-                let old_cid = String_map.find_opt path !block_map in
+                let%lwt old_cid = User_store.get_record_cid t.db path in
                 ( if
                     (swap_record <> None && swap_record <> old_cid)
                     || (swap_record = None && old_cid = None)
@@ -385,7 +383,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   User_store.put_record t.db (`LexMap record_with_type) path
                 in
                 added_leaves := Block_map.set new_cid new_block !added_leaves ;
-                block_map := String_map.add path new_cid !block_map ;
                 commit_ops :=
                   !commit_ops
                   @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
@@ -409,7 +406,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                      ; cid= new_cid } )
             | Delete {collection; rkey; swap_record; _} ->
                 let path = Format.sprintf "%s/%s" collection rkey in
-                let cid = String_map.find_opt path !block_map in
+                let%lwt cid = User_store.get_record_cid t.db path in
                 ( if cid = None || (swap_record <> None && swap_record <> cid)
                   then
                     let cid_str =
@@ -441,7 +438,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                       Lwt.return_unit
                 in
                 let%lwt () = User_store.delete_record t.db path in
-                block_map := String_map.remove path !block_map ;
                 commit_ops :=
                   !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
                 let%lwt new_mst = Cached_mst.delete !mst path in
@@ -458,29 +454,16 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
       let commit_block =
         new_commit_signed |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
       in
-      let diff : Inductive.diff list =
-        List.fold_left
-          (fun (acc : Inductive.diff list)
-               ({action; path; cid; prev} : commit_evt_op) ->
-            match action with
-            | `Create ->
-                acc @ [Add {key= path; cid= Option.get cid}]
-            | `Update ->
-                acc @ [Update {key= path; cid= Option.get cid; prev}]
-            | `Delete ->
-                acc @ [Delete {key= path; prev= Option.get prev}] )
-          [] !commit_ops
-      in
       let%lwt proof_blocks =
-        match%lwt
-          Inductive.generate_proof !block_map diff ~new_root:new_mst.root
-            ~prev_root:prev_commit.data
-        with
-        | Ok blocks ->
-            Lwt.return (Block_map.merge blocks !added_leaves)
-        | Error err ->
-            raise err
+        Lwt_list.fold_left_s
+          (fun acc ({path; _} : commit_evt_op) ->
+            let%lwt key_proof =
+              Cached_mst.proof_for_key new_mst new_mst.root path
+            in
+            Lwt.return (Block_map.merge acc key_proof) )
+          Block_map.empty !commit_ops
       in
+      let proof_blocks = Block_map.merge proof_blocks !added_leaves in
       let block_stream =
         proof_blocks |> Block_map.entries |> Lwt_seq.of_list
         |> Lwt_seq.cons (new_commit_cid, commit_block)

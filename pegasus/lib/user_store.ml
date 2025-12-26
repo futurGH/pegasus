@@ -129,6 +129,15 @@ module Queries = struct
       ~cid ~data
 
   (* record storage *)
+  let get_record_cid =
+    [%rapper
+      get_opt
+        {sql| SELECT @CID{cid} FROM records WHERE path = %string{path} |sql}]
+
+  let get_all_record_cids =
+    [%rapper get_many {sql| SELECT @string{path}, @CID{cid} FROM records |sql}]
+      ()
+
   let get_record =
     [%rapper
       get_opt
@@ -390,6 +399,12 @@ let get_record t path : record option Lwt.t =
   Util.use_pool t.db @@ Queries.get_record ~path
   >|= Option.map (fun (cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
+
+let get_record_cid t path : Cid.t option Lwt.t =
+  Util.use_pool t.db @@ Queries.get_record_cid ~path
+
+let get_all_record_cids t : (string * Cid.t) list Lwt.t =
+  Util.use_pool t.db Queries.get_all_record_cids
 
 let get_records_by_cids t cids : (Cid.t * Blob.t) list Lwt.t =
   if List.is_empty cids then Lwt.return []
