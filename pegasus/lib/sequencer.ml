@@ -743,7 +743,7 @@ let sequence_commit (conn : Data_store.t) ~(did : string) ~(commit : Cid.t)
   let raw = Dag_cbor.encode_yojson @@ Encode.format_commit evt in
   let%lwt seq = DB.append_event conn ~t:`Commit ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Commit evt) in
-  Lwt.async (fun () -> Bus.publish {seq; bytes= frame}) ;
+  let%lwt () = Bus.publish {seq; bytes= frame} in
   Lwt.return seq
 
 let sequence_sync (conn : Data_store.t) ~(did : string) ~(rev : string)
@@ -754,7 +754,7 @@ let sequence_sync (conn : Data_store.t) ~(did : string) ~(rev : string)
   let raw = Dag_cbor.encode_yojson @@ Encode.format_sync evt in
   let%lwt seq = DB.append_event conn ~t:`Sync ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Sync evt) in
-  Lwt.async (fun () -> Bus.publish {seq; bytes= frame}) ;
+  let%lwt () = Bus.publish {seq; bytes= frame} in
   Lwt.return seq
 
 let sequence_identity (conn : Data_store.t) ~(did : string)
@@ -765,7 +765,7 @@ let sequence_identity (conn : Data_store.t) ~(did : string)
   let raw = Dag_cbor.encode_yojson @@ Encode.format_identity evt in
   let%lwt seq = DB.append_event conn ~t:`Identity ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Identity evt) in
-  Lwt.async (fun () -> Bus.publish {seq; bytes= frame}) ;
+  let%lwt () = Bus.publish {seq; bytes= frame} in
   Lwt.return seq
 
 let sequence_account (conn : Data_store.t) ~(did : string) ~(active : bool)
@@ -776,5 +776,5 @@ let sequence_account (conn : Data_store.t) ~(did : string) ~(active : bool)
   let raw = Dag_cbor.encode_yojson @@ Encode.format_account evt in
   let%lwt seq = DB.append_event conn ~t:`Account ~time:time_ms ~data:raw in
   let frame = Frame.encode_message ~seq ~time:time_iso (Account evt) in
-  Lwt.async (fun () -> Bus.publish {seq; bytes= frame}) ;
+  let%lwt () = Bus.publish {seq; bytes= frame} in
   Lwt.return seq
