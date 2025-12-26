@@ -502,10 +502,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
       Dream.debug (fun l -> l "commit sequenced") ;
       Lwt.return {commit= new_commit; results} )
 
-let load ?create ?(ensure_active = false) ?ds did : t Lwt.t =
-  let%lwt data_store_conn =
-    match ds with Some ds -> Lwt.return ds | None -> Data_store.connect ()
-  in
+let load ?create ?(ensure_active = false) did : t Lwt.t =
+  let%lwt ds_conn = Data_store.connect () in
   let%lwt user_db =
     try%lwt User_store.connect ?create did
     with _ ->
@@ -513,7 +511,7 @@ let load ?create ?(ensure_active = false) ?ds did : t Lwt.t =
         "your princess is in another castle"
   in
   let%lwt {signing_key; _} =
-    match%lwt Data_store.get_actor_by_identifier did data_store_conn with
+    match%lwt Data_store.get_actor_by_identifier did ds_conn with
     | Some actor when ensure_active = false || actor.deactivated_at = None ->
         Lwt.return actor
     | Some _ ->

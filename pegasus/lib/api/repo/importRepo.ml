@@ -13,7 +13,7 @@ let handler =
       let did = Auth.get_authed_did_exn ctx.auth in
       let bytes_stream = Dream.body_stream ctx.req in
       let car_stream = stream_to_seq bytes_stream in
-      let%lwt repo = Repository.load did ~ds:ctx.db ~ensure_active:true in
+      let%lwt repo = Repository.load did ~ensure_active:true in
       let%lwt result = Repository.import_car repo car_stream in
       match result with
       | Ok _ ->

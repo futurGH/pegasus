@@ -4,9 +4,7 @@ let handler =
   Xrpc.handler (fun ctx ->
       let {did; cid} = Xrpc.parse_query ctx.req query_of_yojson in
       let cid_parsed = Cid.as_cid cid in
-      let%lwt {db; _} =
-        Repository.load did ~ensure_active:true ~ds:ctx.db
-      in
+      let%lwt {db; _} = Repository.load did ~ensure_active:true in
       let%lwt blob_meta = User_store.get_blob_metadata db cid_parsed in
       match blob_meta with
       | None ->

@@ -15,7 +15,7 @@ let handler =
             Errors.invalid_request ~name:"RepoNotFound"
               "couldn't find a repo with that did"
       in
-      let%lwt {db= user_db; _} = Repository.load did ~ds:ctx.db in
+      let%lwt {db= user_db; _} = Repository.load did in
       let%lwt _, commit =
         match%lwt User_store.get_commit user_db with
         | Some c ->
