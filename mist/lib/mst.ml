@@ -791,9 +791,16 @@ struct
     Lwt_result.bind (Store.put_block blockstore cid encoded) (fun _ ->
         Lwt.return_ok {blockstore; root= cid} )
 
+  (* helper to propagate put_block errors *)
+  let put_block_exn blockstore cid encoded =
+    match%lwt Store.put_block blockstore cid encoded with
+    | Ok _ ->
+        Lwt.return_unit
+    | Error e ->
+        raise e
+
   (* builds and persists a canonical mst from sorted leaves *)
   let of_assoc blockstore assoc : t Lwt.t =
-    let open Lwt.Infix in
     let sorted =
       List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) assoc
     in
@@ -805,7 +812,8 @@ struct
       | [] ->
           let encoded = Dag_cbor.encode (encode_node_raw {l= None; e= []}) in
           let cid = Cid.create Dcbor encoded in
-          Store.put_block blockstore cid encoded >|= fun _ -> (cid, 0)
+          let%lwt () = put_block_exn blockstore cid encoded in
+          Lwt.return (cid, 0)
       | _ ->
           let with_layers =
             List.map (fun (k, v) -> (k, v, Util.leading_zeros_on_hash k)) pairs
@@ -842,10 +850,11 @@ struct
                       Dag_cbor.encode (encode_node_raw {l= Some cid; e= []})
                     in
                     let cid' = Cid.create Dcbor encoded in
-                    Store.put_block blockstore cid' encoded
-                    >>= fun _ -> wrap cid' (layer + 1)
+                    let%lwt () = put_block_exn blockstore cid' encoded in
+                    wrap cid' (layer + 1)
                 in
-                wrap cid child_layer >|= fun c -> Some c
+                let%lwt c = wrap cid child_layer in
+                Lwt.return_some c
           in
           (* compute right groups aligned to on-layer entries *)
           let rec right_groups acc rest =
@@ -883,10 +892,11 @@ struct
                           Dag_cbor.encode (encode_node_raw {l= Some cid; e= []})
                         in
                         let cid' = Cid.create Dcbor encoded in
-                        Store.put_block blockstore cid' encoded
-                        >>= fun _ -> wrap cid' (layer + 1)
+                        let%lwt () = put_block_exn blockstore cid' encoded in
+                        wrap cid' (layer + 1)
                     in
-                    wrap cid child_layer >|= fun c -> Some c )
+                    let%lwt c = wrap cid child_layer in
+                    Lwt.return_some c )
               rights
           in
           let entries_raw =
@@ -905,9 +915,11 @@ struct
           let node_raw = {l= l_cid; e= entries_raw} in
           let encoded = Dag_cbor.encode (encode_node_raw node_raw) in
           let cid = Cid.create Dcbor encoded in
-          Store.put_block blockstore cid encoded >|= fun _ -> (cid, root_layer)
+          let%lwt () = put_block_exn blockstore cid encoded in
+          Lwt.return (cid, root_layer)
     in
-    persist_from_sorted sorted >|= fun (root, _) -> {blockstore; root}
+    let%lwt root, _ = persist_from_sorted sorted in
+    Lwt.return {blockstore; root}
 
   (* insert or replace an entry, constructing a new canonical mst from scratch *)
   let add_rebuild t key cid : t Lwt.t =
@@ -927,7 +939,7 @@ struct
   let persist_node_raw (blockstore : bs) (raw : node_raw) : Cid.t Lwt.t =
     let encoded = Dag_cbor.encode (encode_node_raw raw) in
     let cid = Cid.create Dcbor encoded in
-    let%lwt _ = Store.put_block blockstore cid encoded in
+    let%lwt () = put_block_exn blockstore cid encoded in
     Lwt.return cid
 
   (* decompress entry keys from a raw node *)

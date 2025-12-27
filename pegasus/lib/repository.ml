@@ -419,6 +419,14 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
       writes
   in
   let new_mst = !mst in
+  (* flush all writes, ensuring all blocks are written or none are *)
+  let%lwt () =
+    match%lwt Cached_store.flush_writes cached_store with
+    | Ok () ->
+        Lwt.return_unit
+    | Error e ->
+        raise e
+  in
   let%lwt new_commit = put_commit t new_mst.root ~previous:(Some prev_commit) in
   let new_commit_cid, new_commit_signed = new_commit in
   let commit_block =

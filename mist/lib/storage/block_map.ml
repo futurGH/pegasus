@@ -41,6 +41,10 @@ let of_seq = Cid_map.of_seq
 
 let size = Cid_map.cardinal
 
+let length = size
+
+let is_empty = Cid_map.is_empty
+
 let byte_size m = Cid_map.fold (fun _ bytes acc -> acc + Bytes.length bytes) m 0
 
 let equal = Cid_map.equal Bytes.equal

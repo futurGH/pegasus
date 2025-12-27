@@ -279,7 +279,7 @@ let transact conn fn : (unit, 'e) Lwt_result.t =
   | Error e ->
       Lwt.return_error e
 
-(* runs a bunch of queries and catches duplicate insertion, returning how many succeeded *)
+(* runs a bunch of queries in a transaction, catches duplicate insertion, returning how many succeeded *)
 let multi_query pool
     (queries : (Caqti_lwt.connection -> ('a, Caqti_error.t) Lwt_result.t) list)
     : (int, exn) Lwt_result.t =
@@ -317,7 +317,13 @@ let multi_query pool
                       else Lwt.return_error e ) )
           in
           let%lwt result = aux (Ok 0) queries in
-          Lwt.return result ) )
+          match result with
+          | Ok count ->
+              let$! () = C.commit () in
+              Lwt.return_ok count
+          | Error e ->
+              let%lwt _ = C.rollback () in
+              Lwt.return_error e ) )
 
 let minute = 60 * 1000
 
