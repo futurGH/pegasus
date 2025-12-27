@@ -589,3 +589,24 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
     t.commit <- Some (root, commit) ;
     Lwt.return_ok t
   with exn -> Lwt.return_error exn
+
+let rebuild_mst t : (Cid.t * signed_commit, exn) Lwt_result.t =
+  try%lwt
+    let%lwt record_cids = User_store.get_all_record_cids t.db in
+    let record_count = List.length record_cids in
+    Logs.info (fun m -> m "rebuilding MST from %d records" record_count) ;
+    let%lwt () = User_store.clear_mst t.db in
+    Logs.info (fun m -> m "cleared existing MST blocks") ;
+    let%lwt mst_result = Mst.of_assoc t.db record_cids in
+    Logs.info (fun m ->
+        m "built new MST with root %s" (Cid.to_string mst_result.root) ) ;
+    let%lwt prev_commit = User_store.get_commit t.db in
+    let%lwt new_commit =
+      put_commit t mst_result.root ~previous:(Option.map snd prev_commit)
+    in
+    let commit_cid, commit = new_commit in
+    Logs.info (fun m ->
+        m "inserted new commit %s with rev %s" (Cid.to_string commit_cid)
+          commit.rev ) ;
+    Lwt.return_ok new_commit
+  with exn -> Lwt.return_error exn

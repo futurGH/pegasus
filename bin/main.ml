@@ -251,6 +251,19 @@ let migrate_blobs ?did () =
       print_endline "migrating all blobs to S3" ;
       S3.Blob_migration.migrate_all ()
 
+let rebuild_mst ~did () =
+  print_endline ("rebuilding MST for " ^ did) ;
+  let%lwt repo = Repository.load did in
+  match%lwt Repository.rebuild_mst repo with
+  | Ok (commit_cid, commit) ->
+      print_endline
+        (Printf.sprintf "MST rebuilt successfully, new commit: %s (rev: %s)"
+           (Cid.to_string commit_cid) commit.rev ) ;
+      Lwt.return_unit
+  | Error exn ->
+      print_endline ("error rebuilding MST: " ^ Printexc.to_string exn) ;
+      exit 1
+
 let print_usage () =
   print_endline
   @@ String.trim
@@ -262,6 +275,7 @@ commands:
   create-invite [uses]     create an invite code with an optional number of uses (default: 1)
   migrate-blobs            migrate all local blobs to S3
   migrate-blobs <did>      migrate blobs for a specific user to S3
+  rebuild-mst <did>        rebuild MST from records table (recovery tool)
 
 see also: gen-keys
 |}
@@ -280,6 +294,8 @@ let () =
       Lwt_main.run (migrate_blobs ())
   | ["migrate-blobs"; did] ->
       Lwt_main.run (migrate_blobs ~did ())
+  | ["rebuild-mst"; did] ->
+      Lwt_main.run (rebuild_mst ~did ())
   | ["help"] | ["--help"] | ["-h"] ->
       print_usage ()
   | cmd :: _ ->
