@@ -147,57 +147,17 @@ type t =
   { key: Kleidos.key
   ; did: string
   ; db: User_store.t
-  ; mutable block_map: Cid.t String_map.t option
   ; mutable commit: (Cid.t * signed_commit) option }
 
-let get_map t : Cid.t String_map.t Lwt.t =
-  let%lwt root, commit =
-    match%lwt User_store.get_commit t.db with
-    | Some (r, c) ->
-        Lwt.return (r, c)
-    | None ->
-        failwith ("failed to retrieve commit for " ^ t.did)
-  in
-  t.commit <- Some (root, commit) ;
-  match t.block_map with
-  | Some map ->
-      Lwt.return map
-  | _ ->
-      let%lwt map = Mst.build_map {blockstore= t.db; root= commit.data} in
-      t.block_map <- Some map ;
-      Lwt.return map
-
 let get_record_cid t path : Cid.t option Lwt.t =
-  let%lwt map = get_map t in
-  Lwt.return @@ String_map.find_opt path map
+  User_store.get_record_cid t.db path
 
 let get_record t path : record option Lwt.t = User_store.get_record t.db path
 
-let list_collections t : string list Lwt.t =
-  let module Set = Set.Make (String) in
-  let%lwt map = get_map t in
-  String_map.bindings map
-  |> List.fold_left
-       (fun (acc : Set.t) (path, _) ->
-         let collection = String.split_on_char '/' path |> List.hd in
-         Set.add collection acc )
-       Set.empty
-  |> Set.to_list |> Lwt.return
+let list_collections t : string list Lwt.t = User_store.list_collections t.db
 
-let list_all_records t collection : (string * Cid.t * record) list Lwt.t =
-  let%lwt map = get_map t in
-  String_map.bindings map
-  |> List.filter (fun (path, _) ->
-      String.starts_with ~prefix:(path ^ "/") collection )
-  |> Lwt_list.fold_left_s
-       (fun acc (path, cid) ->
-         match%lwt User_store.get_record t.db path with
-         | Some record ->
-             Lwt.return
-               ((Format.sprintf "at://%s/%s" t.did path, cid, record) :: acc)
-         | None ->
-             Lwt.return acc )
-       []
+let list_records t ?limit ?cursor ?reverse collection =
+  User_store.list_records t.db ?limit ?cursor ?reverse collection
 
 let sign_commit t commit : signed_commit =
   let msg = commit |> commit_to_yojson |> Dag_cbor.encode_yojson in
@@ -232,8 +192,6 @@ let put_commit t ?(previous : signed_commit option = None) mst_root :
     User_store.put_commit t.db signed |> Lwt_result.get_exn
   in
   t.commit <- Some (commit_cid, signed) ;
-  (* clear cached blocks so next get_map call rebuilds from the new commit *)
-  t.block_map <- None ;
   Lwt.return (commit_cid, signed)
 
 let put_initial_commit t : (Cid.t * signed_commit) Lwt.t =
@@ -261,7 +219,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let mst : Cached_mst.t ref =
     ref (Cached_mst.create cached_store prev_commit.data)
   in
-  t.block_map <- None ;
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
   let commit_ops : commit_evt_op list ref = ref [] in
   let added_leaves = ref Block_map.empty in
@@ -477,7 +434,7 @@ let load ?create ?(ensure_active = false) did : t Lwt.t =
   in
   let key = Kleidos.parse_multikey_str signing_key in
   let%lwt commit = User_store.get_commit user_db in
-  Lwt.return {key; did; db= user_db; block_map= None; commit}
+  Lwt.return {key; did; db= user_db; commit}
 
 let export_car t : Car.stream Lwt.t =
   let%lwt root, commit =
@@ -629,8 +586,6 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
               let$! () = User_store.Bulk.put_blob_refs blob_refs conn in
               Lwt.return_ok () ) )
     in
-    (* clear cached block_map so it's rebuilt on next access *)
-    t.block_map <- None ;
     t.commit <- Some (root, commit) ;
     Lwt.return_ok t
   with exn -> Lwt.return_error exn

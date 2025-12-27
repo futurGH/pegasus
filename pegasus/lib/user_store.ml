@@ -162,6 +162,12 @@ module Queries = struct
   let count_records =
     [%rapper get_one {sql| SELECT @int{COUNT(*)} FROM records |sql}]
 
+  let list_collections =
+    [%rapper
+      get_many
+        {sql| SELECT DISTINCT SUBSTR(path, 1, INSTR(path, '/') - 1) AS @string{collection} FROM records |sql}]
+      ()
+
   let list_records_reverse =
     [%rapper
       get_many
@@ -439,6 +445,9 @@ let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
       {path; cid; value= Lex.of_cbor data; since} )
 
 let count_records t : int Lwt.t = Util.use_pool t.db @@ Queries.count_records ()
+
+let list_collections t : string list Lwt.t =
+  Util.use_pool t.db @@ Queries.list_collections
 
 let put_record t record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in
