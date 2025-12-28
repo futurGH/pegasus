@@ -1216,7 +1216,7 @@ let post_handler =
                                     | _ ->
                                         Printf.sprintf "%s@%s" did Env.hostname
                                   in
-                                  (* Step 5: Create account *)
+                                  (* step 5: create account *)
                                   match%lwt
                                     create_migrated_account ~email ~handle
                                       ~password ~did ~service_auth_token

@@ -1,8 +1,9 @@
 type request =
   { token: string
-  ; rotation_keys: string list option [@default None]
-  ; verification_methods: Util.Did_doc_types.string_map option [@default None]
-  ; also_known_as: string list option [@default None]
+  ; rotation_keys: string list option [@default None] [@key "rotationKeys"]
+  ; verification_methods: Util.Did_doc_types.string_map option
+        [@default None] [@key "verificationMethods"]
+  ; also_known_as: string list option [@default None] [@key "alsoKnownAs"]
   ; services: Plc.service_map option [@default None] }
 [@@deriving yojson {strict= false}]
 
