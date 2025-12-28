@@ -8,13 +8,7 @@ let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
   let%lwt () =
     if token_required then
       let did = actor.did in
-      let code =
-        "eml-"
-        ^ String.sub
-            Digestif.SHA256.(
-              digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex )
-            0 8
-      in
+      let code = Util.make_code () in
       let expires_at = Util.now_ms () + (10 * 60 * 1000) in
       let%lwt () =
         match pending_email with

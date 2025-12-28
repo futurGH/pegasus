@@ -467,6 +467,18 @@ let str_contains ~affix str =
     true
   with Not_found -> false
 
+let make_code () =
+  let () = Random.self_init () in
+  let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
+  let len = String.length chars in
+  let s = Bytes.create 10 in
+  for i = 0 to 9 do
+    let random_index = Random.int len in
+    Bytes.set s i chars.[random_index]
+  done ;
+  let str = Bytes.to_string s in
+  String.sub str 0 5 ^ "-" ^ String.sub str 5 5
+
 module type Template = sig
   type props
 

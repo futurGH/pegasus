@@ -5,14 +5,7 @@ let request_email_confirmation (actor : Data_store.Types.actor) db =
   | Some _ ->
       Lwt.return_error AlreadyConfirmed
   | None ->
-      let code =
-        "eml-"
-        ^ String.sub
-            Digestif.SHA256.(
-              digest_string (actor.did ^ Int.to_string @@ Util.now_ms ())
-              |> to_hex )
-            0 8
-      in
+      let code = Util.make_code () in
       let expires_at = Util.now_ms () + (10 * 60 * 1000) in
       let%lwt () =
         Data_store.set_auth_code ~did:actor.did ~code ~expires_at db

@@ -7,15 +7,15 @@ let has_valid_delete_code (actor : Data_store.Types.actor) =
 
 let has_valid_email_change_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at, actor.pending_email) with
-  | Some code, Some expires_at, Some _ ->
-      String.starts_with ~prefix:"eml-" code && expires_at > Util.now_ms ()
+  | Some _, Some expires_at, Some _ ->
+      expires_at > Util.now_ms ()
   | _ ->
       false
 
 let has_valid_email_confirmation_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at, actor.pending_email) with
-  | Some code, Some expires_at, None ->
-      String.starts_with ~prefix:"eml-" code && expires_at > Util.now_ms ()
+  | Some _, Some expires_at, None ->
+      expires_at > Util.now_ms ()
   | _ ->
       false
 

@@ -22,9 +22,7 @@ let handler =
       | Some actor -> (
         match (actor.auth_code, actor.auth_code_expires_at) with
         | Some auth_code, Some auth_expires_at
-          when String.starts_with ~prefix:"plc-" auth_code
-               && input.token = auth_code
-               && Util.now_ms () < auth_expires_at -> (
+          when input.token = auth_code && Util.now_ms () < auth_expires_at -> (
           match%lwt Plc.get_audit_log did with
           | Ok log ->
               let latest = Mist.Util.last log |> Option.get in

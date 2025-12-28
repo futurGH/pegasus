@@ -29,9 +29,7 @@ let update_email ?email ~token (actor : Data_store.Types.actor) db =
       | Some token -> (
         match (actor.auth_code, actor.auth_code_expires_at) with
         | Some auth_code, Some expires_at
-          when String.starts_with ~prefix:"eml-" auth_code
-               && auth_code = token
-               && Util.now_ms () < expires_at ->
+          when auth_code = token && Util.now_ms () < expires_at ->
             let%lwt () = Data_store.update_email ~did ~email db in
             Lwt.return_ok email
         | Some _, Some expires_at when Util.now_ms () >= expires_at ->

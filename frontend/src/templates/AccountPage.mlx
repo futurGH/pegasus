@@ -252,7 +252,7 @@ let[@react.component] make
 		                            <Input
 		                                name="token"
 		                                label="Verification code"
-		                                placeholder="eml-..."
+		                                placeholder="A1B2C-3D4E5"
 			                            required=true
 			                            showIndicator=false
 		                                value=emailTokenInput
@@ -416,7 +416,7 @@ let[@react.component] make
                               <Input
                                   name="email_token"
                                   label="Confirmation code"
-                                  placeholder="eml-..."
+                                  placeholder="A1B2C-3D4E5"
                                   showIndicator=false
                                   value=confirmEmailTokenInput
                                   onChange=(fun e ->
