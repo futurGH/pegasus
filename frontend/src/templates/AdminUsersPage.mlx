@@ -62,7 +62,7 @@ let[@react.component] make
   let editValue, setEditValue = useState (fun () -> "") in
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : actor option)) in
-  <div className="w-full max-w-3xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+  <div className="w-auto h-full max-w-full px-4 pt-16 mx-auto flex flex-col md:flex-row gap-12">
     <Sidebar pages=admin_pages active_page="/admin/users" />
     <main className="flex-1 w-full max-w-2xl">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
@@ -169,16 +169,18 @@ let[@react.component] make
           </div>
       | None -> null )
       <div className="overflow-x-auto">
-        <table className="w-full min-w-xl text-sm">
-          <thead>
-            <tr className="text-left text-mist-80">
-              <th className="pb-2 font-normal">(string "Handle")</th>
-              <th className="pb-2 font-normal">(string "Email")</th>
-              <th className="pb-2 font-normal">(string "Created at")</th>
-              <th className="pb-2 font-normal w-8"></th>
+        <table
+          className="w-full min-w-xl grid border-collapse text-sm"
+          style=(ReactDOM.Style.make ~gridTemplateColumns:"minmax(200px, 2fr) minmax(160px, 2fr) minmax(160px, 1.5fr) 1.25rem" ())>
+          <thead className="contents">
+            <tr className="contents text-left text-mist-80">
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "Handle")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "Email")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "Created at")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal w-8"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="contents">
             ( List.map
                 (fun (actor : actor) ->
                   if filter <> ""
@@ -187,10 +189,10 @@ let[@react.component] make
                   && not (contains_str actor.email filter) then null else
                   let handleClasses = "font-medium truncate " ^
                   	(if actor.deactivated then "text-phoenix-100" else "text-mana-100") in
-                  <tr key=actor.did className="border-t border-mist-60/50">
+                  <tr key=actor.did className="contents">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-3">
-                        <div className="max-w-54">
+                        <div className="max-w-54 truncate">
                           <p className=handleClasses ?title=(if actor.deactivated then Some "Deactivated" else None)>
                             (string actor.handle)
                           </p>
@@ -202,19 +204,19 @@ let[@react.component] make
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-1">
-                        <span className="text-mist-100">(string actor.email)</span>
+                        <span className="text-mist-100 truncate">(string actor.email)</span>
                         ( if actor.email_confirmed then
-                            <CheckmarkIcon className="w-4 h-4 text-mana-100" />
+                            <CheckmarkIcon className="flex-shrink-0 w-4 h-4 text-mana-100" />
                           else
-                            <XIcon className="w-4 h-4 text-phoenix-100" /> )
+                            <XIcon className="flex-shrink-0 w-4 h-4 text-phoenix-100" /> )
                       </div>
                     </td>
-                    <td className="py-3 pr-4 text-mist-100">
+                    <td className="py-3 pr-4 text-mist-100 truncate">
                       (string actor.created_at)
                     </td>
                     <td className="py-3">
                       <ClientOnly fallback=(
-                        <button className="p-1 text-mist-80 hover:text-mana-100">
+                        <button className="text-mist-80 hover:text-mana-100">
                           <EllipsisIcon className="w-5 h-5" />
                         </button>
                       )>
@@ -228,7 +230,7 @@ let[@react.component] make
                               setMenuOpenFor (fun _ -> if o then Some actor.did else None))>
                             <Aria.Pressable>
                               <button
-                                className="p-1 text-mist-80 hover:text-mana-100 cursor-pointer"
+                                className="text-mist-80 hover:text-mana-100 cursor-pointer"
                                 onClick=(fun _ -> setMenuOpenFor (fun _ -> Some actor.did))>
                                 <EllipsisIcon className="w-5 h-5" />
                               </button>

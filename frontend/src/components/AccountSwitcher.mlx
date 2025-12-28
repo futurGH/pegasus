@@ -10,7 +10,7 @@ let button_class_inline =
      active:bg-mist-20/40"
 
 let button_class_default =
-  "group min-w-48 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
+  "group w-64 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
    rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
      active:bg-mist-20/40"
 
@@ -44,12 +44,16 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
     [%browser_only
       fun newDid ->
         if newDid <> current_user.did then
-          let formData = Fetch.FormData.make () in
-          Fetch.FormData.set "did" newDid formData ;
+          let body =
+            Fetch.BodyInit.make
+              (Webapi.Url.URLSearchParams.makeWithArray [|("did", newDid)|]
+	          |> Webapi.Url.URLSearchParams.toString )
+	      in
           let _ =
             Fetch.fetchWithInit "/account/switch"
               (Fetch.RequestInit.make ~method_:Fetch.Post
-                 ~body:(Fetch.BodyInit.makeWithFormData formData)
+                 ~headers:(Fetch.HeadersInit.makeWithArray [|("Content-Type", "application/x-www-form-urlencoded")|])
+                 ~body
                  () )
             |> Js.Promise.then_ (fun response ->
                    if Fetch.Response.ok response then (

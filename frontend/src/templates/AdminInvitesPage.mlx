@@ -38,7 +38,7 @@ let[@react.component] make
   let editRemaining, setEditRemaining = useState (fun () -> "") in
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : invite option)) in
-  <div className="w-full max-w-3xl h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
+  <div className="w-auto h-full max-w-full px-4 pt-16 mx-auto flex flex-1 flex-col md:flex-row justify-center gap-12">
     <Sidebar pages=admin_pages active_page="/admin/invites" />
     <main className="flex-1 w-full max-w-2xl">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
@@ -138,19 +138,21 @@ let[@react.component] make
           </div>
       | None -> null )
       <div className="overflow-x-auto">
-        <table className="w-full min-w-xl text-sm">
-          <thead>
-            <tr className="text-left text-mist-80">
-              <th className="pb-2 font-normal">(string "Code")</th>
-              <th className="pb-2 font-normal">(string "For")</th>
-              <th className="pb-2 font-normal">(string "Remaining")</th>
-              <th className="pb-2 font-normal w-20"></th>
+        <table
+          className="w-full grid border-collapse text-sm"
+          style=(ReactDOM.Style.make ~gridTemplateColumns:"minmax(6rem, 1fr) 1fr minmax(2rem, 1fr) 4rem" ())>
+          <thead className="contents">
+            <tr className="contents text-left text-mist-80">
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "Code")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "For")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal">(string "Remaining")</th>
+              <th className="border-b border-mist-60/50 pb-2 font-normal w-20"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="contents">
             ( List.map
                 (fun (invite : invite) ->
-                  <tr key=invite.code className="border-t border-mist-60/50">
+                  <tr key=invite.code className="contents">
                     <td className="py-3 pr-4">
                       <span className="font-mono text-mana-100">
                         (string invite.code)
