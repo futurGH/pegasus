@@ -47,9 +47,7 @@ let step_to_label = function
       "error"
 
 let step_to_number = function
-  | EnterCredentials | ResumeAvailable | Enter2FA ->
-      0
-  | ImportingData ->
+  | EnterCredentials | ResumeAvailable | Enter2FA | ImportingData ->
       1
   | EnterPlcToken ->
       2
@@ -104,73 +102,32 @@ module AlertMessage = struct
     </div>
 end
 
-module LoadingOverlay = struct
-  type loading_step =
-    { label: string
-    ; message: string
-    ; duration: int (* ms before moving to next step *) }
-
-  let steps =
-    [| { label= "authenticating"
-       ; message= "Logging into your current PDS..."
-       ; duration= 2000 (* fake step *) }
-     ; { label= "creating account"
-       ; message= "Creating your account on this PDS..."
-       ; duration= 2000 (* fake step *) }
-     ; { label= "importing repository"
-       ; message= "Importing your repository data..."
-       ; duration= 0 (* stays here until page loads *) } |]
+module LoadingSpinner = struct
+  let messages =
+    [| "Logging into your current PDS..."
+     ; "Creating your account on this PDS..."
+     ; "Importing your repository data..." |]
 
   let[@react.component] make () =
-    let step_index, set_step_index = React.useState (fun () -> 0) in
-    (* advance through steps on a timer *)
+    let msg_index, set_msg_index = React.useState (fun () -> 0) in
+    (* cycle through messages every 2 seconds *)
     React.useEffect1
       (fun () ->
-        let current = steps.(step_index) in
-        if current.duration > 0 && step_index < Array.length steps - 1 then
+        if msg_index < Array.length messages - 1 then
           let timer_id =
             Js.Global.setTimeout
-              ~f:(fun () -> set_step_index (fun i -> i + 1))
-              current.duration
+              ~f:(fun () -> set_msg_index (fun i -> i + 1))
+              2000
           in
           Some (fun () -> Js.Global.clearTimeout timer_id)
         else None )
-      [|step_index|] ;
-    let current = steps.(step_index) in
-    let step_number = step_index + 1 in
-    <div>
-      <div className="mb-6">
-        <div className="flex items-center gap-1 text-sm text-mist-100 mb-2">
-          <span>
-            (string
-               ( "step " ^ string_of_int step_number ^ " of "
-               ^ string_of_int total_steps ^ ": " ) )
-          </span>
-          <span className="font-medium text-mana-100">
-            (string current.label)
-          </span>
-        </div>
-        <div
-          className="w-full bg-mist-60 rounded-full h-3"
-          style=(ReactDOM.Style.make
-                   ~boxShadow:"0 4px 8px 0 rgba(115, 117, 121, 0.30) inset" () )>
-          <div
-            className="bg-mana-100 shadow-elixir h-3 rounded-full \
-                       transition-all duration-500"
-            style=(ReactDOM.Style.make
-                     ~width:
-                       (string_of_int (step_number * 100 / total_steps) ^ "%")
-                     () )
-          />
-        </div>
-      </div>
-      <div className="flex flex-col items-center py-8">
-        <div
-          className="animate-spin w-8 h-8 border-2 border-mana-100 \
-                     border-t-transparent rounded-full mb-4"
-        />
-        <p className="text-mist-100 text-center">(string current.message)</p>
-      </div>
+      [|msg_index|] ;
+    <div className="flex flex-col items-center py-8">
+      <div
+        className="animate-spin w-8 h-8 border-2 border-mana-100 \
+                   border-t-transparent rounded-full mb-4"
+      />
+      <p className="text-mist-100 text-center">(string messages.(msg_index))</p>
     </div>
 end
 
@@ -186,74 +143,83 @@ module CredentialsForm = struct
   let[@react.component] make ~csrf_token ~invite_required () =
     let is_submitting, set_is_submitting = React.useState (fun () -> false) in
     let handle_submit _ = set_is_submitting (fun _ -> true) in
-    if is_submitting then <LoadingOverlay />
-    else
-      array
-        [| <p key="desc" className="w-full text-balance text-mist-100 mb-4">
-             (string
-                "Migrate your existing atproto account to this PDS. You'll \
-                 need your account credentials from your current PDS." )
-           </p>
-         ; <form
-             key="form"
-             className="w-full flex flex-col gap-y-3"
-             onSubmit=handle_submit>
-             <input type_="hidden" name="dream.csrf" value=csrf_token />
-             <input type_="hidden" name="action" value="start_migration" />
-             ( if invite_required then
-                 <Input
-                   name="invite_code"
-                   type_="text"
-                   label="Invite code"
-                   placeholder="a1b2c3d4"
-                   required=true
-                   showIndicator=false />
-               else null )
-             <Input
-               name="identifier"
-               type_="text"
-               label="Existing handle or DID"
-               placeholder="you.bsky.social or did:plc:..."
-               required=true
-               showIndicator=false
-             />
-             <Input
-               name="password"
-               type_="password"
-               label="Existing password"
-               required=true
-               showIndicator=false
-             />
-             <p className="text-xs text-mist-80 -mt-1">
-               (string
-                  "Use your actual account password, not an app password. Your \
-                   password is only used to log into your current PDS and is \
-                   never stored." )
-             </p>
-             <Button type_="submit" formMethod="post" className="mt-2">
-               (string "start migration")
-             </Button>
-           </form>
-         ; <div key="footer" className="mt-4">
-             <span className="text-sm text-mist-100">
-               (string "Don't have an account? ")
-               <a
-                 href="/account/signup"
-                 className="text-mana-100 underline hover:text-mana-200">
-                 (string "sign up")
-               </a>
-               (string " instead.")
-             </span>
-           </div> |]
+    <div>
+      ( if is_submitting then
+          <div>
+            <ProgressIndicator step_number=1 label="importing data" />
+            <LoadingSpinner />
+          </div>
+        else null )
+      <div className=(if is_submitting then "hidden" else "")>
+        <p className="w-full text-balance text-mist-100 mb-4">
+          (string
+             "Migrate your existing atproto account to this PDS. You'll need \
+              your account credentials from your current PDS." )
+        </p>
+        <form className="w-full flex flex-col gap-y-3" onSubmit=handle_submit>
+          <input type_="hidden" name="dream.csrf" value=csrf_token />
+          <input type_="hidden" name="action" value="start_migration" />
+          ( if invite_required then
+              <Input
+                name="invite_code"
+                type_="text"
+                label="Invite code"
+                placeholder="a1b2c3d4"
+                required=true
+                showIndicator=false />
+            else null )
+          <Input
+            name="identifier"
+            type_="text"
+            label="Existing handle or DID"
+            placeholder="you.bsky.social or did:plc:..."
+            required=true
+            showIndicator=false
+          />
+          <Input
+            name="password"
+            type_="password"
+            label="Existing password"
+            required=true
+            showIndicator=false
+          />
+          <p className="text-xs text-mist-80 -mt-1">
+            (string
+               "Use your actual account password, not an app password. Your \
+                password is only used to log into your current PDS and is \
+                never stored." )
+          </p>
+          <Button type_="submit" formMethod="post" className="mt-2">
+            (string "start migration")
+          </Button>
+        </form>
+        <div className="mt-4">
+          <span className="text-sm text-mist-100">
+            (string "Don't have an account? ")
+            <a
+              href="/account/signup"
+              className="text-mana-100 underline hover:text-mana-200">
+              (string "sign up")
+            </a>
+            (string " instead.")
+          </span>
+        </div>
+      </div>
+    </div>
 end
 
 module ResumeForm = struct
   let[@react.component] make ~csrf_token ~did () =
     let is_submitting, set_is_submitting = React.useState (fun () -> false) in
     let handle_submit _ = set_is_submitting (fun _ -> true) in
-    if is_submitting then <LoadingOverlay />
-    else
-      <div>
+    <div>
+      ( if is_submitting then
+          <div>
+            <ProgressIndicator step_number=1 label="importing data" />
+            <LoadingSpinner />
+          </div>
+        else null )
+      <div className=(if is_submitting then "hidden" else "")>
         <div
           className="bg-mana-100/10 border border-mana-100/30 rounded-lg p-4 \
                      mb-4">
@@ -309,15 +275,21 @@ module ResumeForm = struct
           </a>
         </div>
       </div>
+    </div>
 end
 
 module TwoFactorForm = struct
   let[@react.component] make ~csrf_token ~identifier ~old_pds ~invite_code () =
     let is_submitting, set_is_submitting = React.useState (fun () -> false) in
     let handle_submit _ = set_is_submitting (fun _ -> true) in
-    if is_submitting then <LoadingOverlay />
-    else
-      <div>
+    <div>
+      ( if is_submitting then
+          <div>
+            <ProgressIndicator step_number=1 label="importing data" />
+            <LoadingSpinner />
+          </div>
+        else null )
+      <div className=(if is_submitting then "hidden" else "")>
         <p className="text-mist-100 mb-4">
           (string
              "Your account requires two-factor authentication. Check your \
@@ -363,6 +335,7 @@ module TwoFactorForm = struct
           </a>
         </div>
       </div>
+    </div>
 end
 
 module BlobProgress = struct
