@@ -20,6 +20,7 @@ let routes =
   ; {path= "/account/migrate"; template= (module MigratePage)}
   ; {path= "/account"; template= (module AccountPage)}
   ; {path= "/account/permissions"; template= (module AccountPermissionsPage)}
+  ; {path= "/account/identity"; template= (module AccountIdentityPage)}
   ; {path= "/admin/login"; template= (module AdminLoginPage)}
   ; {path= "/admin/users"; template= (module AdminUsersPage)}
   ; {path= "/admin/invites"; template= (module AdminInvitesPage)}
