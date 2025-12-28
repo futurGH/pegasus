@@ -340,6 +340,21 @@ end
 
 module BlobProgress = struct
   let[@react.component] make ~csrf_token ~did ~blobs_imported ~blobs_failed () =
+    let form_ref : Dom.htmlFormElement Js.nullable React.ref = useRef Js.Nullable.null in
+    (* auto-submit the form after a brief delay to continue importing *)
+    React.useEffect0 (fun () ->
+        let timer_id =
+          Js.Global.setTimeout
+            ~f:(fun () ->
+              match Js.Nullable.toOption form_ref.current with
+              | Some form ->
+                  Webapi.Dom.HtmlFormElement.setAttribute "method" "post" form ;
+                  Webapi.Dom.HtmlFormElement.submit form ;
+              | None ->
+                  () )
+            100
+        in
+        Some (fun () -> Js.Global.clearTimeout timer_id) ) ;
     <div>
       <div className="flex flex-col items-center py-6">
         <div
@@ -358,7 +373,7 @@ module BlobProgress = struct
             else null )
         </p>
       </div>
-      <form className="flex justify-center">
+      <form ref=(ReactDOM.Ref.domRef (Obj.magic form_ref))>
         <input type_="hidden" name="dream.csrf" value=csrf_token />
         <input type_="hidden" name="action" value="continue_blobs" />
         ( match did with
@@ -366,9 +381,6 @@ module BlobProgress = struct
             <input type_="hidden" name="did" value=d />
         | None ->
             null )
-        <Button type_="submit" formMethod="post">
-          (string "continue importing")
-        </Button>
       </form>
     </div>
 end
