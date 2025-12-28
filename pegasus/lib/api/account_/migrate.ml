@@ -751,6 +751,8 @@ let activate_account did db =
   let%lwt _ =
     Sequencer.sequence_account db ~did ~active:true ~status:`Active ()
   in
+  (* don't think this is strictly necessary but it gets bluesky to fix its did doc cache *)
+  let%lwt _ = Sequencer.sequence_identity ~did db () in
   Lwt.return_unit
 
 (* deactivate account on old pds after successful migration *)
