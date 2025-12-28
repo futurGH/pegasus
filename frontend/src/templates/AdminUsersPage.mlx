@@ -35,10 +35,6 @@ let contains_str s1 s2 =
       false
     with Exit -> true
 
-let admin_pages =
-  [ ("Users", "/admin/users")
-  ; ("Invite codes", "/admin/invites") ]
-
 let[@react.component] make
     ~props:
       ({ actors
@@ -63,7 +59,7 @@ let[@react.component] make
   (* delete confirmation state *)
   let deleteConfirmFor, setDeleteConfirmFor = useState (fun () -> (None : actor option)) in
   <div className="w-full h-full max-w-4xl px-4 pt-16 mx-auto flex flex-col md:flex-row gap-12">
-    <Sidebar pages=admin_pages active_page="/admin/users" />
+    <AdminSidebar active_page="/admin/users" />
     <main className="flex-1 w-full">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
         (string "users")

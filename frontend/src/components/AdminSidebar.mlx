@@ -1,0 +1,12 @@
+[@@@ocaml.warning "-26-27"]
+
+let pages =
+  [ ("Users", "/admin/users")
+  ; ("Invite codes", "/admin/invites")
+  ; ("Blobs", "/admin/blobs") ]
+
+let[@react.component] make ~active_page () =
+  <Sidebar
+    pages
+    active_page
+  />

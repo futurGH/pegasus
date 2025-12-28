@@ -22,7 +22,8 @@ let routes =
   ; {path= "/account/permissions"; template= (module AccountPermissionsPage)}
   ; {path= "/admin/login"; template= (module AdminLoginPage)}
   ; {path= "/admin/users"; template= (module AdminUsersPage)}
-  ; {path= "/admin/invites"; template= (module AdminInvitesPage)} ]
+  ; {path= "/admin/invites"; template= (module AdminInvitesPage)}
+  ; {path= "/admin/blobs"; template= (module AdminBlobsPage)} ]
 
 let find_by_path path_to_find =
   List.find_opt
