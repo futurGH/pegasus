@@ -146,6 +146,7 @@ type write_result =
 type t =
   { key: Kleidos.key
   ; did: string
+  ; actor: Data_store.Types.actor
   ; db: User_store.t
   ; mutable commit: (Cid.t * signed_commit) option }
 
@@ -422,7 +423,7 @@ let load ?create ?(ensure_active = false) did : t Lwt.t =
       Errors.invalid_request ~name:"RepoNotFound"
         "your princess is in another castle"
   in
-  let%lwt {signing_key; _} =
+  let%lwt actor =
     match%lwt Data_store.get_actor_by_identifier did ds_conn with
     | Some actor when ensure_active = false || actor.deactivated_at = None ->
         Lwt.return actor
@@ -432,9 +433,9 @@ let load ?create ?(ensure_active = false) did : t Lwt.t =
     | None ->
         failwith ("failed to retrieve actor for " ^ did)
   in
-  let key = Kleidos.parse_multikey_str signing_key in
+  let key = Kleidos.parse_multikey_str actor.signing_key in
   let%lwt commit = User_store.get_commit user_db in
-  Lwt.return {key; did; db= user_db; commit}
+  Lwt.return {key; did; actor; db= user_db; commit}
 
 let export_car t : Car.stream Lwt.t =
   let%lwt root, commit =

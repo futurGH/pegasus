@@ -120,3 +120,88 @@ let generate_service_jwt ~did ~aud ~lxm ~signing_key =
   let exp = now_s + Defaults.service_token_exp in
   let payload = service_jwt_to_yojson {iss= did; aud; lxm; exp} in
   sign_jwt payload ~signing_key
+
+type verify_jwt_error =
+  | AuthRequired of string
+  | ExpiredToken of string
+  | InvalidToken of string
+  | InternalError of string
+
+(* if no did is provided, iss did will be assumed to be correct *)
+let verify_service_jwt ~nsid ?did ~(verify_sig : string -> string -> 'a) token =
+  match decode_jwt token with
+  | Error e ->
+      Lwt.return_error @@ AuthRequired e
+  | Ok (_header, payload) -> (
+    try
+      let open Yojson.Safe.Util in
+      let iss = payload |> member "iss" |> to_string in
+      let aud = payload |> member "aud" |> to_string in
+      let exp = payload |> member "exp" |> to_int in
+      let lxm = payload |> member "lxm" |> to_string_option in
+      let now = int_of_float (Unix.gettimeofday ()) in
+      if exp < now then Lwt.return_error @@ ExpiredToken "token expired"
+      else if aud <> Env.did then
+        Lwt.return_error
+        @@ InvalidToken "jwt audience does not match service did"
+      else
+        let iss_did =
+          match String.split_on_char '#' iss with did :: _ -> did | [] -> iss
+        in
+        if did <> None && Some iss_did <> did then
+          Lwt.return_error @@ InvalidToken "jwt issuer does not match did"
+        else
+          match lxm with
+          | Some l when l <> nsid && l <> "*" ->
+              Lwt.return_error
+              @@ InvalidToken ("jwt lxm " ^ l ^ " does not match " ^ nsid)
+          | _ -> (
+              let did = Option.value did ~default:iss_did in
+              match%lwt Id_resolver.Did.resolve did with
+              | Error e ->
+                  Dream.debug (fun log ->
+                      log "failed to resolve did %s: %s" did e ) ;
+                  Lwt.return_error
+                  @@ InternalError "could not resolve jwt issuer did"
+              | Ok did_doc -> (
+                match
+                  Id_resolver.Did.Document.get_verification_key did_doc
+                    "#atproto"
+                with
+                | None ->
+                    Lwt.return_error
+                    @@ InternalError "missing or bad key in issuer did doc"
+                | Some pubkey_multibase -> (
+                  match%lwt verify_sig did pubkey_multibase with
+                  | Ok creds ->
+                      Lwt.return_ok creds
+                  | Error _ -> (
+                    (* try again, skipping cache in case of key rotation *)
+                    match%lwt
+                      Id_resolver.Did.resolve ~skip_cache:true did
+                    with
+                    | Error _ ->
+                        Lwt.return_error
+                        @@ InvalidToken
+                             "jwt signature does not match jwt issuer"
+                    | Ok fresh_doc -> (
+                      match
+                        Id_resolver.Did.Document.get_verification_key fresh_doc
+                          "#atproto"
+                      with
+                      | None ->
+                          Lwt.return_error
+                          @@ InvalidToken
+                               "jwt signature does not match jwt issuer"
+                      | Some fresh_pubkey_multibase
+                        when fresh_pubkey_multibase = pubkey_multibase ->
+                          Lwt.return_error
+                          @@ InvalidToken
+                               "jwt signature does not match jwt issuer"
+                      | Some fresh_pubkey_multibase -> (
+                        match%lwt verify_sig did fresh_pubkey_multibase with
+                        | Ok creds ->
+                            Lwt.return_ok creds
+                        | Error e ->
+                            Lwt.return_error @@ InternalError e ) ) ) ) ) )
+    with _ -> Lwt.return_error @@ InvalidToken "malformed service jwt" )

@@ -165,6 +165,38 @@ let submit_operation ?(endpoint = default_endpoint) did operation :
       let%lwt body_str = Body.to_string body in
       Lwt.return_error (Http.Status.to_int res.status, body_str)
 
+let validate_operation ~handle ?signing_key (op : signed_operation) =
+  let pds_pubkey =
+    Env.rotation_key |> Kleidos.derive_pubkey |> Kleidos.pubkey_to_did_key
+  in
+  match op with
+  | Operation op -> (
+      if not (List.mem pds_pubkey op.rotation_keys) then
+        Error "rotation keys must include the PDS public key"
+      else
+        match List.assoc_opt "atproto_pds" op.services with
+        | Some {type'; endpoint}
+          when type' <> "AtprotoPersonalDataServer"
+               || endpoint <> Env.host_endpoint ->
+            Error "invalid atproto_pds service"
+        | _ ->
+            let actor_pubkey =
+              signing_key
+              |> Option.map (fun sk ->
+                  sk |> Kleidos.parse_multikey_str |> Kleidos.derive_pubkey
+                  |> Kleidos.pubkey_to_did_key )
+            in
+            if
+              actor_pubkey <> None
+              && List.assoc_opt "atproto" op.verification_methods
+                 <> actor_pubkey
+            then Error "incorrect atproto signing key"
+            else if List.hd op.also_known_as <> "at://" ^ handle then
+              Error "incorrect handle"
+            else Ok () )
+  | Tombstone _ ->
+      Ok ()
+
 let did_of_operation operation : string =
   let cbor = signed_operation_to_yojson operation |> Dag_cbor.encode_yojson in
   let digest = Digestif.SHA256.(cbor |> digest_bytes |> to_raw_string) in

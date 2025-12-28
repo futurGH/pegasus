@@ -32,6 +32,20 @@ let not_found ?(name = "NotFound") msg = raise (NotFoundError (name, msg))
 
 let use_dpop_nonce () = raise UseDpopNonceError
 
+let printer = function
+  | InvalidRequestError (error, message) ->
+      Some (Printf.sprintf "Invalid request (%s): %s" error message)
+  | InternalServerError (error, message) ->
+      Some (Printf.sprintf "Internal server error (%s): %s" error message)
+  | AuthError (error, message) ->
+      Some (Printf.sprintf "Auth error (%s): %s" error message)
+  | NotFoundError (error, message) ->
+      Some (Printf.sprintf "Not found (%s): %s" error message)
+  | UseDpopNonceError ->
+      Some "Use DPoP nonce"
+  | _ ->
+      None
+
 let exn_to_response exn =
   let format_response error msg status =
     Dream.json ~status @@ Yojson.Safe.to_string

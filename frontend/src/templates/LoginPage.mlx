@@ -33,12 +33,22 @@ let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
       </Button>
     </form>
     <span className="text-sm text-mist-100">
-      (string "or ")
-      <a
-        href="/account/signup"
-        className="text-mana-100 underline hover:text-mana-200">
-        (string "create an account")
-      </a>
-      (string ".")
+      (string "or: ")
+      <ul className="mt-1 pl-2">
+        <li className="mb-1">
+          <a
+            className="text-mana-100 underline hover:text-mana-200"
+            href="/account/signup">
+            (string "create an account")
+          </a>
+        </li>
+        <li>
+          <a
+            className="text-mana-100 underline hover:text-mana-200"
+            href="/account/migrate">
+            (string "migrate from another PDS")
+          </a>
+        </li>
+      </ul>
     </span>
   </main>

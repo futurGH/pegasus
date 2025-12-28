@@ -64,4 +64,9 @@
 	--shadow-shimmer: inset 0 0 1em #90bbeea6;
 	--shadow-glow: inset 0 0 1.25em #2d37ba80;
 	--shadow-bleed: inset 0 0 1.25em #db4c6473;
+	--shadow-elixir:
+		0 0 3px 1px rgba(166, 144, 241, 0.25),
+		-1px 2px 8px 0 rgba(141, 109, 216, 0.7) inset,
+		1px 3px 8px 0 rgba(184, 176, 219, 0.8) inset,
+		2px -2px 8px 0 rgba(68, 57, 119, 0.9) inset;
 }

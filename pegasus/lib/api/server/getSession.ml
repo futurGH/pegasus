@@ -1,4 +1,4 @@
-type response = Auth.session_info
+type response = Auth.session_info [@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {db; auth; _} ->
@@ -9,8 +9,8 @@ let handler =
         if Auth.allows_email_read auth then session
         else
           { session with
-            email= ""
-          ; email_confirmed= false
-          ; email_auth_factor= false }
+            email= Some ""
+          ; email_confirmed= Some false
+          ; email_auth_factor= Some false }
       in
       Dream.json @@ Yojson.Safe.to_string @@ Auth.session_info_to_yojson session )

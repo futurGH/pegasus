@@ -40,6 +40,8 @@ let handlers =
   ; ( get
     , "/account/signup/check-handle"
     , Api.Account_.Signup.check_handle_handler )
+  ; (get, "/account/migrate", Api.Account_.Migrate.get_handler)
+  ; (post, "/account/migrate", Api.Account_.Migrate.post_handler)
   ; (post, "/account/switch", Api.Account_.Login.switch_account_handler)
   ; (get, "/account/logout", Api.Account_.Logout.handler)
   ; (* admin ui *)
@@ -203,6 +205,7 @@ let static_routes =
 
 let serve () =
   Printexc.record_backtrace true ;
+  Printexc.register_printer Errors.printer ;
   Dream.initialize_log ~level:Env.log_level () ;
   List.iter (fun src ->
       match Logs.Src.name src with

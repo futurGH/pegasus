@@ -460,6 +460,13 @@ let make_headers headers =
           headers )
     (Http.Header.init ()) headers
 
+let str_contains ~affix str =
+  let re = Str.regexp_string affix in
+  try
+    ignore (Str.search_forward re str 0) ;
+    true
+  with Not_found -> false
+
 module type Template = sig
   type props
 

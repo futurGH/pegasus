@@ -89,7 +89,9 @@ let[@react.component] make
             <ul className="space-y-2">
               ( List.map
                   (fun (app : authorized_app) ->
-                    let name = Option.value app.client_name ~default:app.client_host in
+                    let name =
+                      Option.value app.client_name ~default:app.client_host
+                    in
                     <li key=app.client_id className="flex items-center gap-x-2">
                       <span
                         title=name
@@ -174,8 +176,8 @@ let[@react.component] make
                             formMethod="post"
                             name="action"
                             value="sign_out_device"
-                            className="text-mist-100 underline whitespace-nowrap \
-                                       hover:text-mana-100">
+                            className="text-mist-100 underline \
+                                       whitespace-nowrap hover:text-mana-100">
                             (string "sign out")
                           </button>
                         </form>

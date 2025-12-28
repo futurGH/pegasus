@@ -3,9 +3,9 @@ type t = (module Rapper_helper.CONNECTION)
 type session_info =
   { handle: string
   ; did: string
-  ; email: string
-  ; email_confirmed: bool [@key "emailConfirmed"]
-  ; email_auth_factor: bool [@key "emailAuthFactor"]
+  ; email: string option
+  ; email_confirmed: bool option [@key "emailConfirmed"]
+  ; email_auth_factor: bool option [@key "emailAuthFactor"]
   ; active: bool option [@default None]
   ; status: string option [@default None] }
 [@@deriving yojson {strict= false}]
@@ -149,9 +149,9 @@ let get_session_info identifier db =
   Lwt.return
     { did= actor.did
     ; handle= actor.handle
-    ; email= actor.email
-    ; email_confirmed= true
-    ; email_auth_factor= true
+    ; email= Some actor.email
+    ; email_confirmed= Some (actor.email_confirmed_at <> None)
+    ; email_auth_factor= Some true
     ; active
     ; status }
 
@@ -410,92 +410,22 @@ module Verifiers = struct
       | Error e ->
           Lwt.return_error @@ Errors.auth_required e
       | Ok token -> (
-        match Jwt.decode_jwt token with
-        | Error e ->
-            Lwt.return_error @@ Errors.auth_required e
-        | Ok (_header, payload) -> (
-          try
-            let open Yojson.Safe.Util in
-            let iss = payload |> member "iss" |> to_string in
-            let aud = payload |> member "aud" |> to_string in
-            let exp = payload |> member "exp" |> to_int in
-            let lxm = payload |> member "lxm" |> to_string_option in
-            let now = int_of_float (Unix.gettimeofday ()) in
-            if exp < now then
-              Lwt.return_error
-              @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
-            else if aud <> Env.did then
-              Lwt.return_error
-              @@ Errors.invalid_request ~name:"InvalidToken"
-                   "jwt audience does not match service did"
-            else
-              let nsid =
-                (Dream.path [@warning "-3"]) req |> List.rev |> List.hd
-              in
-              match lxm with
-              | Some l when l <> nsid && l <> "*" ->
-                  Lwt.return_error
-                  @@ Errors.invalid_request ~name:"InvalidToken"
-                       ("jwt lxm " ^ l ^ " does not match " ^ nsid)
-              | _ -> (
-                  let did =
-                    match String.split_on_char '#' iss with
-                    | did :: _ ->
-                        did
-                    | [] ->
-                        iss
-                  in
-                  match%lwt Id_resolver.Did.resolve did with
-                  | Error e ->
-                      Dream.debug (fun log ->
-                          log "failed to resolve did %s: %s" did e ) ;
-                      Lwt.return_error
-                      @@ Errors.internal_error
-                           ~msg:"could not resolve jwt issuer did" ()
-                  | Ok did_doc -> (
-                    match
-                      Id_resolver.Did.Document.get_verification_key did_doc
-                        "#atproto"
-                    with
-                    | None ->
-                        Lwt.return_error
-                        @@ Errors.internal_error
-                             ~msg:"missing or bad key in issuer did doc" ()
-                    | Some pubkey_multibase -> (
-                      match%lwt
-                        verify_with_key token pubkey_multibase did db
-                      with
-                      | Ok creds ->
-                          Lwt.return_ok creds
-                      | Error _ -> (
-                        (* try again, skipping cache in case of key rotation *)
-                        match%lwt
-                          Id_resolver.Did.resolve ~skip_cache:true did
-                        with
-                        | Error _ ->
-                            Lwt.return_error
-                            @@ Errors.invalid_request ~name:"InvalidToken"
-                                 "jwt signature does not match jwt issuer"
-                        | Ok fresh_doc -> (
-                          match
-                            Id_resolver.Did.Document.get_verification_key
-                              fresh_doc "#atproto"
-                          with
-                          | None ->
-                              Lwt.return_error
-                              @@ Errors.invalid_request ~name:"InvalidToken"
-                                   "jwt signature does not match jwt issuer"
-                          | Some fresh_pubkey_multibase
-                            when fresh_pubkey_multibase = pubkey_multibase ->
-                              Lwt.return_error
-                              @@ Errors.invalid_request ~name:"InvalidToken"
-                                   "jwt signature does not match jwt issuer"
-                          | Some fresh_pubkey_multibase ->
-                              verify_with_key token fresh_pubkey_multibase did
-                                db ) ) ) ) )
-          with _ ->
-            Lwt.return_error @@ Errors.invalid_request "malformed service jwt" )
-        )
+          let nsid = (Dream.path [@warning "-3"]) req |> List.rev |> List.hd in
+          match%lwt
+            Jwt.verify_service_jwt ~nsid
+              ~verify_sig:(fun did pk -> verify_with_key token pk did db)
+              token
+          with
+          | Ok creds ->
+              Lwt.return_ok creds
+          | Error (AuthRequired e) ->
+              Lwt.return_error @@ Errors.auth_required e
+          | Error (ExpiredToken e) ->
+              Lwt.return_error @@ Errors.invalid_request ~name:"ExpiredToken" e
+          | Error (InvalidToken e) ->
+              Lwt.return_error @@ Errors.invalid_request ~name:"InvalidToken" e
+          | Error (InternalError e) ->
+              Lwt.return_error @@ Errors.internal_error ~msg:e () )
 
   let authorization : verifier =
    fun ctx ->
