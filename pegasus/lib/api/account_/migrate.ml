@@ -1574,156 +1574,145 @@ let post_handler =
                     ~handle:state.handle ~old_pds:state.old_pds
                     "Please enter the PLC token from your email"
                 else
-                  (* Get our recommended credentials *)
+                  (* new rotation keys = current rotation keys - old PDS key(s) + new PDS key *)
+                  let%lwt old_pds_keys =
+                    match%lwt
+                      get_remote_recommended_credentials
+                        ~pds_endpoint:state.old_pds ~access_jwt:state.access_jwt
+                    with
+                    | Ok creds ->
+                        Lwt.return creds.rotation_keys
+                    | Error e ->
+                        Dream.warning (fun log ->
+                            log
+                              "migration %s: failed to get old PDS \
+                               credentials: %s"
+                              state.did e ) ;
+                        Lwt.return []
+                  in
+                  let%lwt current_keys =
+                    match%lwt get_plc_rotation_keys ~did:state.did with
+                    | Ok keys ->
+                        Lwt.return keys
+                    | Error _ ->
+                        Lwt.return []
+                  in
+                  (* remove old PDS key(s) from current keys *)
+                  let keys_to_preserve =
+                    List.filter
+                      (fun k -> not (List.mem k old_pds_keys))
+                      current_keys
+                  in
+                  (* construct recommended credentials *)
                   match%lwt
                     get_recommended_did_credentials state.did ctx.db
+                      ~extra_rotation_keys:keys_to_preserve
                   with
                   | Error e ->
                       render_error ~step:"enter_plc_token" ~did:state.did
                         ~handle:state.handle ~old_pds:state.old_pds
                         ("Failed to get credentials: " ^ e)
-                  | Ok base_credentials -> (
-                      (* new rotation keys = current rotation keys - old PDS key(s) + new PDS key *)
-                      let%lwt merged_credentials =
-                        let%lwt old_pds_keys =
-                          match%lwt
-                            get_remote_recommended_credentials
-                              ~pds_endpoint:state.old_pds
-                              ~access_jwt:state.access_jwt
-                          with
-                          | Ok creds ->
-                              Lwt.return creds.rotation_keys
-                          | Error e ->
-                              Dream.warning (fun log ->
-                                  log
-                                    "migration %s: failed to get old PDS \
-                                     credentials: %s"
-                                    state.did e ) ;
-                              Lwt.return []
-                        in
-                        let%lwt current_keys =
-                          match%lwt get_plc_rotation_keys ~did:state.did with
-                          | Ok keys ->
-                              Lwt.return keys
-                          | Error _ ->
-                              Lwt.return []
-                        in
-                        (* remove old PDS key(s) from current keys *)
-                        let preserved_keys =
-                          List.filter
-                            (fun k -> not (List.mem k old_pds_keys))
-                            current_keys
-                        in
-                        (* then add in new key *)
-                        let merged_keys =
-                          preserved_keys @ base_credentials.rotation_keys
-                          |> List.sort_uniq String.compare
-                        in
-                        Lwt.return
-                          {base_credentials with rotation_keys= merged_keys}
-                      in
-                      (* get old pds to sign plc operation *)
+                  | Ok credentials -> (
+                    (* get old pds to sign plc operation *)
+                    match%lwt
+                      sign_plc_operation ~pds_endpoint:state.old_pds
+                        ~access_jwt:state.access_jwt ~token:plc_token
+                        ~credentials
+                    with
+                    | Error e ->
+                        render_error ~step:"enter_plc_token" ~did:state.did
+                          ~handle:state.handle ~old_pds:state.old_pds
+                          ("Failed to sign PLC operation: " ^ e)
+                    | Ok signed_operation -> (
+                      (* submit plc operation *)
                       match%lwt
-                        sign_plc_operation ~pds_endpoint:state.old_pds
-                          ~access_jwt:state.access_jwt ~token:plc_token
-                          ~credentials:merged_credentials
+                        submit_plc_operation ~did:state.did ~handle:state.handle
+                          ~operation:signed_operation ctx.db
                       with
                       | Error e ->
                           render_error ~step:"enter_plc_token" ~did:state.did
                             ~handle:state.handle ~old_pds:state.old_pds
-                            ("Failed to sign PLC operation: " ^ e)
-                      | Ok signed_operation -> (
-                        (* submit plc operation *)
-                        match%lwt
-                          submit_plc_operation ~did:state.did
-                            ~handle:state.handle ~operation:signed_operation
-                            ctx.db
-                        with
-                        | Error e ->
-                            render_error ~step:"enter_plc_token" ~did:state.did
-                              ~handle:state.handle ~old_pds:state.old_pds
-                              ("Failed to submit PLC operation: " ^ e)
-                        | Ok () ->
-                            (* log account status before activation *)
-                            let%lwt () =
+                            ("Failed to submit PLC operation: " ^ e)
+                      | Ok () ->
+                          (* log account status before activation *)
+                          let%lwt () =
+                            match%lwt
+                              check_local_account_status ~did:state.did
+                            with
+                            | Ok status ->
+                                Dream.info (fun log ->
+                                    log
+                                      "migration %s: activating account, \
+                                       imported_blobs=%d/%d"
+                                      state.did status.imported_blobs
+                                      status.expected_blobs ) ;
+                                Lwt.return_unit
+                            | Error e ->
+                                Dream.warning (fun log ->
+                                    log
+                                      "migration %s: failed to check status \
+                                       before activation: %s"
+                                      state.did e ) ;
+                                Lwt.return_unit
+                          in
+                          (* activate the account *)
+                          let%lwt () = activate_account state.did ctx.db in
+                          let%lwt () = Session.log_in_did ctx.req state.did in
+                          let%lwt () = clear_migration_state ctx.req in
+                          (* try deactivating old account with current token, refresh if expired *)
+                          let%lwt deactivation_result =
+                            match%lwt
+                              deactivate_old_account ~pds_endpoint:state.old_pds
+                                ~access_jwt:state.access_jwt
+                            with
+                            | Ok () ->
+                                Lwt.return_ok ()
+                            | Error e
+                              when Util.str_contains ~affix:"401" e
+                                   || Util.str_contains ~affix:"Unauthorized" e
+                              -> (
                               match%lwt
-                                check_local_account_status ~did:state.did
+                                refresh_session ~pds_endpoint:state.old_pds
+                                  ~refresh_jwt:state.refresh_jwt
                               with
-                              | Ok status ->
-                                  Dream.info (fun log ->
-                                      log
-                                        "migration %s: activating account, \
-                                         imported_blobs=%d/%d"
-                                        state.did status.imported_blobs
-                                        status.expected_blobs ) ;
-                                  Lwt.return_unit
-                              | Error e ->
-                                  Dream.warning (fun log ->
-                                      log
-                                        "migration %s: failed to check status \
-                                         before activation: %s"
-                                        state.did e ) ;
-                                  Lwt.return_unit
-                            in
-                            (* activate the account *)
-                            let%lwt () = activate_account state.did ctx.db in
-                            let%lwt () = Session.log_in_did ctx.req state.did in
-                            let%lwt () = clear_migration_state ctx.req in
-                            (* try deactivating old account with current token, refresh if expired *)
-                            let%lwt deactivation_result =
-                              match%lwt
-                                deactivate_old_account
-                                  ~pds_endpoint:state.old_pds
-                                  ~access_jwt:state.access_jwt
-                              with
-                              | Ok () ->
-                                  Lwt.return_ok ()
-                              | Error e
-                                when Util.str_contains ~affix:"401" e
-                                     || Util.str_contains ~affix:"Unauthorized"
-                                          e -> (
-                                match%lwt
-                                  refresh_session ~pds_endpoint:state.old_pds
-                                    ~refresh_jwt:state.refresh_jwt
-                                with
-                                | Ok tokens ->
-                                    deactivate_old_account
-                                      ~pds_endpoint:state.old_pds
-                                      ~access_jwt:tokens.access_jwt
-                                | Error refresh_err ->
-                                    Lwt.return_error
-                                      (Printf.sprintf
-                                         "Token expired and refresh failed: %s"
-                                         refresh_err ) )
-                              | Error e ->
-                                  Lwt.return_error e
-                            in
-                            let ( old_account_deactivated
-                                , old_account_deactivation_error ) =
-                              match deactivation_result with
-                              | Ok () ->
-                                  (true, None)
-                              | Error e ->
-                                  Dream.warning (fun log ->
-                                      log
-                                        "migration %s: failed to deactivate \
-                                         old account: %s"
-                                        state.did e ) ;
-                                  (false, Some e)
-                            in
-                            Util.render_html ~title:"Migrate Account"
-                              (module Frontend.MigratePage)
-                              ~props:
-                                (make_props ~step:"complete" ~did:state.did
-                                   ~handle:state.handle
-                                   ~blobs_imported:state.blobs_imported
-                                   ~blobs_failed:state.blobs_failed
-                                   ~old_account_deactivated
-                                   ?old_account_deactivation_error
-                                   ~message:
-                                     "Your account has been successfully \
-                                      migrated!"
-                                   () ) ) ) ) )
+                              | Ok tokens ->
+                                  deactivate_old_account
+                                    ~pds_endpoint:state.old_pds
+                                    ~access_jwt:tokens.access_jwt
+                              | Error refresh_err ->
+                                  Lwt.return_error
+                                    (Printf.sprintf
+                                       "Token expired and refresh failed: %s"
+                                       refresh_err ) )
+                            | Error e ->
+                                Lwt.return_error e
+                          in
+                          let ( old_account_deactivated
+                              , old_account_deactivation_error ) =
+                            match deactivation_result with
+                            | Ok () ->
+                                (true, None)
+                            | Error e ->
+                                Dream.warning (fun log ->
+                                    log
+                                      "migration %s: failed to deactivate old \
+                                       account: %s"
+                                      state.did e ) ;
+                                (false, Some e)
+                          in
+                          Util.render_html ~title:"Migrate Account"
+                            (module Frontend.MigratePage)
+                            ~props:
+                              (make_props ~step:"complete" ~did:state.did
+                                 ~handle:state.handle
+                                 ~blobs_imported:state.blobs_imported
+                                 ~blobs_failed:state.blobs_failed
+                                 ~old_account_deactivated
+                                 ?old_account_deactivation_error
+                                 ~message:
+                                   "Your account has been successfully \
+                                    migrated!"
+                                 () ) ) ) ) )
           | "resend_plc_token" -> (
             match get_migration_state ctx.req with
             | None ->
