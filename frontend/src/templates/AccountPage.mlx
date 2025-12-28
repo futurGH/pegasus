@@ -78,6 +78,10 @@ let[@react.component] make
   let confirmEmailLoading, setConfirmEmailLoading = useState (fun () -> false) in
   let confirmEmailTokenInput, setConfirmEmailTokenInput = useState (fun () -> "") in
   let successMessage, setSuccessMessage = useState (fun () -> success) in
+  let importLoading, setImportLoading = useState (fun () -> false) in
+  let importError, setImportError = useState (fun () -> None) in
+  let importSuccess, setImportSuccess = useState (fun () -> false) in
+  let fileInputRef : Dom.element Js.nullable React.ref = useRef Js.Nullable.null in
   <div className="w-auto h-full px-4 sm:px-0 pt-16 mx-auto flex flex-col md:flex-row gap-12">
     <AccountSidebar
       current_user logged_in_users active_page="/account"
@@ -499,19 +503,101 @@ let[@react.component] make
             </form>
             <section className="mt-8">
               <h2 className="text-xl font-serif text-mana-200 mb-1">
-                (string "download repository")
+                (string "my repository")
               </h2>
               <p className="text-mist-100 mb-4">
                 (string
-                   "Export your data to back up or transfer to another PDS." )
+                   "Export your data to back up or transfer to another PDS, or import from a CAR backup.")
               </p>
-              <a
-                href=("/xrpc/com.atproto.sync.getRepo?did=" ^ current_user.did)
-                download=("repo-" ^ current_user.handle ^ ".car")>
-                <Button kind=`Primary className="max-w-1/2">
-                  (string "download")
-                </Button>
-              </a>
+              <div className="flex flex-row gap-x-3">
+                <a
+                  href=("/xrpc/com.atproto.sync.getRepo?did=" ^ current_user.did)
+                  download=("repo-" ^ current_user.handle ^ ".car")
+                  className="basis-1/2 grow">
+                  <Button kind=`Primary>
+                    (string "download")
+                  </Button>
+                </a>
+                <ClientOnly fallback=(
+                  <Button kind=`Secondary disabled=true className="basis-1/2 grow">
+                    (string "import")
+                  </Button>
+                )>
+                [%browser_only
+                  (fun () ->
+                      let handleFileChange e =
+                        let files = (Event.Form.target e)##files in
+                        if Js.Array.length files > 0 then begin
+                          let file = Js.Array.unsafe_get files 0 in
+                          setImportLoading (fun _ -> true) ;
+                          setImportError (fun _ -> None) ;
+                          setImportSuccess (fun _ -> false) ;
+                          let _ =
+                            Fetch.fetchWithInit "/xrpc/com.atproto.repo.importRepo"
+                              (Fetch.RequestInit.make ~method_:Post
+                                 ~body:(Fetch.BodyInit.makeWithBlob file)
+                                 ~headers:
+                                   (Fetch.HeadersInit.makeWithArray
+                                      [|("Content-Type", "application/vnd.ipld.car")|] )
+                                 () )
+                            |> Js.Promise.then_ (fun response ->
+                                   setImportLoading (fun _ -> false) ;
+                                   if Fetch.Response.ok response then begin
+                                     setImportSuccess (fun _ -> true) ;
+                                     Js.Promise.resolve ()
+                                   end else begin
+                                     setImportError (fun _ ->
+                                         Some "Import failed. Please try again." ) ;
+                                     Js.Promise.resolve ()
+                                   end )
+                            |> Js.Promise.catch (fun _ ->
+                                   setImportLoading (fun _ -> false) ;
+                                   setImportError (fun _ ->
+                                       Some "An error occurred. Please try again." ) ;
+                                   Js.Promise.resolve () )
+                          in
+                          ()
+                        end
+                      in
+                      <div className="basis-1/2 grow">
+                        <input
+                          type_="file"
+                          accept=".car,application/vnd.ipld.car"
+                          ref=(ReactDOM.Ref.domRef fileInputRef)
+                          onChange=handleFileChange
+                          className="hidden"
+                        />
+                        <Button
+                          kind=`Secondary
+                          disabled=importLoading
+                          onClick=(fun _ ->
+                              match Js.Nullable.toOption fileInputRef.current with
+                              | Some el ->
+                                  let input = Webapi.Dom.Element.unsafeAsHtmlElement el in
+                                  Webapi.Dom.HtmlElement.click input
+                              | None -> () )>
+                          (string (if importLoading then "importing..." else "import"))
+                        </Button>
+                      </div> )]
+                </ClientOnly>
+              </div>
+              ( match importError with
+              | Some err ->
+                  <span className="inline-flex items-center text-phoenix-100 text-sm mt-4">
+                    <CircleAlertIcon className="w-4 h-4 mr-2" />
+                    (string err)
+                  </span>
+              | None when importSuccess ->
+                  <span className="inline-flex items-center text-mana-100 text-sm mt-4">
+                    (string "Repository imported successfully.")
+                  </span>
+              | None ->
+                  <p className="text-mist-80 text-sm mt-4">
+                    (string "It is recommended to export a copy of your \
+                             repository before importing a backup. \
+                             The import process will overwrite any existing \
+                             data with the contents of the backup.")
+                  </p> )
             </section>
             <section className="mt-8">
               <h2 className="text-xl font-serif text-mana-200 mb-1">

@@ -222,7 +222,6 @@ let serve () =
        [ Dream.logger
        ; Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)
        ; Dream.cookie_sessions
-       ; Dream.livereload
        ; Xrpc.dpop_middleware
        ; Xrpc.cors_middleware ]
   @@ Dream.router
