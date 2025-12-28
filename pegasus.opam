@@ -17,7 +17,7 @@ depends: [
   "caqti-lwt" {>= "1.9.0"}
   "cohttp" {>= "6.1.1"}
   "cohttp-lwt-unix" {>= "6.1.1"}
-  "dns-client" {>= "10.2.0"}
+  "dns-client-lwt" {>= "10.2.0"}
   "dream"
   "emile" {>= "1.1"}
   "letters" {>= "0.4.0"}

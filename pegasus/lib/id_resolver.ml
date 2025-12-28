@@ -1,7 +1,7 @@
 open Cohttp_lwt
 
 module Handle = struct
-  let dns_client = Dns_client_unix.create ()
+  let dns_client = Dns_client_lwt.create (Happy_eyeballs_lwt.create ())
 
   let resolve_well_known handle =
     try%lwt
@@ -24,10 +24,11 @@ module Handle = struct
 
   let resolve_dns handle =
     try%lwt
-      match
-        Dns_client_unix.getaddrinfo dns_client Dns.Rr_map.Txt
+      let%lwt result =
+        Dns_client_lwt.getaddrinfo dns_client Dns.Rr_map.Txt
           (Domain_name.of_string_exn ("_atproto." ^ handle))
-      with
+      in
+      match result with
       | Ok (_, t) -> (
           let txt = Dns.Rr_map.Txt_set.choose t in
           match String.split_on_char '=' txt with
