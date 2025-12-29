@@ -3,9 +3,11 @@ open Lexicon_types
 type output =
   { mutable imports: string list
   ; mutable generated_unions: string list
+  ; mutable union_names: (string list * string) list (* refs -> context name *)
   ; buf: Buffer.t }
 
-let make_output () = {imports= []; generated_unions= []; buf= Buffer.create 4096}
+let make_output () =
+  {imports= []; generated_unions= []; union_names= []; buf= Buffer.create 4096}
 
 let add_import out module_name =
   if not (List.mem module_name out.imports) then
@@ -16,6 +18,17 @@ let mark_union_generated out union_name =
     out.generated_unions <- union_name :: out.generated_unions
 
 let is_union_generated out union_name = List.mem union_name out.generated_unions
+
+(* register a context-based name for a union based on its refs *)
+let register_union_name out refs context_name =
+  let sorted_refs = List.sort String.compare refs in
+  if not (List.exists (fun (r, _) -> r = sorted_refs) out.union_names) then
+    out.union_names <- (sorted_refs, context_name) :: out.union_names
+
+(* look up a union's context-based name, or return None *)
+let lookup_union_name out refs =
+  let sorted_refs = List.sort String.compare refs in
+  List.assoc_opt sorted_refs out.union_names
 
 let emit out s = Buffer.add_string out.buf s
 
@@ -53,9 +66,13 @@ let rec gen_type_ref nsid out (type_def : type_def) : string =
       "object_todo"
   | Ref {ref_; _} ->
       gen_ref_type nsid out ref_
-  | Union {refs; _} ->
-      (* generate inline union reference *)
-      gen_union_type_name refs
+  | Union {refs; _} -> (
+    (* generate inline union reference, using registered name if available *)
+    match lookup_union_name out refs with
+    | Some name ->
+        name
+    | None ->
+        gen_union_type_name refs )
   | Token _ ->
       "string"
   | Unknown _ ->
@@ -97,27 +114,32 @@ let gen_type_uri nsid ref_str =
     (* external ref, use as-is *)
     ref_str
 
-(* collect inline union specs from object properties *)
-let rec collect_inline_unions acc type_def =
+(* collect inline union specs from object properties with context *)
+let rec collect_inline_unions_with_context context acc type_def =
   match type_def with
   | Union spec ->
-      (spec.refs, spec) :: acc
+      (context, spec.refs, spec) :: acc
   | Array {items; _} ->
-      collect_inline_unions acc items
+      (* for array items, append _item to context *)
+      collect_inline_unions_with_context (context ^ "_item") acc items
   | _ ->
       acc
 
 let collect_inline_unions_from_properties properties =
   List.fold_left
-    (fun acc (_, (prop : property)) -> collect_inline_unions acc prop.type_def)
+    (fun acc (prop_name, (prop : property)) ->
+      collect_inline_unions_with_context prop_name acc prop.type_def )
     [] properties
 
 (* generate inline union types that appear in object properties *)
 let gen_inline_unions nsid out properties =
   let inline_unions = collect_inline_unions_from_properties properties in
   List.iter
-    (fun (refs, spec) ->
-      let type_name = Naming.union_type_name refs in
+    (fun (context, refs, spec) ->
+      (* register and use context-based name *)
+      let context_name = Naming.type_name context in
+      register_union_name out refs context_name ;
+      let type_name = context_name in
       (* skip if already generated *)
       if not (is_union_generated out type_name) then begin
         mark_union_generated out type_name ;
@@ -162,8 +184,13 @@ let gen_inline_unions nsid out properties =
             let full_type_uri = gen_type_uri nsid ref_str in
             let payload_type = gen_ref_type nsid out ref_str in
             emitln out (Printf.sprintf "  | %s v ->" variant_name) ;
-            emitln out (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
-            emitln out (Printf.sprintf "       | `Assoc fields -> `Assoc ((\"$type\", `String \"%s\") :: fields)" full_type_uri) ;
+            emitln out
+              (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
+            emitln out
+              (Printf.sprintf
+                 "       | `Assoc fields -> `Assoc ((\"$type\", `String \
+                  \"%s\") :: fields)"
+                 full_type_uri ) ;
             emitln out "       | other -> other)" )
           refs ;
         if not is_closed then emitln out "  | Unknown j -> j" ;
@@ -253,8 +280,13 @@ let gen_union_type nsid out name (spec : union_spec) =
       let full_type_uri = gen_type_uri nsid ref_str in
       let payload_type = gen_ref_type nsid out ref_str in
       emitln out (Printf.sprintf "  | %s v ->" variant_name) ;
-      emitln out (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
-      emitln out (Printf.sprintf "       | `Assoc fields -> `Assoc ((\"$type\", `String \"%s\") :: fields)" full_type_uri) ;
+      emitln out
+        (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
+      emitln out
+        (Printf.sprintf
+           "       | `Assoc fields -> `Assoc ((\"$type\", `String \"%s\") :: \
+            fields)"
+           full_type_uri ) ;
       emitln out "       | other -> other)" )
     spec.refs ;
   if not is_closed then emitln out "  | Unknown j -> j" ;
