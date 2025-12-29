@@ -4,9 +4,9 @@ let handler =
           let cursor =
             match Dream.query req "cursor" with
             | Some s ->
-                max 0 (Option.value (int_of_string_opt s) ~default:0)
+                Some (max 0 (Option.value (int_of_string_opt s) ~default:0))
             | None ->
-                0
+                None
           in
           let closed = ref false in
           let send (bytes : bytes) =

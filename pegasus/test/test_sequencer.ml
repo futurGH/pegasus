@@ -107,7 +107,7 @@ let test_backfill_then_live () =
       in
       let stream =
         Lwt.catch
-          (fun () -> Sequencer.Live.stream_with_backfill ~conn ~cursor:0 ~send)
+          (fun () -> Sequencer.Live.stream_with_backfill ~conn ~cursor:(Some 0) ~send)
           (fun _ -> Lwt.return_unit)
       in
       let _ = Lwt.async (fun () -> stream) in
@@ -162,7 +162,7 @@ let test_gap_healing () =
         Lwt.async (fun () ->
             Lwt.catch
               (fun () ->
-                Sequencer.Live.stream_with_backfill ~conn ~cursor:0 ~send )
+                Sequencer.Live.stream_with_backfill ~conn ~cursor:(Some 0) ~send )
               (fun _ -> Lwt.return_unit) )
       in
       (* after stream starts, directly insert identity row with seq=3, then publish identity for seq=4 via bus *)
