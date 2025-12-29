@@ -159,10 +159,12 @@ let gen_inline_unions nsid out properties =
         List.iter
           (fun ref_str ->
             let variant_name = Naming.variant_name_of_ref ref_str in
+            let full_type_uri = gen_type_uri nsid ref_str in
             let payload_type = gen_ref_type nsid out ref_str in
-            emitln out
-              (Printf.sprintf "  | %s v -> %s_to_yojson v" variant_name
-                 payload_type ) )
+            emitln out (Printf.sprintf "  | %s v ->" variant_name) ;
+            emitln out (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
+            emitln out (Printf.sprintf "       | `Assoc fields -> `Assoc ((\"$type\", `String \"%s\") :: fields)" full_type_uri) ;
+            emitln out "       | other -> other)" )
           refs ;
         if not is_closed then emitln out "  | Unknown j -> j" ;
         emit_newline out
@@ -243,14 +245,17 @@ let gen_union_type nsid out name (spec : union_spec) =
   else emitln out "    | _ -> Ok (Unknown json)" ;
   emitln out "  with _ -> Error \"failed to parse union\"" ;
   emit_newline out ;
-  (* generate to_yojson function *)
+  (* generate to_yojson function - inject $type field *)
   emitln out (Printf.sprintf "let %s_to_yojson = function" type_name) ;
   List.iter
     (fun ref_str ->
       let variant_name = Naming.variant_name_of_ref ref_str in
+      let full_type_uri = gen_type_uri nsid ref_str in
       let payload_type = gen_ref_type nsid out ref_str in
-      emitln out
-        (Printf.sprintf "  | %s v -> %s_to_yojson v" variant_name payload_type) )
+      emitln out (Printf.sprintf "  | %s v ->" variant_name) ;
+      emitln out (Printf.sprintf "      (match %s_to_yojson v with" payload_type) ;
+      emitln out (Printf.sprintf "       | `Assoc fields -> `Assoc ((\"$type\", `String \"%s\") :: fields)" full_type_uri) ;
+      emitln out "       | other -> other)" )
     spec.refs ;
   if not is_closed then emitln out "  | Unknown j -> j" ;
   emit_newline out
