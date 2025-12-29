@@ -8,6 +8,8 @@ Hermes provides three components:
 - **hermes-cli** - Code generator for atproto lexicons
 - **hermes_ppx** - PPX extension for ergonomic API calls
 
+### table of contents
+
 - [Quick Start](#quick-start)
 - [Complete Example](#complete-example)
 - [Installation](#installation)
@@ -15,9 +17,6 @@ Hermes provides three components:
     - [Session Management](#session-management)
     - [Making XRPC Calls](#making-xrpc-calls)
     - [Error Handling](#error-handling)
-- [hermes_ppx](#hermes-ppx)
-    - [Setup](#setup)
-    - [Usage](#ppx-usage)
 - [hermes-cli](#hermes-cli)
     - [Usage](#usage)
     - [Options](#options)
@@ -25,6 +24,9 @@ Hermes provides three components:
     - [Type Mappings](#type-mappings)
     - [Bytes Encoding](#bytes-encoding)
     - [Union Types](#union-types)
+- [hermes_ppx](#hermes-ppx)
+    - [Setup](#setup)
+    - [Usage](#ppx-usage)
 
 ## quick start
 
