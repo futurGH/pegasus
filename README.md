@@ -54,13 +54,16 @@ The PDS can be configured to back up server data to and/or store blobs in S3(-co
 
 This repo contains several libraries in addition to the `pegasus` PDS:
 
-| library  | description                                                                                                                                                                      |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| frontend | The PDS frontend, containing the admin dashboard and account page.                                                                                                               |
-| ipld     | A mostly [DASL-compliant](https://dasl.ing/) implementation of [CIDs](https://dasl.ing/cid.html), [CAR](https://dasl.ing/car.html), and [DAG-CBOR](https://dasl.ing/drisl.html). |
-| kleidos  | An atproto-valid interface for secp256k1 and secp256r1 key management, signing/verifying, and encoding/decoding.                                                                 |
-| mist     | A [Merkle Search Tree](https://atproto.com/specs/repository#mst-structure) implementation for data repository purposes.                                                          |
-| pegasus  | The PDS implementation.                                                                                                                                                          |
+| library    | description                                                                                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| frontend   | The PDS frontend, containing the admin dashboard and account page.                                                                                                               |
+| ipld       | A mostly [DASL-compliant](https://dasl.ing/) implementation of [CIDs](https://dasl.ing/cid.html), [CAR](https://dasl.ing/car.html), and [DAG-CBOR](https://dasl.ing/drisl.html). |
+| kleidos    | An atproto-valid interface for secp256k1 and secp256r1 key management, signing/verifying, and encoding/decoding.                                                                 |
+| mist       | A [Merkle Search Tree](https://atproto.com/specs/repository#mst-structure) implementation for data repository purposes.                                                          |
+| hermes     | An XRPC client for atproto.                                                                                                                                                      |
+| hermes_ppx | A preprocessor for hermes, making API calls more ergonomic.                                                                                                                      |
+| hermes-cli | A CLI to generate OCaml types from atproto lexicons.                                                                                                                             |
+| pegasus    | The PDS implementation.                                                                                                                                                          |
 
 To start developing, you'll need:
 

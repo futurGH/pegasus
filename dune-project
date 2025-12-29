@@ -138,6 +138,43 @@
   (multibase (>= 0.1.0))))
 
 (package
+ (name hermes)
+ (synopsis "Type-safe XRPC client for ATProto")
+ (description "XRPC client with PPX extensions for type-safe API calls")
+ (allow_empty)
+ (depends
+  (ocaml (= 5.2.1))
+  dune
+  lwt
+  (cohttp-lwt-unix (>= 6.1.1))
+  (uri (>= 4.4.0))
+  (yojson (>= 3.0.0))
+  (base64 (>= 3.5.0))
+  (lwt_ppx (>= 5.9.1))
+  (ppx_deriving_yojson (>= 3.9.1))))
+
+(package
+ (name hermes-cli)
+ (synopsis "Code generator for Hermes from ATProto lexicons")
+ (allow_empty)
+ (depends
+  (ocaml (= 5.2.1))
+  dune
+  (cmdliner (>= 1.2.0))
+  (yojson (>= 3.0.0))
+  (fmt (>= 0.9.0))
+  (fpath (>= 0.7.3))))
+
+(package
+ (name hermes_ppx)
+ (synopsis "PPX extension for Hermes XRPC calls")
+ (allow_empty)
+ (depends
+  (ocaml (= 5.2.1))
+  dune
+  (ppxlib (>= 0.32.0))))
+
+(package
  (name tailwindcss)
  (allow_empty))
 

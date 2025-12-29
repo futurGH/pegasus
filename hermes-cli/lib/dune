@@ -1,0 +1,3 @@
+(library
+ (name hermes_cli)
+ (libraries yojson fmt fpath str))

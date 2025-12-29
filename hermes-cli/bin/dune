@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (public_name hermes-cli)
+ (package hermes-cli)
+ (libraries hermes_cli cmdliner))

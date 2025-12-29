@@ -1,0 +1,28 @@
+(library
+ (name test_support)
+ (modules mock_http test_utils)
+ (libraries hermes base64 http cohttp cohttp-lwt lwt yojson uri))
+
+(test
+ (name test_types)
+ (modules test_types)
+ (libraries alcotest hermes ipld yojson))
+
+(test
+ (name test_jwt)
+ (modules test_jwt)
+ (libraries alcotest hermes base64))
+
+(test
+ (name test_client)
+ (modules test_client)
+ (libraries alcotest hermes test_support lwt lwt.unix cohttp yojson)
+ (preprocess
+  (pps lwt_ppx)))
+
+(test
+ (name test_credential_manager)
+ (modules test_credential_manager)
+ (libraries alcotest hermes test_support lwt lwt.unix cohttp yojson)
+ (preprocess
+  (pps lwt_ppx)))

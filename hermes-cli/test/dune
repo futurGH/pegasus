@@ -1,0 +1,11 @@
+(test
+ (name test_naming)
+ (libraries alcotest hermes_cli))
+
+(test
+ (name test_parser)
+ (libraries alcotest hermes_cli yojson))
+
+(test
+ (name test_codegen)
+ (libraries alcotest hermes_cli))
