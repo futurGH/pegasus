@@ -340,17 +340,22 @@ let ms_to_iso8601 ms =
 
 (* returns all blob refs in a record *)
 let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
-  List.fold_left
-    (fun acc (_, value) ->
-      match value with
-      | `BlobRef blob ->
-          blob :: acc
-      | `LexMap map ->
-          find_blob_refs map @ acc
-      | _ ->
-          acc )
-    []
-    (Mist.Lex.String_map.bindings record)
+  let rec aux acc entries =
+    List.fold_left
+      (fun acc value ->
+        match value with
+        | `BlobRef blob ->
+            blob :: acc
+        | `LexMap map ->
+            find_blob_refs map @ acc
+        | `LexArray arr ->
+            aux acc (Array.to_list arr) @ acc
+        | _ ->
+            acc )
+      acc entries
+  in
+  aux [] (Mist.Lex.String_map.bindings record |> List.map snd)
+  |> List.sort_uniq (fun (r1 : Mist.Blob_ref.t) r2 -> Cid.compare r1.ref r2.ref)
 
 type validate_handle_error =
   | InvalidFormat of string
