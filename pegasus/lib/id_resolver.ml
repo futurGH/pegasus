@@ -15,7 +15,7 @@ module Handle = struct
           if
             String.starts_with ~prefix:"did:plc:" did
             || String.starts_with ~prefix:"did:web:" did
-          then Lwt.return_ok did
+          then Lwt.return_ok (String.trim did)
           else Lwt.return_error "invalid did in .well-known/atproto-did"
       | _ ->
           let%lwt () = Body.drain_body body in
@@ -35,7 +35,7 @@ module Handle = struct
           | ["did"; did]
             when String.starts_with ~prefix:"did:plc:" did
                  || String.starts_with ~prefix:"did:web:" did ->
-              Lwt.return_ok did
+              Lwt.return_ok (String.trim did)
           | _ ->
               Lwt.return_error "invalid did in dns record" )
       | Error (`Msg e) ->
