@@ -2,13 +2,36 @@
 
 is an [atproto PDS](https://atproto.com/guides/glossary#pds-personal-data-server), along with an assortment of atproto-relevant libraries, written in OCaml.
 
+## table of contents
+
+- [Running It](#running-it)
+- [Environment](#environment)
+    - [SMTP](#smtp)
+    - [S3](#s3)
+- [Development](#development)
+- [Libraries](#libraries)
+    - [ipld](#ipld) - IPLD implementation (CIDs, CAR, DAG-CBOR)
+    - [kleidos](#kleidos) - Cryptographic key management
+    - [mist](#mist) - Merkle Search Tree implementation
+    - [hermes](#hermes) - XRPC client
+    - [frontend](#frontend) - Web interface
+    - [pegasus](#pegasus-library) - PDS implementation
+
 ## running it
 
 After cloning this repo, start by running
 
 ```
+docker compose pull
+```
+
+to pull the latest image, or
+
+```
 docker compose build
 ```
+
+to build from source.
 
 Next, run
 
@@ -50,20 +73,43 @@ The PDS can be configured to back up server data to and/or store blobs in S3(-co
 - `PDS_S3_ENDPOINT`, `PDS_S3_REGION`, `PDS_S3_BUCKET`, `PDS_S3_ACCESS_KEY`, `PDS_S3_SECRET_KEY` — S3 configuration.
 - `PDS_S3_CDN_URL` — You may optionally set this to redirect `getBlob` requests to `{PDS_S3_CDN_URL}/blobs/{did}/{cid}`. When unset, blobs will be fetched either from local storage or from S3, depending on `PDS_S3_BLOBS_ENABLED`.
 
+## libraries
+
+This repo contains several libraries in addition to the `pegasus` PDS. Each library has its own README with detailed documentation.
+
+### <a id="ipld"></a>[ipld](ipld/README.md)
+
+A mostly [DASL-compliant](https://dasl.ing/) implementation of [CIDs](https://dasl.ing/cid.html), [CAR](https://dasl.ing/car.html), and [DAG-CBOR](https://dasl.ing/drisl.html).
+
+Provides content addressing primitives for IPLD: Content Identifiers (CIDs), Content Addressable aRchives (CAR), and deterministic CBOR encoding.
+
+### <a id="kleidos"></a>[kleidos](kleidos/README.md)
+
+An atproto-valid interface for secp256k1 and secp256r1 key management, signing/verifying, and encoding/decoding.
+
+Handles cryptographic operations for both K-256 and P-256 elliptic curves with multikey encoding and did:ket generation.
+
+### <a id="mist"></a>[mist](mist/README.md)
+
+A [Merkle Search Tree](https://atproto.com/specs/repository#mst-structure) implementation for data repository purposes with a swappable storage backend.
+
+### <a id="hermes"></a>[hermes](hermes/README.md)
+
+An XRPC client for atproto with three components:
+
+- **hermes** - Core XRPC client library
+- **hermes_ppx** - PPX extension for ergonomic API calls
+- **hermes-cli** - CLI to generate OCaml types from atproto lexicons
+
+### <a id="frontend"></a>[frontend](frontend/README.md)
+
+The PDS frontend, containing the admin dashboard and account page.
+
+### <a id="pegasus-library"></a>[pegasus](pegasus/README.md)
+
+The PDS implementation.
+
 ## development
-
-This repo contains several libraries in addition to the `pegasus` PDS:
-
-| library    | description                                                                                                                                                                      |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| frontend   | The PDS frontend, containing the admin dashboard and account page.                                                                                                               |
-| ipld       | A mostly [DASL-compliant](https://dasl.ing/) implementation of [CIDs](https://dasl.ing/cid.html), [CAR](https://dasl.ing/car.html), and [DAG-CBOR](https://dasl.ing/drisl.html). |
-| kleidos    | An atproto-valid interface for secp256k1 and secp256r1 key management, signing/verifying, and encoding/decoding.                                                                 |
-| mist       | A [Merkle Search Tree](https://atproto.com/specs/repository#mst-structure) implementation for data repository purposes.                                                          |
-| hermes     | An XRPC client for atproto.                                                                                                                                                      |
-| hermes_ppx | A preprocessor for hermes, making API calls more ergonomic.                                                                                                                      |
-| hermes-cli | A CLI to generate OCaml types from atproto lexicons.                                                                                                                             |
-| pegasus    | The PDS implementation.                                                                                                                                                          |
 
 To start developing, you'll need:
 
@@ -108,4 +154,4 @@ dune tools exec ocamllsp
 
 to download the formatter and LSP services. You can run `dune fmt` to format the project.
 
-The [frontend](frontend) is written in [MLX](https://github.com/ocaml-mlx/mlx), a JSX-ish OCaml dialect. To format it, you'll need to `opam install ocamlformat-mlx`, then `ocamlformat-mlx -i frontend/**/*.mlx`. You'll see a few errors on formatting files containing `[%browser_only]`; I'm waiting on the next release of `mlx` to fix those.
+The [frontend](frontend/) is written in [MLX](https://github.com/ocaml-mlx/mlx), a JSX-ish OCaml dialect. To format it, you'll need to `opam install ocamlformat-mlx`, then `ocamlformat-mlx -i frontend/**/*.mlx`. You'll see a few errors on formatting files containing `[%browser_only]`; I'm waiting on the next release of `mlx` to fix those.

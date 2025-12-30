@@ -96,24 +96,6 @@ and entry =
 
 type node_or_entry = Node of node | Entry of entry
 
-type diff_add = {key: string; cid: Cid.t}
-
-type diff_update = {key: string; prev: Cid.t; cid: Cid.t}
-
-type diff_delete = {key: string; cid: Cid.t}
-
-type data_diff =
-  { adds: diff_add list
-  ; updates: diff_update list
-  ; deletes: diff_delete list
-  ; new_mst_blocks: (Cid.t * bytes) list
-  ; new_leaf_cids: Cid.Set.t
-  ; removed_cids: Cid.Set.t }
-
-let ( let*? ) lazy_opt_lwt f =
-  let%lwt result = Lazy.force lazy_opt_lwt in
-  f result
-
 let ( >>? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
@@ -345,14 +327,14 @@ struct
   let traverse t fn : unit Lwt.t =
     let rec traverse node =
       let%lwt () =
-        let*? left = node.left in
+        let%lwt left = Lazy.force node.left in
         match left with Some l -> traverse l | None -> Lwt.return_unit
       in
       let%lwt () =
         Lwt_list.iter_s
           (fun (entry : entry) ->
             fn entry.key entry.value ;
-            let*? right = entry.right in
+            let%lwt right = Lazy.force entry.right in
             match right with Some r -> traverse r | None -> Lwt.return_unit )
           node.entries
       in
@@ -1633,59 +1615,4 @@ struct
         Lwt.return true
     | _ ->
         Lwt.return false
-end
-
-module Inductive (M : Intf) = struct
-  module Cache_bs = Cache_blockstore (Memory_blockstore)
-  module Mem_mst = Make (Cache_bs)
-
-  type diff =
-    | Add of {key: string; cid: Cid.t}
-    | Update of {key: string; prev: Cid.t option; cid: Cid.t}
-    | Delete of {key: string; prev: Cid.t}
-
-  (* given an mst diff, returns all new blocks as well as inductive proof blocks *)
-  let generate_proof (map : Cid.t String_map.t) (diff : diff list)
-      ~(new_root : Cid.t) ~(prev_root : Cid.t) : (Block_map.t, exn) Lwt_result.t
-      =
-    try%lwt
-      let%lwt mem_mst =
-        Mem_mst.of_assoc
-          (Cache_bs.create (Memory_blockstore.create ()))
-          (String_map.bindings map)
-      in
-      (* save this now so we can read blocks from it later *)
-      let blockstore = mem_mst.blockstore in
-      (* apply inverse of operations in reverse order,
-         check that mst root matches prev_root *)
-      let%lwt inverted_mst, added_cids =
-        Lwt_list.fold_right_s
-          (fun (diff : diff) (mst, added_cids) ->
-            match diff with
-            | Delete {key; prev} | Update {key; prev= Some prev; _} ->
-                let%lwt mst = Mem_mst.add mst key prev in
-                Lwt.return (mst, Cid.Set.remove prev added_cids)
-            | Add {key; cid} | Update {key; prev= None; cid} ->
-                let%lwt mst = Mem_mst.delete mst key in
-                Lwt.return (mst, Cid.Set.add cid added_cids) )
-          diff (mem_mst, Cid.Set.empty)
-      in
-      if not (Cid.equal inverted_mst.root prev_root) then
-        failwith
-          (Printf.sprintf
-             "inductive proof produced invalid previous cid: expected %s, got \
-              %s"
-             (Cid.to_string prev_root)
-             (Cid.to_string inverted_mst.root) ) ;
-      let proof_cids =
-        Cid.Set.union added_cids (Cache_bs.get_reads blockstore)
-        |> Cid.Set.remove prev_root |> Cid.Set.add new_root
-      in
-      let {blocks= proof_bm; _} : Block_map.with_missing =
-        Block_map.get_many
-          (Cid.Set.elements proof_cids)
-          (Cache_bs.get_cache blockstore)
-      in
-      Lwt.return_ok proof_bm
-    with e -> Lwt.return_error e
 end

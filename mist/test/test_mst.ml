@@ -4,34 +4,32 @@ open Lwt_result.Syntax
 module Mem_mst = Mst.Make (Storage.Memory_blockstore)
 module String_map = Dag_cbor.String_map
 
+type diff_add = {key: string; cid: Cid.t}
+
+type diff_update = {key: string; prev: Cid.t; cid: Cid.t}
+
+type diff_delete = {key: string; cid: Cid.t}
+
+type data_diff =
+  { adds: diff_add list
+  ; updates: diff_update list
+  ; deletes: diff_delete list
+  ; new_mst_blocks: (Cid.t * bytes) list
+  ; new_leaf_cids: Cid.Set.t }
+
 module Differ (Prev : Mst.Intf) (Curr : Mst.Intf) = struct
-  let diff ~(t_curr : Curr.t) ~(t_prev : Prev.t) : Mst.data_diff Lwt.t =
-    let%lwt curr_nodes, curr_node_set, curr_leaf_set =
+  let diff ~(t_curr : Curr.t) ~(t_prev : Prev.t) : data_diff Lwt.t =
+    let%lwt curr_nodes, _, curr_leaf_set =
       Curr.collect_nodes_and_leaves t_curr
     in
     let%lwt _, prev_node_set, prev_leaf_set =
       Prev.collect_nodes_and_leaves t_prev
     in
     let in_prev_nodes cid = Cid.Set.mem cid prev_node_set in
-    let in_curr_nodes cid = Cid.Set.mem cid curr_node_set in
     let in_prev_leaves cid = Cid.Set.mem cid prev_leaf_set in
-    let in_curr_leaves cid = Cid.Set.mem cid curr_leaf_set in
     let new_mst_blocks =
       List.filter (fun (cid, _) -> not (in_prev_nodes cid)) curr_nodes
     in
-    let removed_node_cids =
-      Cid.Set.fold
-        (fun cid acc ->
-          if not (in_curr_nodes cid) then Cid.Set.add cid acc else acc )
-        prev_node_set Cid.Set.empty
-    in
-    let removed_leaf_cids =
-      Cid.Set.fold
-        (fun cid acc ->
-          if not (in_curr_leaves cid) then Cid.Set.add cid acc else acc )
-        prev_leaf_set Cid.Set.empty
-    in
-    let removed_cids = Cid.Set.union removed_node_cids removed_leaf_cids in
     let new_leaf_cids =
       Cid.Set.fold
         (fun cid acc ->
@@ -41,8 +39,8 @@ module Differ (Prev : Mst.Intf) (Curr : Mst.Intf) = struct
     let%lwt curr_leaves = Curr.leaves_of_root t_curr in
     let%lwt prev_leaves = Prev.leaves_of_root t_prev in
     let rec merge (pl : (string * Cid.t) list) (cl : (string * Cid.t) list)
-        (adds : Mst.diff_add list) (updates : Mst.diff_update list)
-        (deletes : Mst.diff_delete list) =
+        (adds : diff_add list) (updates : diff_update list)
+        (deletes : diff_delete list) =
       match (pl, cl) with
       | [], [] ->
           (List.rev adds, List.rev updates, List.rev deletes)
@@ -64,8 +62,7 @@ module Differ (Prev : Mst.Intf) (Curr : Mst.Intf) = struct
               updates deletes
     in
     let adds, updates, deletes = merge prev_leaves curr_leaves [] [] [] in
-    Lwt.return
-      {Mst.adds; updates; deletes; new_mst_blocks; new_leaf_cids; removed_cids}
+    Lwt.return {adds; updates; deletes; new_mst_blocks; new_leaf_cids}
 end
 
 module Mem_diff = Differ (Mem_mst) (Mem_mst)
@@ -487,17 +484,17 @@ let test_diffs () =
   (* contents: convert to maps to compare *)
   let adds_map =
     List.fold_left
-      (fun m (a : Mst.diff_add) -> String_map.add a.key a.cid m)
+      (fun m (a : diff_add) -> String_map.add a.key a.cid m)
       String_map.empty diff.adds
   in
   let updates_map =
     List.fold_left
-      (fun m (u : Mst.diff_update) -> String_map.add u.key (u.prev, u.cid) m)
+      (fun m (u : diff_update) -> String_map.add u.key (u.prev, u.cid) m)
       String_map.empty diff.updates
   in
   let deletes_map =
     List.fold_left
-      (fun m (d : Mst.diff_delete) -> String_map.add d.key d.cid m)
+      (fun m (d : diff_delete) -> String_map.add d.key d.cid m)
       String_map.empty diff.deletes
   in
   (* compare adds *)
