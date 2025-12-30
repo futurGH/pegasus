@@ -1,17 +1,9 @@
-type query =
-  { did: string
-  ; since: string option [@default None]
-  ; limit: int option [@default None]
-  ; cursor: string option [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response = {cursor: string option [@default None]; cids: string list}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_listBlobs.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
       let {did; since; limit; cursor} =
-        Xrpc.parse_query ctx.req query_of_yojson
+        Xrpc.parse_query ctx.req params_of_yojson
       in
       let cursor = Option.value ~default:"" cursor in
       let limit =
@@ -27,4 +19,4 @@ let handler =
       let cursor =
         if List.length cids = limit then Mist.Util.last cids else None
       in
-      Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {cursor; cids} )
+      Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {cursor; cids} )

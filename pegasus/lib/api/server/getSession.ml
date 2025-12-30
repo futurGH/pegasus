@@ -1,4 +1,4 @@
-type response = Auth.session_info [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_getSession.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {db; auth; _} ->
@@ -13,4 +13,7 @@ let handler =
           ; email_confirmed= Some false
           ; email_auth_factor= Some false }
       in
-      Dream.json @@ Yojson.Safe.to_string @@ Auth.session_info_to_yojson session )
+      Dream.json @@ Yojson.Safe.to_string
+      @@ output_to_yojson
+           (session |> Auth.session_info_to_yojson |> output_of_yojson
+           |> Result.get_ok ) )

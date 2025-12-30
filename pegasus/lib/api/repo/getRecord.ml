@@ -1,16 +1,8 @@
-type query =
-  { repo: string
-  ; collection: string
-  ; rkey: string
-  ; cid: string option [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response = {uri: string; cid: string; value: Mist.Lex.repo_record}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_getRecord.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req params_of_yojson in
       let%lwt input_did =
         Lwt_result.catch @@ fun () -> Xrpc.resolve_repo_did ctx input.repo
       in
@@ -26,7 +18,10 @@ let handler =
           | Some {cid; value; _}
             when input.cid = None || input.cid = Some (Cid.to_string cid) ->
               Dream.json @@ Yojson.Safe.to_string
-              @@ response_to_yojson {uri; cid= Cid.to_string cid; value}
+              @@ output_to_yojson
+                   { uri
+                   ; cid= Some (Cid.to_string cid)
+                   ; value= Repository.Lex.repo_record_to_yojson value }
           | _ ->
               Errors.internal_error ~name:"RecordNotFound"
                 ~msg:("could not find record " ^ uri)

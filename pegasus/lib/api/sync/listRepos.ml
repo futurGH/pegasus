@@ -1,21 +1,9 @@
-type query =
-  {cursor: string option [@default None]; limit: int option [@default None]}
-[@@deriving yojson {strict= false}]
-
-type response = {cursor: string option [@default None]; repos: res_repo list}
-[@@deriving yojson {strict= false}]
-
-and res_repo =
-  { did: string
-  ; head: string
-  ; rev: string
-  ; active: bool option [@default None]
-  ; status: string option [@default None] }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_listRepos
+open Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {cursor; limit} = Xrpc.parse_query ctx.req query_of_yojson in
+      let {cursor; limit} = Xrpc.parse_query ctx.req params_of_yojson in
       let limit =
         match limit with
         | Some limit when limit > 0 && limit <= 1000 ->
@@ -52,4 +40,4 @@ let handler =
           Option.map (fun r -> r.did) @@ Mist.Util.last repos
         else None
       in
-      Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {cursor; repos} )
+      Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {cursor; repos} )

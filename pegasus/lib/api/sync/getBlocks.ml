@@ -1,9 +1,8 @@
-type query = {did: string; cids: string list}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_getBlocks.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {did; cids} : query = Xrpc.parse_query ctx.req query_of_yojson in
+      let {did; cids} = Xrpc.parse_query ctx.req params_of_yojson in
       let%lwt {db; commit; _} = Repository.load did ~ensure_active:true in
       let commit_cid, commit_signed = Option.get commit in
       let commit_block =

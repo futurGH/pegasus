@@ -1,0 +1,134 @@
+(* re-exported from App_bsky_shared_1 *)
+
+type profile_view_basic = App_bsky_shared_1.profile_view_basic
+let profile_view_basic_of_yojson = App_bsky_shared_1.profile_view_basic_of_yojson
+let profile_view_basic_to_yojson = App_bsky_shared_1.profile_view_basic_to_yojson
+
+type profile_view = App_bsky_shared_1.profile_view
+let profile_view_of_yojson = App_bsky_shared_1.profile_view_of_yojson
+let profile_view_to_yojson = App_bsky_shared_1.profile_view_to_yojson
+
+type profile_view_detailed = App_bsky_shared_1.profile_view_detailed
+let profile_view_detailed_of_yojson = App_bsky_shared_1.profile_view_detailed_of_yojson
+let profile_view_detailed_to_yojson = App_bsky_shared_1.profile_view_detailed_to_yojson
+
+type profile_associated = App_bsky_shared_1.profile_associated
+let profile_associated_of_yojson = App_bsky_shared_1.profile_associated_of_yojson
+let profile_associated_to_yojson = App_bsky_shared_1.profile_associated_to_yojson
+
+type profile_associated_chat = App_bsky_shared_1.profile_associated_chat
+let profile_associated_chat_of_yojson = App_bsky_shared_1.profile_associated_chat_of_yojson
+let profile_associated_chat_to_yojson = App_bsky_shared_1.profile_associated_chat_to_yojson
+
+type profile_associated_activity_subscription = App_bsky_shared_1.profile_associated_activity_subscription
+let profile_associated_activity_subscription_of_yojson = App_bsky_shared_1.profile_associated_activity_subscription_of_yojson
+let profile_associated_activity_subscription_to_yojson = App_bsky_shared_1.profile_associated_activity_subscription_to_yojson
+
+type viewer_state = App_bsky_shared_1.actor_viewer_state
+let viewer_state_of_yojson = App_bsky_shared_1.actor_viewer_state_of_yojson
+let viewer_state_to_yojson = App_bsky_shared_1.actor_viewer_state_to_yojson
+
+type known_followers = App_bsky_shared_1.known_followers
+let known_followers_of_yojson = App_bsky_shared_1.known_followers_of_yojson
+let known_followers_to_yojson = App_bsky_shared_1.known_followers_to_yojson
+
+type verification_state = App_bsky_shared_1.verification_state
+let verification_state_of_yojson = App_bsky_shared_1.verification_state_of_yojson
+let verification_state_to_yojson = App_bsky_shared_1.verification_state_to_yojson
+
+type verification_view = App_bsky_shared_1.verification_view
+let verification_view_of_yojson = App_bsky_shared_1.verification_view_of_yojson
+let verification_view_to_yojson = App_bsky_shared_1.verification_view_to_yojson
+
+type preferences = App_bsky_shared_1.preferences
+let preferences_of_yojson = App_bsky_shared_1.preferences_of_yojson
+let preferences_to_yojson = App_bsky_shared_1.preferences_to_yojson
+
+type adult_content_pref = App_bsky_shared_1.adult_content_pref
+let adult_content_pref_of_yojson = App_bsky_shared_1.adult_content_pref_of_yojson
+let adult_content_pref_to_yojson = App_bsky_shared_1.adult_content_pref_to_yojson
+
+type content_label_pref = App_bsky_shared_1.content_label_pref
+let content_label_pref_of_yojson = App_bsky_shared_1.content_label_pref_of_yojson
+let content_label_pref_to_yojson = App_bsky_shared_1.content_label_pref_to_yojson
+
+type saved_feed = App_bsky_shared_1.saved_feed
+let saved_feed_of_yojson = App_bsky_shared_1.saved_feed_of_yojson
+let saved_feed_to_yojson = App_bsky_shared_1.saved_feed_to_yojson
+
+type saved_feeds_pref_v2 = App_bsky_shared_1.saved_feeds_pref_v2
+let saved_feeds_pref_v2_of_yojson = App_bsky_shared_1.saved_feeds_pref_v2_of_yojson
+let saved_feeds_pref_v2_to_yojson = App_bsky_shared_1.saved_feeds_pref_v2_to_yojson
+
+type saved_feeds_pref = App_bsky_shared_1.saved_feeds_pref
+let saved_feeds_pref_of_yojson = App_bsky_shared_1.saved_feeds_pref_of_yojson
+let saved_feeds_pref_to_yojson = App_bsky_shared_1.saved_feeds_pref_to_yojson
+
+type personal_details_pref = App_bsky_shared_1.personal_details_pref
+let personal_details_pref_of_yojson = App_bsky_shared_1.personal_details_pref_of_yojson
+let personal_details_pref_to_yojson = App_bsky_shared_1.personal_details_pref_to_yojson
+
+type declared_age_pref = App_bsky_shared_1.declared_age_pref
+let declared_age_pref_of_yojson = App_bsky_shared_1.declared_age_pref_of_yojson
+let declared_age_pref_to_yojson = App_bsky_shared_1.declared_age_pref_to_yojson
+
+type feed_view_pref = App_bsky_shared_1.feed_view_pref
+let feed_view_pref_of_yojson = App_bsky_shared_1.feed_view_pref_of_yojson
+let feed_view_pref_to_yojson = App_bsky_shared_1.feed_view_pref_to_yojson
+
+type thread_view_pref = App_bsky_shared_1.thread_view_pref
+let thread_view_pref_of_yojson = App_bsky_shared_1.thread_view_pref_of_yojson
+let thread_view_pref_to_yojson = App_bsky_shared_1.thread_view_pref_to_yojson
+
+type interests_pref = App_bsky_shared_1.interests_pref
+let interests_pref_of_yojson = App_bsky_shared_1.interests_pref_of_yojson
+let interests_pref_to_yojson = App_bsky_shared_1.interests_pref_to_yojson
+
+type muted_word_target = App_bsky_shared_1.muted_word_target
+let muted_word_target_of_yojson = App_bsky_shared_1.muted_word_target_of_yojson
+let muted_word_target_to_yojson = App_bsky_shared_1.muted_word_target_to_yojson
+
+type muted_word = App_bsky_shared_1.muted_word
+let muted_word_of_yojson = App_bsky_shared_1.muted_word_of_yojson
+let muted_word_to_yojson = App_bsky_shared_1.muted_word_to_yojson
+
+type muted_words_pref = App_bsky_shared_1.muted_words_pref
+let muted_words_pref_of_yojson = App_bsky_shared_1.muted_words_pref_of_yojson
+let muted_words_pref_to_yojson = App_bsky_shared_1.muted_words_pref_to_yojson
+
+type hidden_posts_pref = App_bsky_shared_1.hidden_posts_pref
+let hidden_posts_pref_of_yojson = App_bsky_shared_1.hidden_posts_pref_of_yojson
+let hidden_posts_pref_to_yojson = App_bsky_shared_1.hidden_posts_pref_to_yojson
+
+type labelers_pref = App_bsky_shared_1.labelers_pref
+let labelers_pref_of_yojson = App_bsky_shared_1.labelers_pref_of_yojson
+let labelers_pref_to_yojson = App_bsky_shared_1.labelers_pref_to_yojson
+
+type labeler_pref_item = App_bsky_shared_1.labeler_pref_item
+let labeler_pref_item_of_yojson = App_bsky_shared_1.labeler_pref_item_of_yojson
+let labeler_pref_item_to_yojson = App_bsky_shared_1.labeler_pref_item_to_yojson
+
+type bsky_app_state_pref = App_bsky_shared_1.bsky_app_state_pref
+let bsky_app_state_pref_of_yojson = App_bsky_shared_1.bsky_app_state_pref_of_yojson
+let bsky_app_state_pref_to_yojson = App_bsky_shared_1.bsky_app_state_pref_to_yojson
+
+type bsky_app_progress_guide = App_bsky_shared_1.bsky_app_progress_guide
+let bsky_app_progress_guide_of_yojson = App_bsky_shared_1.bsky_app_progress_guide_of_yojson
+let bsky_app_progress_guide_to_yojson = App_bsky_shared_1.bsky_app_progress_guide_to_yojson
+
+type nux = App_bsky_shared_1.nux
+let nux_of_yojson = App_bsky_shared_1.nux_of_yojson
+let nux_to_yojson = App_bsky_shared_1.nux_to_yojson
+
+type verification_prefs = App_bsky_shared_1.verification_prefs
+let verification_prefs_of_yojson = App_bsky_shared_1.verification_prefs_of_yojson
+let verification_prefs_to_yojson = App_bsky_shared_1.verification_prefs_to_yojson
+
+type post_interaction_settings_pref = App_bsky_shared_1.post_interaction_settings_pref
+let post_interaction_settings_pref_of_yojson = App_bsky_shared_1.post_interaction_settings_pref_of_yojson
+let post_interaction_settings_pref_to_yojson = App_bsky_shared_1.post_interaction_settings_pref_to_yojson
+
+type status_view = App_bsky_shared_1.status_view
+let status_view_of_yojson = App_bsky_shared_1.status_view_of_yojson
+let status_view_to_yojson = App_bsky_shared_1.status_view_to_yojson
+

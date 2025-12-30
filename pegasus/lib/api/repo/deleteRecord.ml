@@ -1,15 +1,4 @@
-type request =
-  { repo: string
-  ; collection: string
-  ; rkey: string
-  ; swap_record: string option [@key "swapRecord"] [@default None]
-  ; swap_commit: string option [@key "swapCommit"] [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response = {commit: res_commit option [@default None]}
-[@@deriving yojson {strict= false}]
-
-and res_commit = {cid: string; rev: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_deleteRecord.Main
 
 let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
 
@@ -27,7 +16,7 @@ let handler =
           ; calc_key= Some calc_key_did
           ; calc_points= Some calc_points_delete } ]
     (fun ctx ->
-      let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
+      let%lwt input = Xrpc.parse_body ctx.req input_of_yojson in
       Auth.assert_repo_scope ctx.auth ~collection:input.collection
         ~action:Oauth.Scopes.Delete ;
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
@@ -46,7 +35,7 @@ let handler =
       match List.hd results with
       | Delete _ ->
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson
+          @@ output_to_yojson
                {commit= Some {cid= Cid.to_string commit_cid; rev}}
       | _ ->
           Errors.invalid_request "unexpected create or update result" )

@@ -1,5 +1,4 @@
-type response = {token_required: bool [@key "tokenRequired"]}
-[@@deriving yojson]
+open Lexicons.Com_atproto_server_requestEmailUpdate.Main
 
 let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
   let token_required =
@@ -65,4 +64,4 @@ let handler =
       | Some actor ->
           let%lwt token_required = request_email_update actor db in
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {token_required} )
+          @@ output_to_yojson {token_required} )

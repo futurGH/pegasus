@@ -1,18 +1,4 @@
-type request =
-  { email: string
-  ; handle: string
-  ; did: string option [@default None]
-  ; password: string
-  ; invite_code: string option [@key "inviteCode"] [@default None]
-  ; recovery_key: string option [@key "recoveryKey"] [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response =
-  { access_jwt: string [@key "accessJwt"]
-  ; refresh_jwt: string [@key "refreshJwt"]
-  ; handle: string
-  ; did: string }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_createAccount.Main
 
 type create_account_error =
   | InviteCodeRequired
@@ -119,9 +105,7 @@ let create_account ~email ~handle ~password ?invite_code ?did ?recovery_key db =
                       (Util.Constants.user_db_filepath did)
                       ~perm:0o644
                   in
-                  let%lwt repo =
-                    Repository.load ~create:true did
-                  in
+                  let%lwt repo = Repository.load ~create:true did in
                   let%lwt _ = Repository.put_initial_commit repo in
                   let%lwt _ = Sequencer.sequence_identity db ~did ~handle () in
                   let%lwt _ =
@@ -148,10 +132,11 @@ let create_account ~email ~handle ~password ?invite_code ?did ?recovery_key db =
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
+      let%lwt input = Xrpc.parse_body ctx.req input_of_yojson in
       match%lwt
-        create_account ~email:input.email ~handle:input.handle
-          ~password:input.password ?invite_code:input.invite_code ?did:input.did
+        create_account ~email:(Option.get input.email) ~handle:input.handle
+          ~password:(Option.get input.password)
+          ?invite_code:input.invite_code ?did:input.did
           ?recovery_key:input.recovery_key ctx.db
       with
       | Error InviteCodeRequired ->
@@ -174,4 +159,5 @@ let handler =
       | Ok {did; handle} ->
           let access_jwt, refresh_jwt = Jwt.generate_jwt did in
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {access_jwt; refresh_jwt; did; handle} )
+          @@ output_to_yojson
+               {access_jwt; refresh_jwt; did; handle; did_doc= None} )

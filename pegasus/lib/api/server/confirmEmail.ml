@@ -1,5 +1,4 @@
-type request = {email: string; token: string}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_confirmEmail.Main
 
 type confirm_error = InvalidToken | ExpiredToken | EmailMismatch
 
@@ -23,7 +22,7 @@ let handler =
       Auth.assert_account_scope auth ~attr:Oauth.Scopes.Email
         ~action:Oauth.Scopes.Manage ;
       let did = Auth.get_authed_did_exn auth in
-      let%lwt {email; token} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {email; token} = Xrpc.parse_body req input_of_yojson in
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->
           Errors.invalid_request ~name:"AccountNotFound" "account not found"

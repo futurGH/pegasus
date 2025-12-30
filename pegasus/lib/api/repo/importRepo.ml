@@ -1,5 +1,3 @@
-type query = {did: string} [@@deriving yojson {strict= false}]
-
 let rec stream_to_seq stream () =
   let%lwt chunk = Dream.read stream in
   match chunk with

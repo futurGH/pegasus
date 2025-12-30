@@ -1,8 +1,8 @@
-type query = {did: string; cid: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_getBlob.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {did; cid} = Xrpc.parse_query ctx.req query_of_yojson in
+      let {did; cid} = Xrpc.parse_query ctx.req params_of_yojson in
       let cid_parsed = Cid.as_cid cid in
       let%lwt {db; _} = Repository.load did ~ensure_active:true in
       let%lwt blob_meta = User_store.get_blob_metadata db cid_parsed in

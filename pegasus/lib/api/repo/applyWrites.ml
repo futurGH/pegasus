@@ -1,26 +1,14 @@
-type request =
-  { repo: string
-  ; validate: bool option [@default None]
-  ; writes: Repository.repo_write list
-  ; swap_commit: string option [@key "swapCommit"] [@default None] }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_applyWrites.Main
 
-type response =
-  { commit: res_commit option [@default None]
-  ; results: Repository.apply_writes_result list }
-[@@deriving yojson {strict= false}]
-
-and res_commit = {cid: string; rev: string} [@@deriving yojson]
-
-let calc_write_points (writes : Repository.repo_write list) =
+let calc_write_points writes =
   List.fold_left
-    (fun acc (write : Repository.repo_write) ->
+    (fun acc write ->
       acc + match write with Create _ -> 3 | Update _ -> 2 | Delete _ -> 1 )
     0 writes
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
-      let%lwt input = Xrpc.parse_body ctx.req request_of_yojson in
+      let%lwt input = Xrpc.parse_body ctx.req input_of_yojson in
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
       (* apply rate limits after parsing body so we can count points accurately *)
       let points = calc_write_points input.writes in
@@ -32,7 +20,7 @@ let handler =
       in
       (* check oauth scopes for each write operation *)
       List.iter
-        (fun (write : Repository.repo_write) ->
+        (fun write ->
           match write with
           | Create {collection; _} ->
               Auth.assert_repo_scope ctx.auth ~collection
@@ -45,10 +33,25 @@ let handler =
                 ~action:Oauth.Scopes.Delete )
         input.writes ;
       let%lwt repo = Repository.load did in
-      let%lwt {commit= commit_cid, {rev; _}; results} =
-        Repository.apply_writes repo input.writes
+      let repo_writes =
+        List.map
+          (fun w ->
+            w |> writes_item_to_yojson |> Repository.repo_write_of_yojson
+            |> Result.get_ok )
+          input.writes
+      in
+      let%lwt {commit= commit_cid, {rev; _}; results= aw_results} =
+        Repository.apply_writes repo repo_writes
           (Option.map Cid.as_cid input.swap_commit)
       in
+      let results =
+        Option.some
+        @@ List.map
+             (fun r ->
+               r |> Repository.apply_writes_result_to_yojson
+               |> results_item_of_yojson |> Result.get_ok )
+             aw_results
+      in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson
+      @@ output_to_yojson
            {commit= Some {cid= Cid.to_string commit_cid; rev}; results} )

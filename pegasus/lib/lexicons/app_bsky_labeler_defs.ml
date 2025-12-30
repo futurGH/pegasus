@@ -1,0 +1,18 @@
+(* re-exported from App_bsky_shared_1 *)
+
+type labeler_view = App_bsky_shared_1.labeler_view
+let labeler_view_of_yojson = App_bsky_shared_1.labeler_view_of_yojson
+let labeler_view_to_yojson = App_bsky_shared_1.labeler_view_to_yojson
+
+type labeler_view_detailed = App_bsky_shared_1.labeler_view_detailed
+let labeler_view_detailed_of_yojson = App_bsky_shared_1.labeler_view_detailed_of_yojson
+let labeler_view_detailed_to_yojson = App_bsky_shared_1.labeler_view_detailed_to_yojson
+
+type labeler_viewer_state = App_bsky_shared_1.labeler_viewer_state
+let labeler_viewer_state_of_yojson = App_bsky_shared_1.labeler_viewer_state_of_yojson
+let labeler_viewer_state_to_yojson = App_bsky_shared_1.labeler_viewer_state_to_yojson
+
+type labeler_policies = App_bsky_shared_1.labeler_policies
+let labeler_policies_of_yojson = App_bsky_shared_1.labeler_policies_of_yojson
+let labeler_policies_to_yojson = App_bsky_shared_1.labeler_policies_to_yojson
+

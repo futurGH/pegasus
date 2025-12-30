@@ -1,11 +1,8 @@
-type request = {did: string option [@default None]}
-[@@deriving yojson {strict= false}]
-
-type response = {signing_key: string [@key "signingKey"]} [@@deriving yojson]
+open Lexicons.Com_atproto_server_reserveSigningKey.Main
 
 let handler =
   Xrpc.handler (fun {req; db; _} ->
-      let%lwt {did} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {did} = Xrpc.parse_body req input_of_yojson in
       let%lwt existing =
         match did with
         | Some did when did <> "" ->
@@ -16,7 +13,7 @@ let handler =
       match existing with
       | Some key ->
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {signing_key= key.key_did}
+          @@ output_to_yojson {signing_key= key.key_did}
       | None ->
           let privkey, pubkey = Kleidos.K256.generate_keypair () in
           let key_did = Kleidos.K256.pubkey_to_did_key pubkey in
@@ -25,4 +22,4 @@ let handler =
             Data_store.create_reserved_key ~key_did ~did ~private_key db
           in
           Dream.json @@ Yojson.Safe.to_string
-          @@ response_to_yojson {signing_key= key_did} )
+          @@ output_to_yojson {signing_key= key_did} )

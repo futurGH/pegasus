@@ -1,4 +1,4 @@
-type response = {token: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_getServiceAuth.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
@@ -22,4 +22,4 @@ let handler =
       in
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let token = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
-      Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {token} )
+      Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {token} )

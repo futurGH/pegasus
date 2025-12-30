@@ -1,4 +1,4 @@
-type request = {email: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_requestPasswordReset.Main
 
 let request_password_reset (actor : Data_store.Types.actor) db =
   let did = actor.did in
@@ -36,7 +36,7 @@ let handler =
           | None ->
               Errors.internal_error ~msg:"actor not found" () )
         | _ -> (
-            let%lwt {email} = Xrpc.parse_body req request_of_yojson in
+            let%lwt {email} = Xrpc.parse_body req input_of_yojson in
             let email = String.lowercase_ascii email in
             match%lwt Data_store.get_actor_by_identifier email db with
             | Some actor ->

@@ -1,5 +1,4 @@
-type response = {infos: GetAccountInfo.account_view list}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_admin_getAccountInfos.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->
@@ -18,4 +17,4 @@ let handler =
                 Lwt.return_some (GetAccountInfo.actor_to_account_view actor) )
           dids
       in
-      Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {infos} )
+      Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {infos} )

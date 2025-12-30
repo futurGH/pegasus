@@ -1,18 +1,6 @@
-type invite_code_use =
-  {used_by: string [@key "usedBy"]; used_at: string [@key "usedAt"]}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_admin_getInviteCodes.Main
 
-type invite_code =
-  { code: string
-  ; available: int
-  ; disabled: bool
-  ; for_account: string [@key "forAccount"]
-  ; created_by: string [@key "createdBy"]
-  ; created_at: string [@key "createdAt"]
-  ; uses: invite_code_use list }
-[@@deriving yojson {strict= false}]
-
-type response = {codes: invite_code list; cursor: string option [@default None]}
+type invite_code = Lexicons.Com_atproto_server_defs.invite_code
 [@@deriving yojson {strict= false}]
 
 let handler =
@@ -26,7 +14,7 @@ let handler =
       let%lwt db_codes = Data_store.list_invites ~limit db in
       let codes =
         List.map
-          (fun (ic : Data_store.Types.invite_code) ->
+          (fun (ic : Data_store.Types.invite_code) : invite_code ->
             { code= ic.code
             ; available= ic.remaining
             ; disabled= ic.remaining = 0
@@ -37,4 +25,4 @@ let handler =
           db_codes
       in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {codes; cursor= None} )
+      @@ output_to_yojson {codes; cursor= None} )

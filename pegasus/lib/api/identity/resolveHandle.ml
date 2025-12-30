@@ -1,10 +1,12 @@
-type query = {handle: string} [@@deriving yojson {strict= false}]
+type query = Lexicons.Com_atproto_identity_resolveHandle.Main.params
+[@@deriving yojson {strict= false}]
 
-type response = {did: string} [@@deriving yojson {strict= false}]
+type response = Lexicons.Com_atproto_identity_resolveHandle.Main.output
+[@@deriving yojson {strict= false}]
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {handle} = Xrpc.parse_query ctx.req query_of_yojson in
+      let {handle} : query = Xrpc.parse_query ctx.req query_of_yojson in
       match%lwt Data_store.get_actor_by_identifier handle ctx.db with
       | Some actor ->
           Dream.json @@ Yojson.Safe.to_string

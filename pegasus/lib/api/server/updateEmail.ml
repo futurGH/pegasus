@@ -1,8 +1,4 @@
-type request =
-  { email: string
-  ; email_auth_factor: bool option [@key "emailAuthFactor"] [@default None]
-  ; token: string option [@default None] }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_updateEmail.Main
 
 type update_email_error =
   | TokenRequired
@@ -46,7 +42,7 @@ let handler =
       Auth.assert_account_scope auth ~attr:Oauth.Scopes.Email
         ~action:Oauth.Scopes.Manage ;
       let did = Auth.get_authed_did_exn auth in
-      let%lwt {email; token; _} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {email; token; _} = Xrpc.parse_body req input_of_yojson in
       let email = String.lowercase_ascii email in
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->

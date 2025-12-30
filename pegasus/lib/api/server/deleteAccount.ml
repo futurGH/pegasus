@@ -1,5 +1,4 @@
-type request = {did: string; password: string; token: string}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_deleteAccount.Main
 
 let rec rm_rf path =
   if Sys.is_directory path then (
@@ -34,7 +33,7 @@ let delete_account ~did db =
 
 let handler =
   Xrpc.handler (fun {req; db; _} ->
-      let%lwt {did; password; token} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {did; password; token} = Xrpc.parse_body req input_of_yojson in
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->
           Errors.invalid_request "account not found"

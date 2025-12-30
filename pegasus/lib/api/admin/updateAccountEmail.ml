@@ -1,9 +1,8 @@
-type request = {account: string; email: string}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_admin_updateAccountEmail.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->
-      let%lwt {account; email} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {account; email} = Xrpc.parse_body req input_of_yojson in
       match%lwt Data_store.get_actor_by_identifier account db with
       | None ->
           Errors.invalid_request "account not found"

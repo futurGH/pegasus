@@ -1,17 +1,9 @@
-type query =
-  {limit: int option [@default None]; cursor: string option [@default None]}
-[@@deriving yojson {strict= false}]
-
-type response =
-  {cursor: string option [@default None]; blobs: response_blob list}
-[@@deriving yojson {strict= false}]
-
-and response_blob = {cid: string; record_uri: string [@key "recordUri"]}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_listMissingBlobs
+open Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {limit; cursor} = Xrpc.parse_query ctx.req query_of_yojson in
+      let {limit; cursor} = Xrpc.parse_query ctx.req params_of_yojson in
       let limit =
         match limit with
         | Some limit when limit > 0 && limit <= 1000 ->
@@ -32,4 +24,4 @@ let handler =
           blobs
       in
       {cursor= !next_cursor; blobs}
-      |> response_to_yojson |> Yojson.Safe.to_string |> Dream.json )
+      |> output_to_yojson |> Yojson.Safe.to_string |> Dream.json )

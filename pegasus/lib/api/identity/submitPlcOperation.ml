@@ -1,5 +1,4 @@
-type request = {operation: Plc.signed_operation_op}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_identity_submitPlcOperation.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->
@@ -7,7 +6,11 @@ let handler =
       Auth.assert_identity_scope auth ~attr:Oauth.Scopes.Any ;
       if not (String.starts_with ~prefix:"did:plc:" did) then
         Errors.invalid_request "this method is only for did:plc identities" ;
-      let%lwt {operation= op} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {operation= op} = Xrpc.parse_body req input_of_yojson in
+      let op =
+        try Result.get_ok @@ Plc.signed_operation_op_of_yojson op
+        with _ -> Errors.invalid_request "invalid request body"
+      in
       match%lwt Data_store.get_actor_by_identifier did db with
       | None ->
           Errors.internal_error ~msg:"actor not found" ()

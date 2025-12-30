@@ -1,17 +1,9 @@
-type request =
-  { recipient_did: string [@key "recipientDid"]
-  ; content: string
-  ; subject: string option [@default None]
-  ; sender_did: string [@key "senderDid"]
-  ; comment: string option [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response = {sent: bool} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_admin_sendEmail.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->
       let%lwt {recipient_did; content; subject; sender_did; comment= _} =
-        Xrpc.parse_body req request_of_yojson
+        Xrpc.parse_body req input_of_yojson
       in
       match%lwt Data_store.get_actor_by_identifier recipient_did db with
       | None ->
@@ -31,5 +23,5 @@ let handler =
               Util.send_email_or_log ~recipients:[To recipient.email] ~subject
                 ~body:(Plain content)
             in
-            Dream.json @@ Yojson.Safe.to_string
-            @@ response_to_yojson {sent= true} ) )
+            Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {sent= true}
+        ) )

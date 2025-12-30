@@ -1,5 +1,3 @@
-type response = Plc.credentials [@@deriving yojson {strict= false}]
-
 let get_credentials did ?(extra_rotation_keys = []) db =
   match%lwt Data_store.get_actor_by_identifier did db with
   | None ->
@@ -19,4 +17,5 @@ let handler =
       | Error msg ->
           Errors.internal_error ~msg ()
       | Ok credentials ->
-          response_to_yojson credentials |> Yojson.Safe.to_string |> Dream.json )
+          credentials |> Plc.credentials_to_yojson |> Yojson.Safe.to_string
+          |> Dream.json )

@@ -1,8 +1,8 @@
-type query = {did: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_getRepo.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {did} : query = Xrpc.parse_query ctx.req query_of_yojson in
+      let {did; _} = Xrpc.parse_query ctx.req params_of_yojson in
       let%lwt repo = Repository.load did ~ensure_active:true in
       let%lwt car_stream = Repository.export_car repo in
       Dream.stream

@@ -1,14 +1,4 @@
-type response =
-  { activated: bool
-  ; valid_did: bool [@key "validDid"]
-  ; repo_commit: string [@key "repoCommit"]
-  ; repo_rev: string [@key "repoRev"]
-  ; repo_blocks: int [@key "repoBlocks"]
-  ; indexed_records: int [@key "indexedRecords"]
-  ; private_state_values: int [@key "privateStateValues"]
-  ; expected_blobs: int [@key "expectedBlobs"]
-  ; imported_blobs: int [@key "importedBlobs"] }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_checkAccountStatus.Main
 
 let get_account_status did =
   let%lwt {db= us; commit; actor; _} = Repository.load did in
@@ -48,6 +38,6 @@ let handler =
       let did = Auth.get_authed_did_exn auth in
       match%lwt get_account_status did with
       | Ok status ->
-          status |> response_to_yojson |> Yojson.Safe.to_string |> Dream.json
+          status |> output_to_yojson |> Yojson.Safe.to_string |> Dream.json
       | Error msg ->
           Errors.internal_error ~msg () )

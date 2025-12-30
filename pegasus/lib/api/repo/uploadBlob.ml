@@ -1,5 +1,4 @@
-type response = {blob: Mist.Blob_ref.typed_json_ref}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_uploadBlob.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
@@ -15,4 +14,8 @@ let handler =
       let%lwt user_db = User_store.connect did in
       let%lwt _ = User_store.put_blob user_db cid mime_type data in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {blob= {type'= "blob"; ref= cid; mime_type; size}} )
+      @@ output_to_yojson
+           { blob=
+               {type'= "blob"; ref= cid; mime_type; size}
+               |> Mist.Blob_ref.typed_json_ref_to_yojson
+               |> Hermes.blob_of_yojson |> Result.get_ok } )

@@ -13,6 +13,7 @@
   dream
   emile
   frontend
+  hermes
   ipld
   kleidos
   letters
@@ -26,10 +27,11 @@
   uri
   uuidm
   yojson
+  hermes_ppx
   lwt_ppx
   ppx_deriving_yojson.runtime
   ppx_rapper_lwt)
  (preprocess
-  (pps lwt_ppx ppx_deriving_yojson ppx_rapper)))
+  (pps hermes_ppx lwt_ppx ppx_deriving_yojson ppx_rapper)))
 
 (include_subdirs qualified)

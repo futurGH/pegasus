@@ -1,4 +1,4 @@
-type request = {handle: string} [@@deriving yojson]
+open Lexicons.Com_atproto_identity_updateHandle.Main
 
 type update_handle_error =
   | InvalidFormat of string
@@ -99,7 +99,7 @@ let handler =
     (fun {req; auth; db; _} ->
       Auth.assert_identity_scope auth ~attr:Oauth.Scopes.Handle ;
       let did = Auth.get_authed_did_exn auth in
-      let%lwt {handle} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {handle} = Xrpc.parse_body req input_of_yojson in
       match%lwt update_handle ~did ~handle db with
       | Ok () ->
           Dream.empty `OK

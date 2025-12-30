@@ -1,21 +1,9 @@
-type query =
-  { repo: string
-  ; collection: string
-  ; limit: int option [@default None]
-  ; cursor: string option [@default None]
-  ; reverse: bool option [@default None] }
-[@@deriving yojson {strict= false}]
-
-type response =
-  {cursor: string option [@default None]; records: response_record list}
-[@@deriving yojson {strict= false}]
-
-and response_record = {uri: string; cid: string; value: Mist.Lex.repo_record}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_listRecords
+open Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req params_of_yojson in
       let limit =
         match input.limit with
         | Some limit when limit > 0 && limit <= 100 ->
@@ -34,10 +22,12 @@ let handler =
           (fun (_cursor, results_rev) (record : User_store.Types.record) ->
             let uri = "at://" ^ input_did ^ "/" ^ record.path in
             ( record.since
-            , {uri; cid= Cid.to_string record.cid; value= record.value}
+            , { uri
+              ; cid= Cid.to_string record.cid
+              ; value= Repository.Lex.repo_record_to_yojson record.value }
               :: results_rev ) )
           ("", []) results
       in
       let cursor = if List.length results = limit then Some cursor else None in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {cursor; records= List.rev results_rev} )
+      @@ output_to_yojson {cursor; records= List.rev results_rev} )

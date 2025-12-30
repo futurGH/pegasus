@@ -1,5 +1,4 @@
-type request = {token: string; password: string}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_resetPassword.Main
 
 type reset_password_error = InvalidToken | ExpiredToken
 
@@ -27,7 +26,7 @@ let handler =
           ; calc_key= None
           ; calc_points= None } ]
     (fun {req; db; _} ->
-      let%lwt {token; password} = Xrpc.parse_body req request_of_yojson in
+      let%lwt {token; password} = Xrpc.parse_body req input_of_yojson in
       match%lwt reset_password ~token ~password db with
       | Ok did ->
           Dream.log "password reset completed for %s" did ;

@@ -1,9 +1,4 @@
-type request =
-  { use_count: int [@key "useCount"]
-  ; for_account: string option [@key "forAccount"] [@default None] }
-[@@deriving yojson]
-
-type response = {code: string} [@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_server_createInviteCode.Main
 
 let generate_code did =
   String.sub
@@ -19,11 +14,11 @@ let create_invite_code ~db ~did ~use_count =
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->
       let%lwt {use_count; for_account} =
-        Xrpc.parse_body req request_of_yojson
+        Xrpc.parse_body req input_of_yojson
       in
       let%lwt code =
         create_invite_code ~db
           ~did:(Option.value for_account ~default:"admin")
           ~use_count
       in
-      Dream.json @@ Yojson.Safe.to_string @@ response_to_yojson {code} )
+      Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {code} )

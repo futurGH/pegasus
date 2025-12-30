@@ -1,0 +1,44 @@
+(* re-exported from App_bsky_shared_1 *)
+
+type list_view_basic = App_bsky_shared_1.list_view_basic
+let list_view_basic_of_yojson = App_bsky_shared_1.list_view_basic_of_yojson
+let list_view_basic_to_yojson = App_bsky_shared_1.list_view_basic_to_yojson
+
+type list_view = App_bsky_shared_1.list_view
+let list_view_of_yojson = App_bsky_shared_1.list_view_of_yojson
+let list_view_to_yojson = App_bsky_shared_1.list_view_to_yojson
+
+type list_item_view = App_bsky_shared_1.list_item_view
+let list_item_view_of_yojson = App_bsky_shared_1.list_item_view_of_yojson
+let list_item_view_to_yojson = App_bsky_shared_1.list_item_view_to_yojson
+
+type starter_pack_view = App_bsky_shared_1.starter_pack_view
+let starter_pack_view_of_yojson = App_bsky_shared_1.starter_pack_view_of_yojson
+let starter_pack_view_to_yojson = App_bsky_shared_1.starter_pack_view_to_yojson
+
+type starter_pack_view_basic = App_bsky_shared_1.starter_pack_view_basic
+let starter_pack_view_basic_of_yojson = App_bsky_shared_1.starter_pack_view_basic_of_yojson
+let starter_pack_view_basic_to_yojson = App_bsky_shared_1.starter_pack_view_basic_to_yojson
+
+type list_purpose = App_bsky_shared_1.list_purpose
+let list_purpose_of_yojson = App_bsky_shared_1.list_purpose_of_yojson
+let list_purpose_to_yojson = App_bsky_shared_1.list_purpose_to_yojson
+
+let modlist = App_bsky_shared_1.modlist
+
+let curatelist = App_bsky_shared_1.curatelist
+
+let referencelist = App_bsky_shared_1.referencelist
+
+type list_viewer_state = App_bsky_shared_1.list_viewer_state
+let list_viewer_state_of_yojson = App_bsky_shared_1.list_viewer_state_of_yojson
+let list_viewer_state_to_yojson = App_bsky_shared_1.list_viewer_state_to_yojson
+
+type not_found_actor = App_bsky_shared_1.not_found_actor
+let not_found_actor_of_yojson = App_bsky_shared_1.not_found_actor_of_yojson
+let not_found_actor_to_yojson = App_bsky_shared_1.not_found_actor_to_yojson
+
+type relationship = App_bsky_shared_1.relationship
+let relationship_of_yojson = App_bsky_shared_1.relationship_of_yojson
+let relationship_to_yojson = App_bsky_shared_1.relationship_to_yojson
+

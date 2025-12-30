@@ -1,12 +1,11 @@
 module Mst = Mist.Mst.Make (User_store)
 
-type query = {did: string; collection: string; rkey: string}
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_sync_getRecord.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {did; collection; rkey} : query =
-        Xrpc.parse_query ctx.req query_of_yojson
+      let {did; collection; rkey} =
+        Xrpc.parse_query ctx.req params_of_yojson
       in
       let path = collection ^ "/" ^ rkey in
       let%lwt repo = Repository.load did ~ensure_active:true in

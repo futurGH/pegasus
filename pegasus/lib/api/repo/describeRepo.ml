@@ -1,16 +1,8 @@
-type query = {repo: string} [@@deriving yojson {strict= false}]
-
-type response =
-  { handle: string
-  ; did: string
-  ; did_doc: Id_resolver.Did.Document.t [@key "didDoc"]
-  ; collections: string list
-  ; handle_is_correct: bool [@key "handleIsCorrect"] }
-[@@deriving yojson {strict= false}]
+open Lexicons.Com_atproto_repo_describeRepo.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req params_of_yojson in
       let%lwt did = Xrpc.resolve_repo_did ctx input.repo in
       let%lwt did_doc =
         match%lwt Id_resolver.Did.resolve did with
@@ -28,9 +20,9 @@ let handler =
       let%lwt repo = Repository.load did in
       let%lwt collections = Repository.list_collections repo in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson
+      @@ output_to_yojson
            { handle
            ; did
-           ; did_doc
+           ; did_doc= Id_resolver.Did.Document.to_yojson did_doc
            ; collections
            ; handle_is_correct= true (* what am I, a cop? *) } )

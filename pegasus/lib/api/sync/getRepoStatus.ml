@@ -1,12 +1,8 @@
-type query = {did: string} [@@deriving yojson {strict= false}]
-
-type response =
-  {did: string; active: bool; status: string option; rev: string option}
-[@@deriving yojson]
+open Lexicons.Com_atproto_sync_getRepoStatus.Main
 
 let handler =
   Xrpc.handler (fun ctx ->
-      let {did} : query = Xrpc.parse_query ctx.req query_of_yojson in
+      let {did} : params = Xrpc.parse_query ctx.req params_of_yojson in
       let%lwt actor =
         match%lwt Data_store.get_actor_by_identifier did ctx.db with
         | Some actor ->
@@ -31,4 +27,4 @@ let handler =
             (true, None, Some commit.rev)
       in
       Dream.json @@ Yojson.Safe.to_string
-      @@ response_to_yojson {did; active; status; rev} )
+      @@ output_to_yojson {did; active; status; rev} )
