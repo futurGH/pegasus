@@ -5,7 +5,7 @@ open React
 let[@react.component] make ~pages ~active_page ?header () =
   let selected_class = "text-mana-100 font-medium" in
   let unselected_class = "text-mist-100 hover:text-mana-100" in
-  <aside className="flex flex-col gap-y-2 w-auto min-w-32">
+  <aside className="flex flex-col gap-y-2 w-auto min-w-32 max-w-64">
     (match header with Some h -> h | None -> null)
     <nav className="flex flex-col gap-y-1 mt-2">
       ( List.map

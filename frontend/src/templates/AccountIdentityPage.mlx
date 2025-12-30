@@ -35,12 +35,12 @@ let[@react.component] make
   let errorState, setErrorState = useState (fun () -> error) in
   let successState, setSuccessState = useState (fun () -> success) in
   <div
-    className="w-auto h-full max-w-full px-4 sm:px-0 pt-16 mx-auto flex flex-col \
-               md:flex-row gap-12">
+    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col \
+               md:flex-row gap-8">
     <AccountSidebar
       current_user logged_in_users active_page="/account/identity"
     />
-    <main className="flex-1 w-full max-w-lg">
+    <main className="flex-1 w-full md:max-w-lg">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
         (string "identity")
       </h1>

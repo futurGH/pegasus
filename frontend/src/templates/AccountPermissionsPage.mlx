@@ -68,12 +68,12 @@ let[@react.component] make
       ({current_user; logged_in_users; csrf_token; authorized_apps; devices} :
         props ) () =
   <div
-    className="w-auto h-full max-w-full px-4 sm:px-0 pt-16 mx-auto flex \
-               flex-col md:flex-row gap-12">
+    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex \
+               flex-col md:flex-row gap-8">
     <AccountSidebar
       current_user logged_in_users active_page="/account/permissions"
     />
-    <main className="flex-1 w-full max-w-md">
+    <main className="flex-1 w-full md:max-w-lg">
       <section>
         <h1 className="text-2xl font-serif text-mana-200 mb-1">
           (string "authorized applications")
