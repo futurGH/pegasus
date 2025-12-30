@@ -19,9 +19,7 @@ let handler =
         | Ok did_doc -> (
             let pds_host =
               match
-                Option.bind
-                  (Id_resolver.Did.Document.get_service did_doc "#atproto_pds")
-                  (fun s -> s |> Uri.of_string |> Uri.host )
+                Id_resolver.Did.Document.get_service did_doc "#atproto_pds"
               with
               | Some endpoint ->
                   endpoint
@@ -50,6 +48,9 @@ let handler =
                       ~lxm:"app.bsky.feed.getFeedSkeleton"
                 | None ->
                     Errors.invalid_request "missing proxy header" )
-            with _ ->
+            with e ->
+              Dream.error (fun log ->
+                  log "failed to fetch feed generator record: %s"
+                    (Printexc.to_string e) ) ;
               Errors.internal_error ~msg:"failed to fetch feed generator record"
                 () ) ) )
