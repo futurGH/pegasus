@@ -206,20 +206,23 @@ generates type-safe OCaml modules from atproto lexicon files.
 ### usage
 
 ```bash
-# Generate from lexicons directory
-hermes-cli generate --input ./lexicons --output ./lib/generated
+# Generate from a lexicons directory
+hermes-cli generate ./lexicons -o ./lib/generated
+
+# Generate from multiple inputs
+hermes-cli generate ./lexicons/com/atproto ./lexicons/app/bsky/feed/*.json -o ./lib/generated
 
 # With custom root module name
-hermes-cli generate -i ./lexicons -o ./lib/generated --module-name Bsky_api
+hermes-cli generate ./lexicons -o ./lib/generated -m Bsky_api
 ```
 
 ### options
 
-| Option          | Short | Description                             |
-| --------------- | ----- | --------------------------------------- |
-| `--input`       | `-i`  | Directory containing lexicon JSON files |
-| `--output`      | `-o`  | Output directory for generated OCaml    |
-| `--module-name` | `-m`  | Root module name (default: Lexicons)    |
+| Option          | Short | Description                              |
+| --------------- | ----- | ---------------------------------------- |
+| `INPUT...`      |       | Lexicon files or directories (recursive) |
+| `--output`      | `-o`  | Output directory for generated OCaml     |
+| `--module-name` | `-m`  | Root module name (default: Lexicons)     |
 
 ### generated code structure
 

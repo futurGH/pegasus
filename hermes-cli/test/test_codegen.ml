@@ -257,6 +257,190 @@ let test_gen_token () =
   check bool "contains full URI" true
     (contains code "com.example.tokens#myToken")
 
+(* test generating inline union (union as property type) *)
+let test_gen_inline_union () =
+  let union_type =
+    Lexicon_types.Union
+      { refs= ["#typeA"; "#typeB"]
+      ; closed= Some false
+      ; description= None }
+  in
+  let obj_spec =
+    make_object_spec
+      [("status", make_property union_type)]
+      ["status"]
+  in
+  let doc =
+    make_lexicon "com.example.inline"
+      [make_def "main" (Lexicon_types.Object obj_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  (* inline union should get its own type named after the property *)
+  check bool "contains type status" true (contains code "type status =") ;
+  check bool "contains TypeA variant" true (contains code "| TypeA of") ;
+  check bool "contains TypeB variant" true (contains code "| TypeB of") ;
+  (* main type should reference the inline union *)
+  check bool "main uses status type" true (contains code "status: status")
+
+(* test generating inline union in array (field_item context) *)
+let test_gen_inline_union_in_array () =
+  let union_type =
+    Lexicon_types.Union
+      { refs= ["#typeA"; "#typeB"]
+      ; closed= Some true
+      ; description= None }
+  in
+  let array_type =
+    Lexicon_types.Array
+      { items= union_type
+      ; min_length= None
+      ; max_length= None
+      ; description= None }
+  in
+  let obj_spec =
+    make_object_spec
+      [("items", make_property array_type)]
+      ["items"]
+  in
+  let doc =
+    make_lexicon "com.example.arrayunion"
+      [make_def "main" (Lexicon_types.Object obj_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  (* inline union in array should be named field_item *)
+  check bool "contains type items_item" true (contains code "type items_item =") ;
+  check bool "items is items_item list" true (contains code "items_item list")
+
+(* test generating empty object as unit *)
+let test_gen_empty_object () =
+  let empty_spec =
+    { Lexicon_types.properties= []
+    ; required= None
+    ; nullable= None
+    ; description= None }
+  in
+  let doc =
+    make_lexicon "com.example.empty"
+      [make_def "main" (Lexicon_types.Object empty_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  check bool "contains type main = unit" true (contains code "type main = unit") ;
+  check bool "contains main_of_yojson _ = Ok ()" true
+    (contains code "main_of_yojson _ = Ok ()")
+
+(* test generating nullable fields (different from optional) *)
+let test_gen_nullable_fields () =
+  let obj_spec =
+    { Lexicon_types.properties=
+        [ ("required_nullable", make_property string_type)
+        ; ("required_not_nullable", make_property string_type) ]
+    ; required= Some ["required_nullable"; "required_not_nullable"]
+    ; nullable= Some ["required_nullable"]
+    ; description= None }
+  in
+  let doc =
+    make_lexicon "com.example.nullable"
+      [make_def "main" (Lexicon_types.Object obj_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  (* required + nullable = option *)
+  check bool "nullable is option" true
+    (contains code "required_nullable: string option") ;
+  (* required + not nullable = not option *)
+  check bool "not nullable is not option" true
+    (contains code "required_not_nullable: string;")
+
+(* test generating mutually recursive types *)
+let test_gen_mutually_recursive () =
+  (* typeA has a field of typeB, typeB has a field of typeA *)
+  let type_a_spec =
+    make_object_spec
+      [ ("name", make_property string_type)
+      ; ("b", make_property (Lexicon_types.Ref {ref_= "#typeB"; description= None}))
+      ]
+      ["name"]
+  in
+  let type_b_spec =
+    make_object_spec
+      [ ("value", make_property int_type)
+      ; ("a", make_property (Lexicon_types.Ref {ref_= "#typeA"; description= None}))
+      ]
+      ["value"]
+  in
+  let doc =
+    make_lexicon "com.example.recursive"
+      [ make_def "typeA" (Lexicon_types.Object type_a_spec)
+      ; make_def "typeB" (Lexicon_types.Object type_b_spec) ]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  (* should use "type ... and ..." syntax *)
+  check bool "has type keyword" true (contains code "type type_a =") ;
+  check bool "has and keyword" true (contains code "and type_b =") ;
+  (* deriving should appear after the last type in the group *)
+  check bool "has deriving after and block" true
+    (contains code "[@@deriving yojson")
+
+(* test generating record type *)
+let test_gen_record () =
+  let record_spec : Lexicon_types.record_spec =
+    { key= "tid"
+    ; record=
+        make_object_spec
+          [("text", make_property string_type)]
+          ["text"]
+    ; description= Some "A simple record" }
+  in
+  let doc =
+    make_lexicon "com.example.record"
+      [make_def "main" (Lexicon_types.Record record_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  check bool "contains type main" true (contains code "type main =") ;
+  check bool "contains text field" true (contains code "text: string")
+
+(* test generating external ref *)
+let test_gen_external_ref () =
+  let obj_spec =
+    make_object_spec
+      [ ( "user"
+        , make_property
+            (Lexicon_types.Ref {ref_= "com.other.defs#user"; description= None})
+        ) ]
+      ["user"]
+  in
+  let doc =
+    make_lexicon "com.example.extref"
+      [make_def "main" (Lexicon_types.Object obj_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  (* should generate qualified module reference *)
+  check bool "contains qualified ref" true
+    (contains code "Com_other_defs.user")
+
+(* test generating string type with known values *)
+let test_gen_string_known_values () =
+  let string_spec : Lexicon_types.string_spec =
+    { format= None
+    ; min_length= None
+    ; max_length= None
+    ; min_graphemes= None
+    ; max_graphemes= None
+    ; known_values= Some ["pending"; "active"; "completed"]
+    ; enum= None
+    ; const= None
+    ; default= None
+    ; description= Some "Status values" }
+  in
+  let doc =
+    make_lexicon "com.example.status"
+      [make_def "status" (Lexicon_types.String string_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  check bool "contains type status = string" true
+    (contains code "type status = string") ;
+  check bool "contains status_of_yojson" true
+    (contains code "status_of_yojson")
+
 (* test generating query with bytes output (like getBlob) *)
 let test_gen_query_bytes_output () =
   let params_spec =
@@ -317,11 +501,17 @@ let test_gen_procedure_bytes_input () =
 let object_tests =
   [ ("simple object", `Quick, test_gen_simple_object)
   ; ("optional fields", `Quick, test_gen_optional_fields)
-  ; ("key annotation", `Quick, test_gen_key_annotation) ]
+  ; ("key annotation", `Quick, test_gen_key_annotation)
+  ; ("empty object", `Quick, test_gen_empty_object)
+  ; ("nullable fields", `Quick, test_gen_nullable_fields)
+  ; ("external ref", `Quick, test_gen_external_ref)
+  ; ("record type", `Quick, test_gen_record) ]
 
 let union_tests =
   [ ("open union", `Quick, test_gen_union_type)
-  ; ("closed union", `Quick, test_gen_closed_union) ]
+  ; ("closed union", `Quick, test_gen_closed_union)
+  ; ("inline union", `Quick, test_gen_inline_union)
+  ; ("inline union in array", `Quick, test_gen_inline_union_in_array) ]
 
 let xrpc_tests =
   [ ("query module", `Quick, test_gen_query_module)
@@ -329,9 +519,13 @@ let xrpc_tests =
   ; ("query with bytes output", `Quick, test_gen_query_bytes_output)
   ; ("procedure with bytes input", `Quick, test_gen_procedure_bytes_input) ]
 
-let ordering_tests = [("type ordering", `Quick, test_type_ordering)]
+let ordering_tests =
+  [ ("type ordering", `Quick, test_type_ordering)
+  ; ("mutually recursive", `Quick, test_gen_mutually_recursive) ]
 
 let token_tests = [("token generation", `Quick, test_gen_token)]
+
+let string_tests = [("string with known values", `Quick, test_gen_string_known_values)]
 
 let () =
   run "Codegen"
@@ -339,4 +533,5 @@ let () =
     ; ("unions", union_tests)
     ; ("xrpc", xrpc_tests)
     ; ("ordering", ordering_tests)
-    ; ("tokens", token_tests) ]
+    ; ("tokens", token_tests)
+    ; ("strings", string_tests) ]

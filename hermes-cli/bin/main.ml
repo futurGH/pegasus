@@ -1,23 +1,23 @@
 open Hermes_cli
 
-(* recursively find all json files in a directory *)
-let find_json_files dir =
-  let rec aux acc path =
-    if Sys.is_directory path then
-      Sys.readdir path |> Array.to_list
-      |> List.map (Filename.concat path)
+(* recursively find all json files in a path (file or directory) *)
+let find_json_files path =
+  let rec aux acc p =
+    if Sys.is_directory p then
+      Sys.readdir p |> Array.to_list
+      |> List.map (Filename.concat p)
       |> List.fold_left aux acc
-    else if Filename.check_suffix path ".json" then path :: acc
+    else if Filename.check_suffix p ".json" then p :: acc
     else acc
   in
-  aux [] dir
+  aux [] path
 
 (* generate module structure from lexicons *)
-let generate ~input_dir ~output_dir ~module_name =
+let generate ~inputs ~output_dir ~module_name =
   (* create output directory *)
   if not (Sys.file_exists output_dir) then Sys.mkdir output_dir 0o755 ;
-  (* find all lexicon files *)
-  let files = find_json_files input_dir in
+  (* find all lexicon files from all inputs *)
+  let files = List.concat_map find_json_files inputs in
   Printf.printf "Found %d lexicon files\n" (List.length files) ;
   (* parse all files *)
   let lexicons =
@@ -33,33 +33,62 @@ let generate ~input_dir ~output_dir ~module_name =
       files
   in
   Printf.printf "Successfully parsed %d lexicons\n" (List.length lexicons) ;
-  (* group by namespace, all but last segment *)
-  let by_namespace = Hashtbl.create 64 in
+  (* find file-level SCCs to detect cross-file cycles *)
+  let sccs = Scc.find_file_sccs lexicons in
+  Printf.printf "Found %d file-level SCCs\n" (List.length sccs) ;
+  (* track shared module index for unique naming *)
+  let shared_index = ref 0 in
+  (* generate each SCC *)
   List.iter
-    (fun doc ->
-      let segments = String.split_on_char '.' doc.Lexicon_types.id in
-      match List.rev segments with
-      | _last :: rest ->
-          let ns = String.concat "." (List.rev rest) in
-          let existing =
-            try Hashtbl.find by_namespace ns with Not_found -> []
-          in
-          Hashtbl.replace by_namespace ns (doc :: existing)
+    (fun scc ->
+      match scc with
       | [] ->
-          () )
-    lexicons ;
-  (* generate file for each lexicon *)
-  List.iter
-    (fun doc ->
-      let code = Codegen.gen_lexicon_module doc in
-      let rel_path = Naming.file_path_of_nsid doc.Lexicon_types.id in
-      let full_path = Filename.concat output_dir rel_path in
-      (* write file *)
-      let oc = open_out full_path in
-      output_string oc code ;
-      close_out oc ;
-      Printf.printf "  Generated: %s\n" rel_path )
-    lexicons ;
+          ()
+      | [doc] ->
+          (* single file, no cycle - generate normally *)
+          let code = Codegen.gen_lexicon_module doc in
+          let rel_path = Naming.file_path_of_nsid doc.Lexicon_types.id in
+          let full_path = Filename.concat output_dir rel_path in
+          let oc = open_out full_path in
+          output_string oc code ;
+          close_out oc ;
+          Printf.printf "  Generated: %s\n" rel_path
+      | docs ->
+          (* multiple files forming a cycle - use shared module strategy *)
+          incr shared_index ;
+          let nsids = List.map (fun d -> d.Lexicon_types.id) docs in
+          Printf.printf "  Cyclic lexicons: %s\n" (String.concat ", " nsids) ;
+          (* sort for consistent ordering *)
+          let sorted_docs =
+            List.sort
+              (fun a b ->
+                String.compare a.Lexicon_types.id b.Lexicon_types.id )
+              docs
+          in
+          (* generate shared module with all types *)
+          let shared_module_name = Naming.shared_module_name nsids !shared_index in
+          let shared_file = Naming.shared_file_name nsids !shared_index in
+          let code = Codegen.gen_shared_module sorted_docs in
+          let full_path = Filename.concat output_dir shared_file in
+          let oc = open_out full_path in
+          output_string oc code ;
+          close_out oc ;
+          Printf.printf "  Generated shared: %s\n" shared_file ;
+          (* generate re-export modules for each nsid *)
+          List.iter
+            (fun doc ->
+              let stub =
+                Codegen.gen_reexport_module ~shared_module_name
+                  ~all_merged_docs:sorted_docs doc
+              in
+              let rel_path = Naming.file_path_of_nsid doc.Lexicon_types.id in
+              let full_path = Filename.concat output_dir rel_path in
+              let oc = open_out full_path in
+              output_string oc stub ;
+              close_out oc ;
+              Printf.printf "  Generated: %s -> %s\n" rel_path shared_module_name )
+            docs )
+    sccs ;
   (* generate index file *)
   let index_path =
     Filename.concat output_dir (String.lowercase_ascii module_name ^ ".ml")
@@ -85,10 +114,11 @@ let generate ~input_dir ~output_dir ~module_name =
   Printf.printf "Generated dune file\n" ;
   Printf.printf "Done! Generated %d modules\n" (List.length lexicons)
 
-let input_dir =
-  let doc = "directory containing lexicon JSON files" in
-  Cmdliner.Arg.(
-    required & opt (some dir) None & info ["i"; "input"] ~docv:"DIR" ~doc )
+let inputs =
+  let doc =
+    "lexicon files or directories to search recursively for JSON"
+  in
+  Cmdliner.Arg.(non_empty & pos_all file [] & info [] ~docv:"INPUT" ~doc)
 
 let output_dir =
   let doc = "output directory for generated code" in
@@ -105,11 +135,11 @@ let module_name =
 let generate_cmd =
   let doc = "generate ocaml types from atproto lexicons" in
   let info = Cmdliner.Cmd.info "generate" ~doc in
-  let generate' input_dir output_dir module_name =
-    generate ~input_dir ~output_dir ~module_name
+  let generate' inputs output_dir module_name =
+    generate ~inputs ~output_dir ~module_name
   in
   Cmdliner.Cmd.v info
-    Cmdliner.Term.(const generate' $ input_dir $ output_dir $ module_name)
+    Cmdliner.Term.(const generate' $ inputs $ output_dir $ module_name)
 
 let main_cmd =
   let doc = "hermes - atproto lexicon code generator" in
