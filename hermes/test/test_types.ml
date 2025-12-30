@@ -13,7 +13,7 @@ let test_blob_to_yojson () =
   match cid with
   | Ok cid -> (
       let blob : Hermes.blob =
-        {ref_= cid; mime_type= "image/png"; size= 12345L}
+        {type_= "blob"; ref= cid; mime_type= "image/png"; size= 12345L}
       in
       let json = Hermes.blob_to_yojson blob in
       let json_str = Yojson.Safe.to_string json in
@@ -38,7 +38,7 @@ let test_blob_roundtrip () =
   match cid with
   | Ok cid -> (
       let original : Hermes.blob =
-        {ref_= cid; mime_type= "image/jpeg"; size= 54321L}
+        {type_= "blob"; ref= cid; mime_type= "image/jpeg"; size= 54321L}
       in
       let json = Hermes.blob_to_yojson original in
       match Hermes.blob_of_yojson json with

@@ -1,4 +1,5 @@
-type blob = Types.blob = {ref_: Cid.t; mime_type: string; size: int64}
+type blob = Types.blob =
+  {type_: string; ref: Cid.t; mime_type: string; size: int64}
 
 exception Xrpc_error = Types.Xrpc_error
 
@@ -23,6 +24,8 @@ let make_client = Client.make
 let make_credential_manager = Credential_manager.make
 
 let login = Credential_manager.login
+
+let login_client = Credential_manager.login_client
 
 let resume = Credential_manager.resume
 

@@ -1,4 +1,4 @@
-type blob = {ref_: Cid.t; mime_type: string; size: int64}
+type blob = {type_: string; ref: Cid.t; mime_type: string; size: int64}
 
 exception Xrpc_error of {status: int; error: string; message: string option}
 
@@ -24,6 +24,15 @@ val make_credential_manager : service:string -> unit -> credential_manager
 
 val login :
      credential_manager
+  -> identifier:string
+  -> password:string
+  -> ?auth_factor_token:string
+  -> unit
+  -> client Lwt.t
+
+val login_client :
+     credential_manager
+  -> client
   -> identifier:string
   -> password:string
   -> ?auth_factor_token:string
@@ -186,6 +195,15 @@ module Credential_manager : sig
 
     val login :
          t
+      -> identifier:string
+      -> password:string
+      -> ?auth_factor_token:string
+      -> unit
+      -> Client.t Lwt.t
+
+    val login_client :
+         t
+      -> Client.t
       -> identifier:string
       -> password:string
       -> ?auth_factor_token:string

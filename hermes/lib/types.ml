@@ -1,8 +1,11 @@
 (* core types for xrpc client *)
 
 type blob =
-  {ref_: Cid.t [@key "$link"]; mime_type: string [@key "mimeType"]; size: int64}
-[@@deriving yojson]
+  { type_: string [@key "$type"]
+  ; ref: Cid.t
+  ; mime_type: string [@key "mimeType"]
+  ; size: int64 }
+[@@deriving yojson {strict= false}]
 
 type xrpc_error_payload = {error: string; message: string option [@default None]}
 [@@deriving yojson {strict= false}]
