@@ -21,14 +21,13 @@ let get_handler =
               let is_plc = String.starts_with ~prefix:"did:plc:" did in
               let%lwt credentials_json =
                 if is_plc then
-                  match%lwt
-                    Identity.GetRecommendedDidCredentials.get_credentials did ctx.db
-                  with
-                  | Ok credentials ->
+                  match%lwt Data_store.get_actor_by_identifier did ctx.db with
+                  | Some {handle; signing_key; _} ->
                       Lwt.return_some
-                        ( Plc.credentials_to_yojson credentials
+                        ( Plc.get_recommended_credentials ~handle ~signing_key ()
+                        |> Plc.credentials_to_yojson
                         |> Yojson.Safe.pretty_to_string )
-                  | Error _ ->
+                  | None ->
                       Lwt.return_none
                 else Lwt.return_none
               in
@@ -118,9 +117,7 @@ let post_handler =
                                   (Yojson.Safe.to_string
                                      (post_response_to_yojson {error= Some e}) )
                             | Ok () -> (
-                              match%lwt
-                                Plc.submit_operation did signed_op
-                              with
+                              match%lwt Plc.submit_operation did signed_op with
                               | Ok () ->
                                   let%lwt _ =
                                     Sequencer.sequence_identity ctx.db ~did ()
@@ -136,12 +133,13 @@ let post_handler =
                                           { error=
                                               Some
                                                 ( "The directory returned an \
-                                                   error: " ^ msg ) } ) ) ) )
-                          ) ) )
+                                                   error: " ^ msg ) } ) ) ) ) )
+                      ) )
                 | _ ->
                     Dream.json ~status:`Bad_Request
                       (Yojson.Safe.to_string
-                         (post_response_to_yojson {error= Some "Invalid action"}) ) )
+                         (post_response_to_yojson
+                            {error= Some "Invalid action"} ) ) )
             | _ ->
                 Dream.json ~status:`Bad_Request
                   (Yojson.Safe.to_string

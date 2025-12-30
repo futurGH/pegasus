@@ -1,12 +1,6 @@
 (* local migration operations *)
 
-type check_account_status_response = Server.CheckAccountStatus.response
-[@@deriving yojson {strict= false}]
-
 let get_account_status = Server.CheckAccountStatus.get_account_status
-
-let get_recommended_did_credentials =
-  Identity.GetRecommendedDidCredentials.get_credentials
 
 let create_account ~email ~handle ~password ~did ~service_auth_token
     ?invite_code db =
@@ -116,24 +110,24 @@ let import_repo ~did ~car_data =
   with exn ->
     Lwt.return_error ("Failed to import repository: " ^ Printexc.to_string exn)
 
-let import_blobs_batch ~pds_endpoint ~access_jwt ~did ~cids =
+let import_blobs_batch ~did ~cids client =
   let%lwt user_db = User_store.connect ~create:true did in
   let%lwt results =
     Lwt_list.map_p
       (fun cid_str ->
-        match%lwt
-          Remote.fetch_blob ~pds_endpoint ~access_jwt ~did ~cid:cid_str
-        with
+        match%lwt Remote.fetch_blob ~did ~cid:cid_str client with
         | Error e ->
             Dream.warning (fun log ->
                 log "migration %s: failed to fetch blob %s: %s" did cid_str e ) ;
             Lwt.return_error cid_str
-        | Ok (mimetype, data) -> (
+        | Ok (data, mimetype) -> (
           match Cid.of_string cid_str with
           | Error _ ->
               Lwt.return_error cid_str
           | Ok cid ->
-              let%lwt _ = User_store.put_blob user_db cid mimetype data in
+              let%lwt _ =
+                User_store.put_blob user_db cid mimetype (Bytes.of_string data)
+              in
               Lwt.return_ok cid_str ) )
       cids
   in

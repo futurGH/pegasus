@@ -225,6 +225,15 @@ let create_did_credentials (pds_rotation_key : Kleidos.key)
         , {type'= "AtprotoPersonalDataServer"; endpoint= Env.host_endpoint} ) ]
   }
 
+let get_recommended_credentials ~signing_key ~handle ?(extra_rotation_keys = [])
+    () =
+  let did_key =
+    signing_key |> Kleidos.parse_multikey_str |> Kleidos.derive_pubkey
+    |> Kleidos.pubkey_to_did_key
+  in
+  create_did_credentials Env.rotation_key did_key handle
+    ~rotation_did_keys:extra_rotation_keys
+
 let create_did (pds_rotation_key : Kleidos.key) (signing_did_key : string)
     ?(rotation_did_keys : string list option) handle : string * signed_operation
     =

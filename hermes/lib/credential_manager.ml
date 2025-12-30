@@ -25,6 +25,15 @@ module type S = sig
     -> unit
     -> Client.t Lwt.t
 
+  val login_client :
+       t
+    -> Client.t
+    -> identifier:string
+    -> password:string
+    -> ?auth_factor_token:string
+    -> unit
+    -> Client.t Lwt.t
+
   val resume : t -> session:Types.session -> unit -> Client.t Lwt.t
 
   val logout : t -> unit Lwt.t
@@ -68,6 +77,9 @@ module Make (C : Client.S) : S = struct
 
   let rec login t ~identifier ~password ?auth_factor_token () =
     let client = make_raw_client t in
+    login_client t client ~identifier ~password ?auth_factor_token ()
+
+  and login_client t client ~identifier ~password ?auth_factor_token () =
     let input =
       Types.login_request_to_yojson
         {Types.identifier; password; auth_factor_token}

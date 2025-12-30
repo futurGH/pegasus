@@ -4,8 +4,7 @@ type t =
   { did: string
   ; handle: string
   ; old_pds: string
-  ; access_jwt: string
-  ; refresh_jwt: string
+  ; session: Yojson.Safe.t
   ; email: string
   ; blobs_imported: int
   ; blobs_failed: int
