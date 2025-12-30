@@ -56,26 +56,18 @@ let handler =
             Errors.internal_error ~name:"RecordNotFound"
               ~msg:("could not resolve user " ^ input.repo)
               () ;
-          let get_uri = Uri.of_string pds in
-          let get_uri =
-            Uri.with_path get_uri "/xrpc/com.atproto.repo.getRecord"
-          in
-          let get_uri = Uri.with_query get_uri (Util.copy_query ctx.req) in
-          let%lwt res, body =
-            Util.http_get get_uri
-              ~headers:(Cohttp.Header.of_list [("Accept", "application/json")])
-          in
-          match res.status with
-          | `OK ->
-              let%lwt json = Cohttp_lwt.Body.to_string body in
-              let%lwt () = Cohttp_lwt.Body.drain_body body in
-              Dream.json json
-          | _ ->
-              let%lwt () = Cohttp_lwt.Body.drain_body body in
-              Errors.internal_error ~name:"RecordNotFound"
-                ~msg:
-                  ( "could not find record "
-                  ^ Util.make_at_uri ~repo:input.repo
-                      ~collection:input.collection ~rkey:input.rkey
-                      ~fragment:None )
-                () ) )
+          let client = Hermes.make_client ~service:pds () in
+          try%lwt
+            let%lwt record =
+              Lexicons.([%xrpc get "com.atproto.repo.getRecord"])
+                ~repo:input_did ~collection:input.collection ~rkey:input.rkey
+                client
+            in
+            record |> output_to_yojson |> Yojson.Safe.to_string |> Dream.json
+          with _ ->
+            Errors.internal_error ~name:"RecordNotFound"
+              ~msg:
+                ( "could not find record "
+                ^ Util.make_at_uri ~repo:input.repo ~collection:input.collection
+                    ~rkey:input.rkey ~fragment:None )
+              () ) )

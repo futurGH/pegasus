@@ -491,31 +491,16 @@ module Bus = struct
           last_notified := now ;
           List.iter
             (fun crawler ->
-              let uri =
-                Uri.with_path crawler "/xrpc/com.atproto.sync.requestCrawl"
-              in
+              let service = Uri.to_string crawler in
+              let client = Hermes.make_client ~service () in
               Lwt.dont_wait
                 (fun () ->
-                  let%lwt res, _ =
-                    Cohttp_lwt_unix.Client.post
-                      ~headers:
-                        (Cohttp.Header.of_list
-                           [("Content-Type", "application/json")] )
-                      ~body:
-                        (Printf.ksprintf Cohttp_lwt.Body.of_string
-                           {|{ "hostname": "%s" }|} Env.hostname )
-                      uri
-                  in
-                  match res.status with
-                  | `OK ->
-                      Lwt.return_unit
-                  | status ->
-                      failwith
-                        ("errored with status " ^ Http.Status.to_string status) )
+                  Lexicons.([%xrpc post "com.atproto.sync.requestCrawl"])
+                    ~hostname:Env.hostname client )
                 (fun exn ->
                   Dream.warning (fun log ->
-                      log "failed to requestCrawl %s: %s"
-                        (Uri.to_string crawler) (Printexc.to_string exn) ) ) )
+                      log "failed to requestCrawl %s: %s" service
+                        (Printexc.to_string exn) ) ) )
             Env.crawlers
         end ;
         let to_remove = ref [] in
@@ -631,8 +616,8 @@ module Live = struct
     in
     send (Frame.encode_error err)
 
-  let live_loop ~(conn : Data_store.t) ~(sub : Bus.subscriber) ~(send : bytes -> unit Lwt.t)
-      ~(start_seq : int) : unit Lwt.t =
+  let live_loop ~(conn : Data_store.t) ~(sub : Bus.subscriber)
+      ~(send : bytes -> unit Lwt.t) ~(start_seq : int) : unit Lwt.t =
     let rec loop last =
       if sub.Bus.closed then
         match sub.Bus.close_reason with
@@ -675,7 +660,8 @@ module Live = struct
     in
     loop start_seq
 
-  let stream_live ~(conn : Data_store.t) ~(send : bytes -> unit Lwt.t) : unit Lwt.t =
+  let stream_live ~(conn : Data_store.t) ~(send : bytes -> unit Lwt.t) :
+      unit Lwt.t =
     let%lwt sub = Bus.subscribe () in
     Lwt.finalize
       (fun () ->
@@ -722,7 +708,8 @@ module Live = struct
                         Lwt.return_unit
                     | Message (payload, _) ->
                         send
-                          (Frame.encode_message ~seq:ev.seq ~time:ev.time payload) )
+                          (Frame.encode_message ~seq:ev.seq ~time:ev.time
+                             payload ) )
                   events )
             >>= fun () ->
             (* bail if consumer too slow *)
