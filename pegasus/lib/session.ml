@@ -68,13 +68,6 @@ module Raw = struct
     in
     Dream.set_session_field req "pegasus.session" ""
 
-  let get_current_did req =
-    match%lwt get_session req with
-    | Some {current_did; _} when current_did <> None ->
-        Lwt.return current_did
-    | _ ->
-        Lwt.return_none
-
   let set_current_did req did =
     match%lwt get_session req with
     | Some {logged_in_dids; session_id; admin_authenticated; _} ->
@@ -88,6 +81,16 @@ module Raw = struct
         Lwt.return_unit
     | None ->
         Lwt.return_unit
+
+  let get_current_did req =
+    match%lwt get_session req with
+    | Some {current_did= Some did; _} ->
+        Lwt.return_some did
+    | Some {logged_in_dids= first :: _; _} ->
+        let%lwt () = set_current_did req first in
+        Lwt.return_some first
+    | _ ->
+        Lwt.return_none
 
   let get_logged_in_dids req =
     match%lwt get_session req with
@@ -133,12 +136,24 @@ let log_in_did req did =
 let log_out_did req did =
   match%lwt get_session req with
   | Some {current_did; logged_in_dids; session_id; admin_authenticated} ->
+      let logged_in_dids = List.filter (fun d -> d <> did) logged_in_dids in
+      let current_did =
+        if current_did = Some did then List.nth_opt logged_in_dids 0
+        else current_did
+      in
       let%lwt () =
         set_session req
-          { current_did
-          ; logged_in_dids= List.filter (fun d -> d <> did) logged_in_dids
-          ; session_id
-          ; admin_authenticated }
+          {current_did; logged_in_dids; session_id; admin_authenticated}
+      in
+      Lwt.return_unit
+  | None ->
+      Lwt.return_unit
+
+let log_out_all_dids req =
+  match%lwt get_session req with
+  | Some session ->
+      let%lwt () =
+        set_session req {session with logged_in_dids= []; current_did= None}
       in
       Lwt.return_unit
   | None ->

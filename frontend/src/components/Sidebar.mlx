@@ -2,7 +2,7 @@
 
 open React
 
-let[@react.component] make ~pages ~active_page ?header () =
+let[@react.component] make ~pages ~active_page ?header ?footer () =
   let selected_class = "text-mana-100 font-medium" in
   let unselected_class = "text-mist-100 hover:text-mana-100" in
   <aside className="flex flex-col gap-y-2 w-auto min-w-32 max-w-64">
@@ -17,4 +17,5 @@ let[@react.component] make ~pages ~active_page ?header () =
           pages
       |> Array.of_list |> array )
     </nav>
+    (match footer with Some f -> f | None -> null)
   </aside>
