@@ -70,7 +70,7 @@ let exn_to_response exn =
       Dream.json ~status:`Bad_Request
         ~headers:
           [ ("WWW-Authenticate", {|DPoP error="use_dpop_nonce"|})
-          ; ("Access-Control-Expose-Headers", "WWW-Authenticate") ]
+          ; ("Access-Control-Expose-Headers", "DPoP-Nonce, WWW-Authenticate") ]
         {|{ "error": "use_dpop_nonce" }|}
   | e ->
       Dream.warning (fun log ->

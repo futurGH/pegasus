@@ -309,13 +309,19 @@ let service_proxy_handler db req =
 
 let dpop_middleware inner_handler req =
   let%lwt res = inner_handler req in
-  match Dream.header req "DPoP" with
-  | Some _ ->
-      Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
-      Dream.add_header res "Access-Control-Expose-Headers" "DPoP-Nonce" ;
-      Lwt.return res
-  | None ->
-      Lwt.return res
+  let dpop, www_auth =
+    (Dream.header req "DPoP", Dream.header res "WWW-Authenticate")
+  in
+  if
+    Option.is_some dpop
+    || Option.is_some www_auth
+       && Option.get www_auth |> Util.str_contains ~affix:"DPoP"
+  then begin
+    Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
+    Dream.add_header res "Access-Control-Expose-Headers"
+      "DPoP-Nonce, WWW-Authenticate"
+  end ;
+  Lwt.return res
 
 let cors_middleware inner_handler req =
   let%lwt res = inner_handler req in
