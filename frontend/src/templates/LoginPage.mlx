@@ -1,3 +1,5 @@
+[@@@ocaml.warning "-26-27"]
+
 open Melange_json.Primitives
 open React
 
@@ -9,6 +11,74 @@ type props =
 
 let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
     =
+  let passkeyError, setPasskeyError = useState (fun () -> None) in
+  let passkeyLoading, setPasskeyLoading = useState (fun () -> false) in
+  let currentOptions = useRef (None : Js.Json.t option) in
+  let _ =
+    React.useEffect0 (fun () ->
+        let _ =
+          WebAuthn.browserSupportsWebAuthnAutofill ()
+          |> Js.Promise.then_ (fun supported ->
+              if supported then begin
+                Fetch.fetch "/account/passkeys/login/options"
+                |> Js.Promise.then_ (fun response ->
+                    if Fetch.Response.ok response then
+                      Fetch.Response.json response
+                    else Js.Exn.raiseError "Failed to get options" )
+                |> Js.Promise.then_ (fun options ->
+                    currentOptions.current <- Some options ;
+                    WebAuthn.startAuthentication
+                      {optionsJSON= options; useBrowserAutofill= true} )
+                |> Js.Promise.then_ (fun credential ->
+                    setPasskeyLoading (fun _ -> true) ;
+                    let challenge =
+                      match currentOptions.current with
+                      | Some opts ->
+                          Js.Dict.unsafeGet (Obj.magic opts) "challenge"
+                      | None ->
+                          Js.Json.string ""
+                    in
+                    let body =
+                      Js.Json.object_
+                        (Js.Dict.fromArray
+                           [| ( "response"
+                              , Js.Json.string (Js.Json.stringify credential) )
+                            ; ("challenge", challenge) |] )
+                    in
+                    Fetch.fetchWithInit
+                      ( "/account/passkeys/login/verify?redirect_url="
+                      ^ Js.Global.encodeURIComponent redirect_url )
+                      (Fetch.RequestInit.make ~method_:Post
+                         ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                         ~headers:
+                           (Fetch.HeadersInit.makeWithArray
+                              [|("Content-Type", "application/json")|] )
+                         () ) )
+                |> Js.Promise.then_ (fun response ->
+                    setPasskeyLoading (fun _ -> false) ;
+                    if Fetch.Response.ok response then
+                      Fetch.Response.json response
+                      |> Js.Promise.then_ (fun json ->
+                          let redirect =
+                            Js.Dict.unsafeGet (Obj.magic json) "redirect"
+                            |> Js.Json.decodeString
+                            |> Option.value ~default:"/account"
+                          in
+                          Webapi.Dom.(Window.setLocation window redirect) ;
+                          Js.Promise.resolve () )
+                    else begin
+                      setPasskeyError (fun _ ->
+                          Some "Passkey authentication failed" ) ;
+                      Js.Promise.resolve ()
+                    end )
+                |> Js.Promise.catch (fun _ ->
+                    (* user cancelled or error *)
+                    Js.Promise.resolve () )
+              end
+              else Js.Promise.resolve () )
+        in
+        None )
+  in
   <main className="w-full h-auto max-w-xs px-4 sm:px-0 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string "sign in")
@@ -18,18 +88,31 @@ let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
     </span>
     <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
       <input type_="hidden" name="dream.csrf" value=csrf_token />
-      <Input sr_only=true name="identifier" type_="text" label="identifier" />
+      <Input
+        sr_only=true
+        name="identifier"
+        type_="text"
+        label="identifier"
+        autoComplete="username webauthn"
+      />
       <Input sr_only=true name="password" type_="password" label="password" />
       <input type_="hidden" name="redirect_url" value=redirect_url />
       ( match error with
-      | Some error ->
+      | Some err ->
           <span className="inline-flex items-center text-phoenix-100 text-sm">
-            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string error)
+            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+          </span>
+      | None ->
+          null )
+      ( match passkeyError with
+      | Some err ->
+          <span className="inline-flex items-center text-phoenix-100 text-sm">
+            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
           </span>
       | None ->
           null )
       <Button type_="submit" formMethod="post" className="mt-2">
-        (string "sign in")
+        (string (if passkeyLoading then "signing in..." else "sign in"))
       </Button>
     </form>
     <span className="text-sm text-mist-100">

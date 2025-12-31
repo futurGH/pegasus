@@ -27,6 +27,7 @@
   timedesc
   uri
   uuidm
+  webauthn
   yojson
   hermes_ppx
   lwt_ppx

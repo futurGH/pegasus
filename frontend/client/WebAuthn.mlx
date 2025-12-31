@@ -1,0 +1,22 @@
+external browserSupportsWebAuthn : unit -> bool = "browserSupportsWebAuthn"
+[@@mel.module "@simplewebauthn/browser"]
+
+external browserSupportsWebAuthnAutofill : unit -> bool Js.Promise.t
+  = "browserSupportsWebAuthnAutofill"
+[@@mel.module "@simplewebauthn/browser"]
+
+type registration_options = {optionsJSON: Js.Json.t}
+
+external startRegistration : registration_options -> Js.Json.t Js.Promise.t
+  = "startRegistration"
+[@@mel.module "@simplewebauthn/browser"]
+
+type auth_options = {optionsJSON: Js.Json.t; useBrowserAutofill: bool}
+
+external startAuthentication : auth_options -> Js.Json.t Js.Promise.t
+  = "startAuthentication"
+[@@mel.module "@simplewebauthn/browser"]
+
+external startAuthenticationSimple : Js.Json.t -> Js.Json.t Js.Promise.t
+  = "startAuthentication"
+[@@mel.module "@simplewebauthn/browser"]

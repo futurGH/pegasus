@@ -46,6 +46,23 @@ let handlers =
   ; (post, "/account/migrate", Api.Account_.Migrate.post_handler)
   ; (post, "/account/switch", Api.Account_.Login.switch_account_handler)
   ; (get, "/account/logout", Api.Account_.Logout.handler)
+  ; (* passkey management (authed) *)
+    (get, "/account/passkeys", Api.Account_.Passkeys.list_handler)
+  ; ( get
+    , "/account/passkeys/register/options"
+    , Api.Account_.Passkeys.register_options_handler )
+  ; ( post
+    , "/account/passkeys/register/verify"
+    , Api.Account_.Passkeys.register_verify_handler )
+  ; (delete, "/account/passkeys/:id", Api.Account_.Passkeys.delete_handler)
+  ; (post, "/account/passkeys/:id/rename", Api.Account_.Passkeys.rename_handler)
+  ; (* passkey login (unauthed) *)
+    ( get
+    , "/account/passkeys/login/options"
+    , Api.Account_.Passkeys.login_options_handler )
+  ; ( post
+    , "/account/passkeys/login/verify"
+    , Api.Account_.Passkeys.login_verify_handler )
   ; (* admin ui *)
     (get, "/admin", Api.Admin_.Index.handler)
   ; (get, "/admin/login", Api.Admin_.Login.get_handler)

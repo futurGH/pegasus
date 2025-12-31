@@ -10,6 +10,7 @@
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
+		"@simplewebauthn/browser": "^11.0.0",
 		"@pedrobslisboa/react-client": "^19.1.0",
 		"react": "^19.2.0",
 		"react-aria-components": "^1.13.0",

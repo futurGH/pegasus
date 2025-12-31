@@ -47,6 +47,19 @@ let get_handler =
               let email_change_pending = has_valid_email_change_code actor in
               let pending_email = actor.pending_email in
               let delete_pending = has_valid_delete_code actor in
+              let%lwt passkeys_raw =
+                Passkey.get_credentials_for_user ~did ctx.db
+              in
+              let passkeys =
+                List.map
+                  (fun (pk : Passkey.Types.passkey) ->
+                    Frontend.AccountPage.
+                      { id= pk.id
+                      ; name= pk.name
+                      ; created_at= pk.created_at
+                      ; last_used_at= pk.last_used_at } )
+                  passkeys_raw
+              in
               Util.render_html ~title:"Account"
                 (module Frontend.AccountPage)
                 ~props:
@@ -65,7 +78,8 @@ let get_handler =
                   ; delete_pending
                   ; error= None
                   ; success= None
-                  ; delete_error= None } ) )
+                  ; delete_error= None
+                  ; passkeys } ) )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
@@ -101,6 +115,19 @@ let post_handler =
                 let email_change_pending = has_valid_email_change_code actor in
                 let pending_email = actor.pending_email in
                 let delete_pending = has_valid_delete_code actor in
+                let%lwt passkeys_raw =
+                  Passkey.get_credentials_for_user ~did ctx.db
+                in
+                let passkeys =
+                  List.map
+                    (fun (pk : Passkey.Types.passkey) ->
+                      Frontend.AccountPage.
+                        { id= pk.id
+                        ; name= pk.name
+                        ; created_at= pk.created_at
+                        ; last_used_at= pk.last_used_at } )
+                    passkeys_raw
+                in
                 Util.render_html ~title:"Account"
                   (module Frontend.AccountPage)
                   ~props:
@@ -119,7 +146,8 @@ let post_handler =
                     ; delete_pending
                     ; error
                     ; success
-                    ; delete_error }
+                    ; delete_error
+                    ; passkeys }
               in
               match%lwt Dream.form ctx.req with
               | `Ok fields -> (

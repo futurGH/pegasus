@@ -7,6 +7,13 @@ type actor = AccountSwitcher.actor =
   {did: string; handle: string; avatar_data_uri: string option [@default None]}
 [@@deriving json]
 
+type passkey_display =
+  { id: int
+  ; name: string
+  ; created_at: int
+  ; last_used_at: int option [@default None] }
+[@@deriving json]
+
 type props =
   { current_user: actor
   ; logged_in_users: actor list
@@ -23,7 +30,8 @@ type props =
   ; delete_pending: bool [@default false]
   ; error: string option [@default None]
   ; success: string option [@default None]
-  ; delete_error: string option [@default None] }
+  ; delete_error: string option [@default None]
+  ; passkeys: passkey_display list [@default []] }
 [@@deriving json]
 
 let[@react.component] make
@@ -43,7 +51,8 @@ let[@react.component] make
        ; delete_pending
        ; error
        ; success
-       ; delete_error } :
+       ; delete_error
+       ; passkeys } :
         props ) () =
   let emailModalOpen, setEmailModalOpen =
     useState (fun () -> email_change_pending)
@@ -85,8 +94,19 @@ let[@react.component] make
   let importLoading, setImportLoading = useState (fun () -> false) in
   let importError, setImportError = useState (fun () -> None) in
   let importSuccess, setImportSuccess = useState (fun () -> false) in
+  let passkeysState, setPasskeysState = useState (fun () -> passkeys) in
+  let addingPasskey, setAddingPasskey = useState (fun () -> false) in
+  let passkeyName, setPasskeyName = useState (fun () -> "") in
+  let passkeyError, setPasskeyError = useState (fun () -> None) in
+  let webauthnSupported, setWebauthnSupported = useState (fun () -> false) in
+  let currentWebAuthnOptions = useRef None in
   let fileInputRef : Dom.element Js.nullable React.ref =
     useRef Js.Nullable.null
+  in
+  let _ =
+    React.useEffect0 (fun () ->
+        setWebauthnSupported (fun _ -> WebAuthn.browserSupportsWebAuthn ()) ;
+        None )
   in
   <div
     className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col \
@@ -202,7 +222,8 @@ let[@react.component] make
                               setEmailErrorState (fun _ ->
                                   Some "An error occurred. Please try again." ) ;
                               Js.Promise.resolve () ) )
-                        |> Js.Promise.catch (fun _ ->
+                        |> Js.Promise.catch (fun e ->
+                            Js.Console.error (Obj.magic e) ;
                             setEmailLoading (fun _ -> false) ;
                             setEmailErrorState (fun _ ->
                                 Some "An error occurred. Please try again." ) ;
@@ -421,7 +442,8 @@ let[@react.component] make
                                       Some
                                         "An error occurred. Please try again." ) ;
                                   Js.Promise.resolve () ) )
-                            |> Js.Promise.catch (fun _ ->
+                            |> Js.Promise.catch (fun e ->
+                                Js.Console.error (Obj.magic e) ;
                                 setConfirmEmailLoading (fun _ -> false) ;
                                 setConfirmEmailError (fun _ ->
                                     Some "An error occurred. Please try again." ) ;
@@ -600,7 +622,8 @@ let[@react.component] make
                                       Some "Import failed. Please try again." ) ;
                                   Js.Promise.resolve ()
                                 end )
-                            |> Js.Promise.catch (fun _ ->
+                            |> Js.Promise.catch (fun e ->
+                                Js.Console.error (Obj.magic e) ;
                                 setImportLoading (fun _ -> false) ;
                                 setImportError (fun _ ->
                                     Some "An error occurred. Please try again." ) ;
@@ -659,6 +682,188 @@ let[@react.component] make
                         overwrite any existing data with the contents of the \
                         backup." )
                   </p> )
+            </section>
+            <section className="mt-8">
+              <h2 className="text-xl font-serif text-mana-200 mb-1">
+                (string "passkeys")
+              </h2>
+              <p className="text-mist-100 mb-4">
+                (string
+                   "Passkeys are stored on your device, providing a more \
+                    convenient alternative to logging in with a password." )
+              </p>
+              <ClientOnly
+                fallback=(<p className="text-mist-80 text-sm">
+                            (string "Loading passkeys...")
+                          </p>)>
+                [%browser_only
+                  fun () ->
+                    let formatDate ts =
+                      let d = Js.Date.fromFloat (Float.of_int ts) in
+                      Js.Date.toLocaleDateString d
+                    in
+                    let addPasskey () =
+                      setAddingPasskey (fun _ -> true) ;
+                      setPasskeyError (fun _ -> None) ;
+                      let _ =
+                        Fetch.fetch "/account/passkeys/register/options"
+                        |> Js.Promise.then_ (fun response ->
+                            if Fetch.Response.ok response then
+                              Fetch.Response.json response
+                            else Js.Exn.raiseError "Failed to get options" )
+                        |> Js.Promise.then_ (fun options ->
+                            currentWebAuthnOptions.current <- Some options ;
+                            WebAuthn.startRegistration {optionsJSON= options} )
+                        |> Js.Promise.then_ (fun credential ->
+                            let challenge =
+                              Js.Dict.unsafeGet
+                                (Obj.magic currentWebAuthnOptions.current)
+                                "challenge"
+                            in
+                            let body =
+                              Js.Json.object_
+                                (Js.Dict.fromArray
+                                   [| ( "response"
+                                      , Js.Json.string
+                                          (Js.Json.stringify credential) )
+                                    ; ("challenge", challenge)
+                                    ; ( "name"
+                                      , Js.Json.string
+                                          ( if passkeyName = "" then "Passkey"
+                                            else passkeyName ) ) |] )
+                            in
+                            Fetch.fetchWithInit
+                              "/account/passkeys/register/verify"
+                              (Fetch.RequestInit.make ~method_:Post
+                                 ~body:
+                                   (Fetch.BodyInit.make (Js.Json.stringify body))
+                                 ~headers:
+                                   (Fetch.HeadersInit.makeWithArray
+                                      [|("Content-Type", "application/json")|] )
+                                 () ) )
+                        |> Js.Promise.then_ (fun response ->
+                            setAddingPasskey (fun _ -> false) ;
+                            if Fetch.Response.ok response then begin
+                              setPasskeyName (fun _ -> "") ;
+                              Fetch.fetch "/account/passkeys"
+                              |> Js.Promise.then_ (fun r ->
+                                  Fetch.Response.json r )
+                              |> Js.Promise.then_ (fun json ->
+                                  let pks : passkey_display list =
+                                    Js.Dict.unsafeGet (Obj.magic json)
+                                      "passkeys"
+                                    |> Obj.magic |> Array.to_list
+                                  in
+                                  setPasskeysState (fun _ -> pks) ;
+                                  Js.Promise.resolve () )
+                            end
+                            else begin
+                              setPasskeyError (fun _ ->
+                                  Some "Failed to register passkey" ) ;
+                              Fetch.Response.text response
+                              |> Js.Promise.then_ (fun e ->
+                                  Js.Console.error e ; Js.Promise.resolve () )
+                            end )
+                        |> Js.Promise.catch (fun e ->
+                            Js.Console.error (Obj.magic e) ;
+                            setAddingPasskey (fun _ -> false) ;
+                            setPasskeyError (fun _ ->
+                                Some "Passkey registration cancelled or failed" ) ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                    in
+                    let deletePasskey id =
+                      let _ =
+                        Fetch.fetchWithInit
+                          ("/account/passkeys/" ^ string_of_int id)
+                          (Fetch.RequestInit.make ~method_:Delete ())
+                        |> Js.Promise.then_ (fun response ->
+                            if Fetch.Response.ok response then
+                              setPasskeysState (fun ps ->
+                                  List.filter (fun p -> p.id <> id) ps ) ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                    in
+                    if not webauthnSupported then
+                      <p className="text-mist-80 text-sm">
+                        (string "Your browser doesn't support passkeys.")
+                      </p>
+                    else
+                      <div>
+                        ( if List.length passkeysState = 0 then
+                            <p className="text-mist-80 text-sm mb-4">
+                              (string "You haven't added any passkeys yet.")
+                            </p>
+                          else
+                            <ul className="mb-4 space-y-2">
+                              ( List.map
+                                  (fun (pk : passkey_display) ->
+                                    <li
+                                      key=(string_of_int pk.id)
+                                      className="flex items-center \
+                                                 justify-between p-3 border \
+                                                 border-mist-60 rounded-lg">
+                                      <div>
+                                        <span
+                                          className="font-medium text-mist-100">
+                                          (string pk.name)
+                                        </span>
+                                        <span
+                                          className="text-sm text-mist-80 ml-2">
+                                          (string
+                                             ( {js|⸱ |js}
+                                             ^ formatDate pk.created_at ) )
+                                        </span>
+                                      </div>
+                                      <button
+                                        type_="button"
+                                        className="p-1 text-phoenix-100 \
+                                                   hover:text-phoenix-200 \
+                                                   cursor-pointer"
+                                        onClick=(fun _ -> deletePasskey pk.id)>
+                                        <TrashIcon className="w-4 h-4" />
+                                      </button>
+                                    </li> )
+                                  passkeysState
+                              |> Array.of_list |> React.array )
+                            </ul> )
+                        <div className="flex flex-row gap-x-3">
+                          <div className="flex-1">
+                            <Input
+                              name="passkey_name"
+                              label="Passkey name"
+                              placeholder="My Little Passkey"
+                              showIndicator=false
+                              value=passkeyName
+                              onChange=(fun e ->
+                                           setPasskeyName (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                          </div>
+                          <div className="self-end">
+                            <Button
+                              type_="button"
+                              disabled=addingPasskey
+                              onClick=(fun _ -> addPasskey ())>
+                              (string
+                                 (if addingPasskey then "adding..." else "add") )
+                            </Button>
+                          </div>
+                        </div>
+                        ( match passkeyError with
+                        | Some err ->
+                            <span
+                              className="inline-flex items-center \
+                                         text-phoenix-100 text-sm mt-2">
+                              <CircleAlertIcon className="w-4 h-4 mr-2" />
+                              (string err)
+                            </span>
+                        | None ->
+                            null )
+                      </div>]
+              </ClientOnly>
             </section>
             <section className="mt-8">
               <h2 className="text-xl font-serif text-mana-200 mb-1">
@@ -735,7 +940,8 @@ let[@react.component] make
                                 setDeleteErrorState (fun _ ->
                                     Some "An error occurred. Please try again." ) ;
                                 Js.Promise.resolve () ) )
-                          |> Js.Promise.catch (fun _ ->
+                          |> Js.Promise.catch (fun e ->
+                              Js.Console.error (Obj.magic e) ;
                               setDeleteLoading (fun _ -> false) ;
                               setDeleteErrorState (fun _ ->
                                   Some "An error occurred. Please try again." ) ;

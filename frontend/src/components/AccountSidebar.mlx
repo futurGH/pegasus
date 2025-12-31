@@ -19,7 +19,7 @@ let[@react.component] make ~current_user ~logged_in_users ~active_page () =
     footer=(<a
               href=( "/account/logout?did="
                    ^ Js.Global.encodeURIComponent current_user.did )>
-              <Button kind=`Secondary className="mt-2 justify-start pl-0">
+              <Button kind=`Secondary className="mt-2 justify-start pl-0 active:shadow-none focus-visible:shadow-none">
                 (string "log out")
               </Button>
             </a>)

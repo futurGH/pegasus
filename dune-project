@@ -77,6 +77,7 @@
   (ppx_deriving_yojson (>= 3.9.1))
   ppx_rapper
   ppx_rapper_lwt
+  (webauthn (>= 0.2.0))
   (alcotest :with-test)
   crunch
   (ocamlformat-mlx :with-dev-setup)
