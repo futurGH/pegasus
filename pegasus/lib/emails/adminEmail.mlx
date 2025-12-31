@@ -1,0 +1,26 @@
+open EmailStyles
+
+let html_body ~recipient_handle ~content : JSX.element =
+  <div>
+    <p style=Styles.paragraph>
+      (JSX.string ("Hello, " ^ recipient_handle ^ "!"))
+    </p>
+    <p style=Styles.paragraph>(JSX.string content)</p>
+  </div>
+
+let plain_text ~recipient_handle ~content : string =
+  Printf.sprintf "Hello, %s!\n\n%s" recipient_handle content
+
+let make ~sender_handle ~recipient_handle ~subject ~content : Letters.body =
+  let html_content = html_body ~recipient_handle ~content in
+  let template_content =
+    EmailTemplate.
+      { title= subject
+      ; heading= subject
+      ; body= html_content
+      ; footer= Some ("Sent by @" ^ sender_handle ^ " via " ^ Env.hostname ^ ".")
+      }
+  in
+  let html = EmailTemplate.make ~content:template_content () |> JSX.render in
+  let plain = plain_text ~recipient_handle ~content in
+  Mixed (plain, html, None)

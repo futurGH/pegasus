@@ -1,0 +1,45 @@
+open EmailStyles
+
+let html_body ~handle ~did ~code : JSX.element =
+  <div>
+    <p style=Styles.paragraph>
+      (JSX.string
+         "Use the following code to confirm that you would like to update your \
+          identity for:" )
+    </p>
+    <p style=Styles.link>(JSX.string (handle ^ " (" ^ did ^ ")"))</p>
+    <div style=Styles.code_block>(JSX.string code)</div>
+    <p style=Styles.small_text>
+      (JSX.string "This token will expire in 1 hour.")
+    </p>
+    <p style=Styles.small_text>
+      (JSX.string
+         "If you didn't request this operation, you can safely ignore this \
+          email." )
+    </p>
+  </div>
+
+let plain_text ~handle ~did ~code : string =
+  Printf.sprintf
+    "Use the following code to confirm that you would like to update your \
+     identity for:\n\n\
+     %s (%s)\n\n\
+     %s\n\n\
+     This token will expire in 1 hour.\n\n\
+     If you didn't request this operation, you can safely ignore this email."
+    handle did code
+
+(* Generate complete email body *)
+let make ~handle ~did ~code : Letters.body =
+  let html_content = html_body ~handle ~did ~code in
+  let template_content =
+    EmailTemplate.
+      { title= "Confirm PLC operation"
+      ; heading= "confirm plc operation"
+      ; body= html_content
+      ; footer= Some ("This is an automated message from " ^ Env.hostname ^ ".")
+      }
+  in
+  let html = EmailTemplate.make ~content:template_content () |> JSX.render in
+  let plain = plain_text ~handle ~did ~code in
+  Mixed (plain, html, None)

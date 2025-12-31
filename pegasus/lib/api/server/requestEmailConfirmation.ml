@@ -13,11 +13,7 @@ let request_email_confirmation (actor : Data_store.Types.actor) db =
       let%lwt () =
         Util.send_email_or_log ~recipients:[To actor.email]
           ~subject:(Printf.sprintf "Confirm email for %s" actor.handle)
-          ~body:
-            (Plain
-               (Printf.sprintf
-                  "Confirm your email address using the following token: %s"
-                  code ) )
+          ~body:(Emails.EmailConfirmation.make ~handle:actor.handle ~code)
       in
       Lwt.return_ok ()
 

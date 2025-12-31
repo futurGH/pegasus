@@ -1,0 +1,45 @@
+open EmailStyles
+
+let html_body ~handle ~code : JSX.element =
+  <div>
+    <p style=Styles.paragraph>(JSX.string ("Hello, " ^ handle ^ "!"))</p>
+    <p style=Styles.paragraph>
+      (JSX.string
+         "You have requested to delete your account. Use the token below to \
+          confirm this action:" )
+    </p>
+    <div style=Styles.code_block>(JSX.string code)</div>
+    <p style=Styles.small_text>
+      (JSX.string "This token will expire in 15 minutes.")
+    </p>
+    <p style=Styles.small_text>
+      (JSX.string
+         "If you didn't request account deletion, you should update your \
+          account credentials." )
+    </p>
+  </div>
+
+let plain_text ~handle ~code : string =
+  Printf.sprintf
+    "Hello, %s!\n\n\
+     You have requested to delete your account. Use the token below to confirm \
+     this action:\n\n\
+     %s\n\n\
+     This token will expire in 15 minutes.\n\n\
+     If you didn't request account deletion, you should update your account \
+     credentials."
+    handle code
+
+let make ~handle ~code : Letters.body =
+  let html_content = html_body ~handle ~code in
+  let template_content =
+    EmailTemplate.
+      { title= "Account deletion request for " ^ handle
+      ; heading= "account deletion request"
+      ; body= html_content
+      ; footer= Some ("This is an automated message from " ^ Env.hostname ^ ".")
+      }
+  in
+  let html = EmailTemplate.make ~content:template_content () |> JSX.render in
+  let plain = plain_text ~handle ~code in
+  Mixed (plain, html, None)

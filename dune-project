@@ -65,6 +65,7 @@
   dream
   (emile (>= 1.1))
   (letters (>= 0.4.0))
+  (html_of_jsx (>= 0.0.7))
   (re (>= 1.13.2))
   (safepass (>= 3.1))
   server-reason-react

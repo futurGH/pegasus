@@ -10,11 +10,6 @@ let handler =
       let%lwt () =
         Util.send_email_or_log ~recipients:[To email]
           ~subject:"Confirm PLC operation"
-          ~body:
-            (Plain
-               (Printf.sprintf
-                  "Confirm that you would like to update your PLC identity for \
-                   %s (%s) using the following token: %s"
-                  handle did code ) )
+          ~body:(Emails.PlcOperation.make ~handle ~did ~code)
       in
       Dream.empty `OK )

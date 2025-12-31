@@ -1,0 +1,69 @@
+open EmailStyles
+
+type email_content =
+  {title: string; heading: string; body: JSX.element; footer: string option}
+
+let make ~content () : JSX.element =
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>(JSX.string content.title)</title>
+    </head>
+    <body
+      style=( "margin: 0; padding: 0; background-color: " ^ Colors.feather_100
+            ^ "; font-family: " ^ Fonts.sans ^ ";" )>
+      <table
+        role="presentation"
+        cellspacing="0"
+        cellpadding="0"
+        width="100%"
+        style=("background-color: " ^ Colors.feather_100 ^ ";")>
+        <tr>
+          <td style="padding: 40px 20px;">
+            <table
+              role="presentation"
+              cellspacing="0"
+              cellpadding="0"
+              width="600"
+              style=( "margin: 0 auto; background-color: " ^ Colors.white
+                    ^ "; border-radius: 8px; box-shadow: 0 2px 8px rgba(49, \
+                       43, 77, 0.1);" )>
+              <tr>
+                <td
+                  style=( "padding: 32px 40px; background-color: "
+                        ^ Colors.mana_100 ^ "; border-radius: 8px 8px 0 0;" )>
+                  <h1
+                    style=( "margin: 0; color: " ^ Colors.white
+                          ^ "; font-size: 24px; font-weight: normal; \
+                             letter-spacing: 0.01em; font-family: "
+                          ^ Fonts.serif ^ ";" )>
+                    (JSX.string content.heading)
+                  </h1>
+                </td>
+              </tr>
+              <tr><td style="padding: 40px;">content.body</td></tr>
+              ( match content.footer with
+              | Some footer_text ->
+                  <tr>
+                    <td
+                      style=( "padding: 24px 40px; border-top: 1px solid "
+                            ^ Colors.mist_40 ^ "; background-color: "
+                            ^ Colors.mist_20 ^ "; border-radius: 0 0 8px 8px;"
+                            )>
+                      <p
+                        style=( "margin: 0; color: " ^ Colors.mist_80
+                              ^ "; font-size: 13px; line-height: 1.5; \
+                                 font-family: " ^ Fonts.sans ^ ";" )>
+                        (JSX.string footer_text)
+                      </p>
+                    </td>
+                  </tr>
+              | None ->
+                  JSX.null )
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>

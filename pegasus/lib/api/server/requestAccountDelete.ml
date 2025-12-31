@@ -11,10 +11,7 @@ let request_account_delete (actor : Data_store.Types.actor) db =
   let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
   Util.send_email_or_log ~recipients:[To actor.email]
     ~subject:(Printf.sprintf "Account deletion request for %s" actor.handle)
-    ~body:
-      (Plain
-         (Printf.sprintf "Delete your account using the following token: %s"
-            code ) )
+    ~body:(Emails.AccountDelete.make ~handle:actor.handle ~code)
 
 let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
 

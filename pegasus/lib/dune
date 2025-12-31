@@ -14,6 +14,7 @@
   emile
   frontend
   hermes
+  html_of_jsx
   ipld
   kleidos
   letters
@@ -32,6 +33,6 @@
   ppx_deriving_yojson.runtime
   ppx_rapper_lwt)
  (preprocess
-  (pps hermes_ppx lwt_ppx ppx_deriving_yojson ppx_rapper)))
+  (pps hermes_ppx html_of_jsx.ppx lwt_ppx ppx_deriving_yojson ppx_rapper)))
 
 (include_subdirs qualified)

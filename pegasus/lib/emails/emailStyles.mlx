@@ -1,0 +1,52 @@
+module Colors = struct
+  let white = "#ffffff"
+
+  let feather_100 = "#c8cfd2"
+
+  let mana_40 = "#9b9eaa"
+
+  let mana_100 = "#6558a1"
+
+  let mana_200 = "#312b4d"
+
+  let mist_20 = "#ecedf8"
+
+  let mist_40 = "#dee1e3"
+
+  let mist_60 = "#a4a9ac"
+
+  let mist_80 = "#737579"
+
+  let mist_100 = "#4f4f53"
+end
+
+module Fonts = struct
+  let sans =
+    "-apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', \
+     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+
+  let serif = "Georgia, 'Times New Roman', Times, serif"
+
+  let mono = "monospace"
+end
+
+module Styles = struct
+  let paragraph =
+    "margin: 0 0 16px 0; color: " ^ Colors.mist_100
+    ^ "; font-size: 16px; line-height: 1.6; letter-spacing: 0.01em; \
+       font-family: " ^ Fonts.sans ^ ";"
+
+  let code_block =
+    "background-color: " ^ Colors.mist_20 ^ "; border: 1px solid "
+    ^ Colors.mist_40
+    ^ "; border-radius: 4px; padding: 16px 20px; margin: 24px 0; font-family: "
+    ^ Fonts.mono ^ "; font-size: 18px; color: " ^ Colors.mana_200
+    ^ "; text-align: center; letter-spacing: 0.05em; font-weight: bold;"
+
+  let link =
+    "color: " ^ Colors.mana_100 ^ "; text-decoration: none; font-weight: 500;"
+
+  let small_text =
+    "margin: 0 0 12px 0; font-size: 14px; color: " ^ Colors.mist_80
+    ^ "; line-height: 1.5; font-family: " ^ Fonts.sans ^ ";"
+end

@@ -1,0 +1,45 @@
+open EmailStyles
+
+let html_body ~handle ~code : JSX.element =
+  <div>
+    <p style=Styles.paragraph>
+      (JSX.string "Hello, ")
+      <span style=Styles.link>(JSX.string handle)</span>
+      (JSX.string "!")
+    </p>
+    <p style=Styles.paragraph>
+      (JSX.string "Please confirm your email address using the token below:")
+    </p>
+    <div style=Styles.code_block>(JSX.string code)</div>
+    <p style=Styles.small_text>
+      (JSX.string "This token will expire in 10 minutes.")
+    </p>
+    <p style=Styles.small_text>
+      (JSX.string
+         "If you didn't request this email confirmation, you can ignore this \
+          email." )
+    </p>
+  </div>
+
+let plain_text ~handle ~code : string =
+  Printf.sprintf
+    "Hello, %s!\n\n\
+     Please confirm your email address using the token below:\n\n\
+     %s\n\n\
+     This token will expire in 10 minutes.\n\n\
+     If you didn't request this email confirmation, you can ignore this email."
+    handle code
+
+let make ~handle ~code : Letters.body =
+  let html_content = html_body ~handle ~code in
+  let template_content =
+    EmailTemplate.
+      { title= "Confirm email for " ^ handle
+      ; heading= "confirm email"
+      ; body= html_content
+      ; footer= Some ("This is an automated message from " ^ Env.hostname ^ ".")
+      }
+  in
+  let html = EmailTemplate.make ~content:template_content () |> JSX.render in
+  let plain = plain_text ~handle ~code in
+  Mixed (plain, html, None)

@@ -13,10 +13,7 @@ let request_password_reset (actor : Data_store.Types.actor) db =
   let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
   Util.send_email_or_log ~recipients:[To actor.email]
     ~subject:(Printf.sprintf "Password reset for %s" actor.handle)
-    ~body:
-      (Plain
-         (Printf.sprintf "Reset your password using the following token: %s"
-            code ) )
+    ~body:(Emails.PasswordReset.make ~handle:actor.handle ~code)
 
 let handler =
   Xrpc.handler
