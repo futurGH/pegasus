@@ -49,20 +49,33 @@ let next_nonce () =
       (Int64.of_float (Unix.gettimeofday () *. 1000.))
       !nonce_state.rotation_interval_ms
   in
-  if now_counter <> !nonce_state.counter then (
-    !nonce_state.prev <- !nonce_state.curr ;
-    !nonce_state.curr <- !nonce_state.next ;
-    !nonce_state.next <-
-      compute_nonce !nonce_state.secret (Int64.succ now_counter) ;
-    !nonce_state.counter <- now_counter ) ;
+  let diff = Int64.sub now_counter !nonce_state.counter in
+  ( match diff with
+  | 0L ->
+      ()
+  | 1L ->
+      !nonce_state.prev <- !nonce_state.curr ;
+      !nonce_state.curr <- !nonce_state.next ;
+      !nonce_state.next <-
+        compute_nonce !nonce_state.secret (Int64.succ now_counter)
+  | 2L ->
+      !nonce_state.prev <- !nonce_state.next ;
+      !nonce_state.curr <- compute_nonce !nonce_state.secret now_counter ;
+      !nonce_state.next <-
+        compute_nonce !nonce_state.secret (Int64.succ now_counter)
+  | _ ->
+      !nonce_state.prev <-
+        compute_nonce !nonce_state.secret (Int64.pred now_counter) ;
+      !nonce_state.curr <- compute_nonce !nonce_state.secret now_counter ;
+      !nonce_state.next <-
+        compute_nonce !nonce_state.secret (Int64.succ now_counter) ) ;
+  !nonce_state.counter <- now_counter ;
   !nonce_state.next
 
 let verify_nonce nonce =
-  let valid =
-    nonce = !nonce_state.prev || nonce = !nonce_state.curr
-    || nonce = !nonce_state.next
-  in
-  ignore next_nonce ; valid
+  let _ = next_nonce () in
+  nonce = !nonce_state.prev || nonce = !nonce_state.curr
+  || nonce = !nonce_state.next
 
 let add_jti jti =
   let expires_at = int_of_float (Unix.gettimeofday ()) + Constants.jti_ttl_s in
