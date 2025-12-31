@@ -1,4 +1,5 @@
 (test
  (name test_ppx)
  (libraries alcotest hermes_ppx ppxlib)
- (preprocess (pps hermes_ppx)))
+ (preprocess
+  (pps hermes_ppx)))

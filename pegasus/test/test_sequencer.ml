@@ -107,7 +107,8 @@ let test_backfill_then_live () =
       in
       let stream =
         Lwt.catch
-          (fun () -> Sequencer.Live.stream_with_backfill ~conn ~cursor:(Some 0) ~send)
+          (fun () ->
+            Sequencer.Live.stream_with_backfill ~conn ~cursor:(Some 0) ~send )
           (fun _ -> Lwt.return_unit)
       in
       let _ = Lwt.async (fun () -> stream) in

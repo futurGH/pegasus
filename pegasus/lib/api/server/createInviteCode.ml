@@ -13,9 +13,7 @@ let create_invite_code ~db ~did ~use_count =
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->
-      let%lwt {use_count; for_account} =
-        Xrpc.parse_body req input_of_yojson
-      in
+      let%lwt {use_count; for_account} = Xrpc.parse_body req input_of_yojson in
       let%lwt code =
         create_invite_code ~db
           ~did:(Option.value for_account ~default:"admin")

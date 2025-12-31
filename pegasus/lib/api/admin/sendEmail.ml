@@ -21,8 +21,9 @@ let handler =
             in
             let%lwt () =
               Util.send_email_or_log ~recipients:[To recipient.email] ~subject
-                ~body:(Emails.AdminEmail.make ~sender_handle:sender.handle
-                         ~recipient_handle:recipient.handle ~subject ~content)
+                ~body:
+                  (Emails.AdminEmail.make ~sender_handle:sender.handle
+                     ~recipient_handle:recipient.handle ~subject ~content )
             in
             Dream.json @@ Yojson.Safe.to_string @@ output_to_yojson {sent= true}
         ) )

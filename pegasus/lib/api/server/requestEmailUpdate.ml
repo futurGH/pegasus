@@ -28,7 +28,9 @@ let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
       in
       Util.send_email_or_log ~recipients:[To to_email]
         ~subject:(Printf.sprintf "Confirm email change for %s" actor.handle)
-        ~body:(Emails.EmailUpdate.make ~handle:actor.handle ~new_email:pending_email ~code)
+        ~body:
+          (Emails.EmailUpdate.make ~handle:actor.handle ~new_email:pending_email
+             ~code )
     else Lwt.return_unit
   in
   Lwt.return token_required

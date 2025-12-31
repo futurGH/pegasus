@@ -4,7 +4,8 @@ type 'bs data =
   ; mutable pending_writes: Block_map.t
   ; bs: 'bs }
 
-module Make (Bs : Blockstore.Writable) : sig
+module Make
+    (Bs : Blockstore.Writable) : sig
   include Blockstore.Writable
 
   val create : Bs.t -> t
@@ -21,7 +22,10 @@ with type t = Bs.t data = struct
   type t = Bs.t data
 
   let create bs =
-    {reads= Cid.Set.empty; cache= Block_map.empty; pending_writes= Block_map.empty; bs}
+    { reads= Cid.Set.empty
+    ; cache= Block_map.empty
+    ; pending_writes= Block_map.empty
+    ; bs }
 
   let get_reads t = t.reads
 

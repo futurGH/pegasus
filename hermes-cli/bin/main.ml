@@ -61,12 +61,13 @@ let generate ~inputs ~output_dir ~module_name =
           (* sort for consistent ordering *)
           let sorted_docs =
             List.sort
-              (fun a b ->
-                String.compare a.Lexicon_types.id b.Lexicon_types.id )
+              (fun a b -> String.compare a.Lexicon_types.id b.Lexicon_types.id)
               docs
           in
           (* generate shared module with all types *)
-          let shared_module_name = Naming.shared_module_name nsids !shared_index in
+          let shared_module_name =
+            Naming.shared_module_name nsids !shared_index
+          in
           let shared_file = Naming.shared_file_name nsids !shared_index in
           let code = Codegen.gen_shared_module sorted_docs in
           let full_path = Filename.concat output_dir shared_file in
@@ -86,7 +87,8 @@ let generate ~inputs ~output_dir ~module_name =
               let oc = open_out full_path in
               output_string oc stub ;
               close_out oc ;
-              Printf.printf "  Generated: %s -> %s\n" rel_path shared_module_name )
+              Printf.printf "  Generated: %s -> %s\n" rel_path
+                shared_module_name )
             docs )
     sccs ;
   (* generate index file *)
@@ -115,9 +117,7 @@ let generate ~inputs ~output_dir ~module_name =
   Printf.printf "Done! Generated %d modules\n" (List.length lexicons)
 
 let inputs =
-  let doc =
-    "lexicon files or directories to search recursively for JSON"
-  in
+  let doc = "lexicon files or directories to search recursively for JSON" in
   Cmdliner.Arg.(non_empty & pos_all file [] & info [] ~docv:"INPUT" ~doc)
 
 let output_dir =

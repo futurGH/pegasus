@@ -261,14 +261,10 @@ let test_gen_token () =
 let test_gen_inline_union () =
   let union_type =
     Lexicon_types.Union
-      { refs= ["#typeA"; "#typeB"]
-      ; closed= Some false
-      ; description= None }
+      {refs= ["#typeA"; "#typeB"]; closed= Some false; description= None}
   in
   let obj_spec =
-    make_object_spec
-      [("status", make_property union_type)]
-      ["status"]
+    make_object_spec [("status", make_property union_type)] ["status"]
   in
   let doc =
     make_lexicon "com.example.inline"
@@ -286,21 +282,14 @@ let test_gen_inline_union () =
 let test_gen_inline_union_in_array () =
   let union_type =
     Lexicon_types.Union
-      { refs= ["#typeA"; "#typeB"]
-      ; closed= Some true
-      ; description= None }
+      {refs= ["#typeA"; "#typeB"]; closed= Some true; description= None}
   in
   let array_type =
     Lexicon_types.Array
-      { items= union_type
-      ; min_length= None
-      ; max_length= None
-      ; description= None }
+      {items= union_type; min_length= None; max_length= None; description= None}
   in
   let obj_spec =
-    make_object_spec
-      [("items", make_property array_type)]
-      ["items"]
+    make_object_spec [("items", make_property array_type)] ["items"]
   in
   let doc =
     make_lexicon "com.example.arrayunion"
@@ -356,15 +345,17 @@ let test_gen_mutually_recursive () =
   let type_a_spec =
     make_object_spec
       [ ("name", make_property string_type)
-      ; ("b", make_property (Lexicon_types.Ref {ref_= "#typeB"; description= None}))
-      ]
+      ; ( "b"
+        , make_property (Lexicon_types.Ref {ref_= "#typeB"; description= None})
+        ) ]
       ["name"]
   in
   let type_b_spec =
     make_object_spec
       [ ("value", make_property int_type)
-      ; ("a", make_property (Lexicon_types.Ref {ref_= "#typeA"; description= None}))
-      ]
+      ; ( "a"
+        , make_property (Lexicon_types.Ref {ref_= "#typeA"; description= None})
+        ) ]
       ["value"]
   in
   let doc =
@@ -384,10 +375,7 @@ let test_gen_mutually_recursive () =
 let test_gen_record () =
   let record_spec : Lexicon_types.record_spec =
     { key= "tid"
-    ; record=
-        make_object_spec
-          [("text", make_property string_type)]
-          ["text"]
+    ; record= make_object_spec [("text", make_property string_type)] ["text"]
     ; description= Some "A simple record" }
   in
   let doc =
@@ -414,8 +402,7 @@ let test_gen_external_ref () =
   in
   let code = Codegen.gen_lexicon_module doc in
   (* should generate qualified module reference *)
-  check bool "contains qualified ref" true
-    (contains code "Com_other_defs.user")
+  check bool "contains qualified ref" true (contains code "Com_other_defs.user")
 
 (* test generating string type with known values *)
 let test_gen_string_known_values () =
@@ -438,8 +425,7 @@ let test_gen_string_known_values () =
   let code = Codegen.gen_lexicon_module doc in
   check bool "contains type status = string" true
     (contains code "type status = string") ;
-  check bool "contains status_of_yojson" true
-    (contains code "status_of_yojson")
+  check bool "contains status_of_yojson" true (contains code "status_of_yojson")
 
 (* test generating query with bytes output (like getBlob) *)
 let test_gen_query_bytes_output () =
@@ -525,7 +511,8 @@ let ordering_tests =
 
 let token_tests = [("token generation", `Quick, test_gen_token)]
 
-let string_tests = [("string with known values", `Quick, test_gen_string_known_values)]
+let string_tests =
+  [("string with known values", `Quick, test_gen_string_known_values)]
 
 let () =
   run "Codegen"

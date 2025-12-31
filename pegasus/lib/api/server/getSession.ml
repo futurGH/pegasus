@@ -15,5 +15,5 @@ let handler =
       in
       Dream.json @@ Yojson.Safe.to_string
       @@ output_to_yojson
-           (session |> Auth.session_info_to_yojson |> output_of_yojson
+           ( session |> Auth.session_info_to_yojson |> output_of_yojson
            |> Result.get_ok ) )

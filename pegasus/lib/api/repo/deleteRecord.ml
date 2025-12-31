@@ -35,7 +35,6 @@ let handler =
       match List.hd results with
       | Delete _ ->
           Dream.json @@ Yojson.Safe.to_string
-          @@ output_to_yojson
-               {commit= Some {cid= Cid.to_string commit_cid; rev}}
+          @@ output_to_yojson {commit= Some {cid= Cid.to_string commit_cid; rev}}
       | _ ->
           Errors.invalid_request "unexpected create or update result" )
