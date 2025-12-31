@@ -27,36 +27,35 @@ let[@react.component] make ~name ?(label = "handle") ?(sr_only = false)
             ( "/account/signup/check-handle?handle="
             ^ Js.Global.encodeURIComponent handle )
           |> Js.Promise.then_ (fun response ->
-                 if Fetch.Response.ok response then Fetch.Response.json response
-                 else Js.Promise.reject (Js.Exn.raiseError "Request failed") )
+              if Fetch.Response.ok response then Fetch.Response.json response
+              else Js.Promise.reject (Js.Exn.raiseError "Request failed") )
           |> Js.Promise.then_ (fun json ->
-                 let valid =
-                   Js.Dict.get (Obj.magic json) "valid"
-                   |> Option.map Obj.magic
-                   |> Option.value ~default:false
-                 in
-                 let available =
-                   Js.Dict.get (Obj.magic json) "available"
-                   |> Option.map Obj.magic
-                   |> Option.value ~default:false
-                 in
-                 let error =
-                   Option.bind
-                     ( Js.Dict.get (Obj.magic json) "error"
-                     |> Option.map Obj.magic )
-                     (fun x ->
-                       if Js.Nullable.isNullable (Obj.magic x) then None
-                       else Some x )
-                 in
-                 if valid && available then setHandleStatus (fun _ -> Valid)
-                 else
-                   setHandleStatus (fun _ ->
-                       Invalid (Option.value error ~default:"Invalid handle") ) ;
-                 Js.Promise.resolve () )
+              let valid =
+                Js.Dict.get (Obj.magic json) "valid"
+                |> Option.map Obj.magic
+                |> Option.value ~default:false
+              in
+              let available =
+                Js.Dict.get (Obj.magic json) "available"
+                |> Option.map Obj.magic
+                |> Option.value ~default:false
+              in
+              let error =
+                Option.bind
+                  (Js.Dict.get (Obj.magic json) "error" |> Option.map Obj.magic)
+                  (fun x ->
+                    if Js.Nullable.isNullable (Obj.magic x) then None
+                    else Some x )
+              in
+              if valid && available then setHandleStatus (fun _ -> Valid)
+              else
+                setHandleStatus (fun _ ->
+                    Invalid (Option.value error ~default:"Invalid handle") ) ;
+              Js.Promise.resolve () )
           |> Js.Promise.catch (fun _ ->
-                 setHandleStatus (fun _ ->
-                     Invalid "Couldn't check handle availability" ) ;
-                 Js.Promise.resolve () )
+              setHandleStatus (fun _ ->
+                  Invalid "Couldn't check handle availability" ) ;
+              Js.Promise.resolve () )
         in
         ()]
   in

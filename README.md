@@ -154,4 +154,4 @@ dune tools exec ocamllsp
 
 to download the formatter and LSP services. You can run `dune fmt` to format the project.
 
-The [frontend](frontend/) is written in [MLX](https://github.com/ocaml-mlx/mlx), a JSX-ish OCaml dialect. To format it, you'll need to `opam install ocamlformat-mlx`, then `ocamlformat-mlx -i frontend/**/*.mlx`. You'll see a few errors on formatting files containing `[%browser_only]`; I'm waiting on the next release of `mlx` to fix those.
+The [frontend](frontend/) and [email templates](pegasus/lib/emails/) are written in [MLX](https://github.com/ocaml-mlx/mlx), a JSX-ish OCaml dialect. To format them, you'll need to `opam install ocamlformat-mlx`, then `ocamlformat-mlx -i ./{frontend,pegasus}/**/*.mlx`.

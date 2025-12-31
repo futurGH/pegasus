@@ -340,7 +340,9 @@ end
 
 module BlobProgress = struct
   let[@react.component] make ~csrf_token ~did ~blobs_imported ~blobs_failed () =
-    let form_ref : Dom.htmlFormElement Js.nullable React.ref = useRef Js.Nullable.null in
+    let form_ref : Dom.htmlFormElement Js.nullable React.ref =
+      useRef Js.Nullable.null
+    in
     (* auto-submit the form after a brief delay to continue importing *)
     React.useEffect0 (fun () ->
         let timer_id =
@@ -349,7 +351,7 @@ module BlobProgress = struct
               match Js.Nullable.toOption form_ref.current with
               | Some form ->
                   Webapi.Dom.HtmlFormElement.setAttribute "method" "post" form ;
-                  Webapi.Dom.HtmlFormElement.submit form ;
+                  Webapi.Dom.HtmlFormElement.submit form
               | None ->
                   () )
             100

@@ -5,8 +5,4 @@ let pages =
   ; ("Invite codes", "/admin/invites")
   ; ("Blobs", "/admin/blobs") ]
 
-let[@react.component] make ~active_page () =
-  <Sidebar
-    pages
-    active_page
-  />
+let[@react.component] make ~active_page () = <Sidebar pages active_page />

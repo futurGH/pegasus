@@ -68,8 +68,8 @@ let[@react.component] make
       ({current_user; logged_in_users; csrf_token; authorized_apps; devices} :
         props ) () =
   <div
-    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex \
-               flex-col md:flex-row gap-8">
+    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col \
+               md:flex-row gap-8">
     <AccountSidebar
       current_user logged_in_users active_page="/account/permissions"
     />

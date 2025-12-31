@@ -7,14 +7,14 @@ module Aria = ReactAria
 let button_class_inline =
   "group inline-flex flex-row items-center px-1.5 py-1 -mx-0.75 -my-1 \
    rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
-     active:bg-mist-20/40"
+   active:bg-mist-20/40"
 
 let button_class_default =
-  "group w-64 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 \
-   rounded-lg focus-visible:outline-none hover:bg-mist-20/40 \
-     active:bg-mist-20/40"
+  "group w-64 flex flex-row items-center gap-x-1 px-2 py-1.5 -mx-2 rounded-lg \
+   focus-visible:outline-none hover:bg-mist-20/40 active:bg-mist-20/40"
 
-let value_class_inline = "text-mana-100 font-serif inline-flex items-center gap-x-1"
+let value_class_inline =
+  "text-mana-100 font-serif inline-flex items-center gap-x-1"
 
 let value_class_default = "text-mana-100 font-serif flex items-center gap-x-1"
 
@@ -23,17 +23,23 @@ type actor =
 [@@deriving json]
 
 let fallback handle avatar inline =
-  let button_class = if inline then button_class_inline else button_class_default in
-  let value_class = if inline then value_class_inline else value_class_default in
+  let button_class =
+    if inline then button_class_inline else button_class_default
+  in
+  let value_class =
+    if inline then value_class_inline else value_class_default
+  in
   <button className=button_class>
     <span className=value_class>
-      (match avatar with
-      | Some uri -> <img className="w-5 h-5 mr-1 rounded-md" src=uri />
-      | None -> null)
-      <span className="truncate self-baseline select-none">(string handle)</span>
-      <ChevronDownIcon
-        className="w-3 h-3 mt-0.5 text-mana-100"
-        strokeWidth="3"
+      ( match avatar with
+      | Some uri ->
+          <img className="w-5 h-5 mr-1 rounded-md" src=uri />
+      | None ->
+          null )
+      <span className="truncate self-baseline select-none">
+        (string handle)
+      </span>
+      <ChevronDownIcon className="w-3 h-3 mt-0.5 text-mana-100" strokeWidth="3"
       />
     </span>
   </button>
@@ -43,88 +49,97 @@ let[@react.component] make ~current_user ~logged_in_users ~add_account_url
   let handleAccountSwitch =
     [%browser_only
       fun newDid ->
-        if newDid <> current_user.did then
+        if newDid <> current_user.did then (
           let body =
             Fetch.BodyInit.make
-              (Webapi.Url.URLSearchParams.makeWithArray [|("did", newDid)|]
-	          |> Webapi.Url.URLSearchParams.toString )
-	      in
+              ( Webapi.Url.URLSearchParams.makeWithArray [|("did", newDid)|]
+              |> Webapi.Url.URLSearchParams.toString )
+          in
           let _ =
             Fetch.fetchWithInit "/account/switch"
               (Fetch.RequestInit.make ~method_:Fetch.Post
-                 ~headers:(Fetch.HeadersInit.makeWithArray [|("Content-Type", "application/x-www-form-urlencoded")|])
-                 ~body
-                 () )
+                 ~headers:
+                   (Fetch.HeadersInit.makeWithArray
+                      [|("Content-Type", "application/x-www-form-urlencoded")|] )
+                 ~body () )
             |> Js.Promise.then_ (fun response ->
-                   if Fetch.Response.ok response then (
-                     ignore ([%mel.raw {| window.location.reload() |}] : unit) ;
-                     Js.Promise.resolve () )
-                   else Js.Promise.resolve () )
+                if Fetch.Response.ok response then (
+                  ignore ([%mel.raw {| window.location.reload() |}] : unit) ;
+                  Js.Promise.resolve () )
+                else Js.Promise.resolve () )
             |> Js.Promise.catch (fun _ -> Js.Promise.resolve ())
           in
           () ;
-          ( match onChange with
-          | Some f ->
-              f newDid
-          | None ->
-              () )
+          match onChange with Some f -> f newDid | None -> () )
         else ()]
   in
-  let button_class = if inline then button_class_inline else button_class_default in
-  let value_class = if inline then value_class_inline else value_class_default in
-  <ClientOnly fallback=(fallback current_user.handle current_user.avatar_data_uri inline)>
-  [%browser_only
-    (fun () ->
-      <Aria.Select name className="inline" defaultValue=current_user.did placeholder="select account" onChange=handleAccountSwitch>
-        <Aria.Button className=button_class>
-          <Aria.SelectValue className=value_class />
-        </Aria.Button>
-        <Aria.Popover
-          style=
-            (ReactDOM.Style.make
-               ~minWidth:"max(var(--spacing) * 32, calc(var(--trigger-width) + var(--spacing) * 3))" () )
-          className="focus-visible:outline-none">
-          <Aria.ListBox
-            className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \
-                       bg-mist-20 font-light">
-            ( List.map
-                (fun (user : actor) ->
-                  <Aria.ListBoxItem
-                    className="flex flex-row items-center py-1.5 px-2 gap-x-1 \
-                               font-serif text-mist-100 rounded-md \
-                               focus-visible:outline-none \
-                               data-hovered:text-mist-20 \
-                               data-focused:text-mist-20 \
-                               data-hovered:bg-mana-100 \
-                               data-focused:bg-mana-100"
-                    key=user.did
-                    id=user.did>
-                    ( match user.avatar_data_uri with
-                    | Some src ->
-                        <img src className="w-5 h-5 mr-1 rounded-md" />
-                    | None ->
-                        null )
-                    <span className="truncate self-baseline select-none">
-                      (string user.handle)
-                    </span>
-                    <ChevronDownIcon
-                      className="w-3 h-3 mt-0.5 text-mana-100 hidden \
-                                 group-aria-[haspopup]:inline"
-                      strokeWidth="3"
-                    />
-                  </Aria.ListBoxItem> )
-                logged_in_users
-            |> Array.of_list |> array )
-            <Aria.ListBoxItem
-              className="flex flex-row items-center p-1 pl-2 text-mana-100 \
-                         font-normal underline rounded-md \
-                         focus-visible:outline-none \
-                         data-hovered:text-mist-20 data-focused:text-mist-20 \
-                         data-hovered:bg-mana-100 data-focused:bg-mana-100"
-              href=add_account_url>
-              (string "add account")
-            </Aria.ListBoxItem>
-          </Aria.ListBox>
-        </Aria.Popover>
-      </Aria.Select> )]
+  let button_class =
+    if inline then button_class_inline else button_class_default
+  in
+  let value_class =
+    if inline then value_class_inline else value_class_default
+  in
+  <ClientOnly
+    fallback=(fallback current_user.handle current_user.avatar_data_uri inline)>
+    [%browser_only
+      fun () ->
+        <Aria.Select
+          name
+          className="inline"
+          defaultValue=current_user.did
+          placeholder="select account"
+          onChange=handleAccountSwitch>
+          <Aria.Button className=button_class>
+            <Aria.SelectValue className=value_class />
+          </Aria.Button>
+          <Aria.Popover
+            style=(ReactDOM.Style.make
+                     ~minWidth:
+                       "max(var(--spacing) * 32, calc(var(--trigger-width) + \
+                        var(--spacing) * 3))"
+                     () )
+            className="focus-visible:outline-none">
+            <Aria.ListBox
+              className="w-full flex flex-col gap-y-1 p-1.5 -ml-1.5 rounded-lg \
+                         bg-mist-20 font-light">
+              ( List.map
+                  (fun (user : actor) ->
+                    <Aria.ListBoxItem
+                      className="flex flex-row items-center py-1.5 px-2 \
+                                 gap-x-1 font-serif text-mist-100 rounded-md \
+                                 focus-visible:outline-none \
+                                 data-hovered:text-mist-20 \
+                                 data-focused:text-mist-20 \
+                                 data-hovered:bg-mana-100 \
+                                 data-focused:bg-mana-100"
+                      key=user.did
+                      id=user.did>
+                      ( match user.avatar_data_uri with
+                      | Some src ->
+                          <img src className="w-5 h-5 mr-1 rounded-md" />
+                      | None ->
+                          null )
+                      <span className="truncate self-baseline select-none">
+                        (string user.handle)
+                      </span>
+                      <ChevronDownIcon
+                        className="w-3 h-3 mt-0.5 text-mana-100 hidden \
+                                   group-aria-[haspopup]:inline"
+                        strokeWidth="3"
+                      />
+                    </Aria.ListBoxItem> )
+                  logged_in_users
+              |> Array.of_list |> array )
+              <Aria.ListBoxItem
+                className="flex flex-row items-center p-1 pl-2 text-mana-100 \
+                           font-normal underline rounded-md \
+                           focus-visible:outline-none \
+                           data-hovered:text-mist-20 data-focused:text-mist-20 \
+                           data-hovered:bg-mana-100 data-focused:bg-mana-100"
+                href=add_account_url>
+                (string "add account")
+              </Aria.ListBoxItem>
+            </Aria.ListBox>
+          </Aria.Popover>
+        </Aria.Select>]
   </ClientOnly>

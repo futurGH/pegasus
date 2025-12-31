@@ -47,5 +47,3 @@ opam install ocamlformat-mlx
 # Format MLX files
 ocamlformat-mlx -i frontend/src/**/*.mlx
 ```
-
-Note: You may see errors formatting files containing `[%browser_only]`. This is a known issue pending the next MLX release.

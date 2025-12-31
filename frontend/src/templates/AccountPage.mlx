@@ -75,17 +75,23 @@ let[@react.component] make
   let confirmEmailError, setConfirmEmailError =
     useState (fun () -> email_confirmation_error)
   in
-  let confirmEmailLoading, setConfirmEmailLoading = useState (fun () -> false) in
-  let confirmEmailTokenInput, setConfirmEmailTokenInput = useState (fun () -> "") in
+  let confirmEmailLoading, setConfirmEmailLoading =
+    useState (fun () -> false)
+  in
+  let confirmEmailTokenInput, setConfirmEmailTokenInput =
+    useState (fun () -> "")
+  in
   let successMessage, setSuccessMessage = useState (fun () -> success) in
   let importLoading, setImportLoading = useState (fun () -> false) in
   let importError, setImportError = useState (fun () -> None) in
   let importSuccess, setImportSuccess = useState (fun () -> false) in
-  let fileInputRef : Dom.element Js.nullable React.ref = useRef Js.Nullable.null in
-  <div className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col md:flex-row gap-8">
-    <AccountSidebar
-      current_user logged_in_users active_page="/account"
-    />
+  let fileInputRef : Dom.element Js.nullable React.ref =
+    useRef Js.Nullable.null
+  in
+  <div
+    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col \
+               md:flex-row gap-8">
+    <AccountSidebar current_user logged_in_users active_page="/account" />
     <main className="flex-1 w-full md:max-w-lg">
       <h1 className="text-2xl font-serif text-mana-200 mb-1">
         (string "my account")
@@ -124,243 +130,264 @@ let[@react.component] make
             </p>
             <form className="flex flex-col gap-y-3">
               <input type_="hidden" name="dream.csrf" value=csrf_token />
-              <ClientOnly fallback=(
-              	<Input
-                    name="email"
-                    type_="email"
-                    label="Email"
-                    placeholder=email
-                    required=true
-                    showIndicator=false
-                    disabled=true
-                    trailing=(
-                        <button
-                          type_="button"
-                          className="p-1 hover:text-mana-100 cursor-pointer"
-                          ariaLabel="Change email">
-                          <PencilLineIcon className="w-4 h-4" />
-                        </button>
-                    ) />
-              )>
-              [%browser_only
-	            (fun () ->
-	                let module Aria = ReactAria in
-	                let submitEmailForm action fields =
-	                  setEmailLoading (fun _ -> true) ;
-	                  setEmailErrorState (fun _ -> None) ;
-	                  let body =
-	                    Fetch.BodyInit.make
-	                      (Webapi.Url.URLSearchParams.makeWithArray
-	                         (Array.append
-	                            [|("dream.csrf", csrf_token); ("action", action)|]
-	                            fields )
-	                      |> Webapi.Url.URLSearchParams.toString )
-	                  in
-	                  let _ =
-	                    Fetch.fetchWithInit "/account"
-	                      (Fetch.RequestInit.make ~method_:Post ~body
-	                         ~headers:
-	                           (Fetch.HeadersInit.makeWithArray
-	                              [|("Content-Type", "application/x-www-form-urlencoded")|] )
-	                         () )
-	                    |> Js.Promise.then_ (fun response ->
-	                           setEmailLoading (fun _ -> false) ;
-	                           if Fetch.Response.ok response then
-	                             match action with
-	                             | "request_email_change" ->
-	                                 let new_email =
-	                                   Array.find_opt
-	                                     (fun (k, _) -> k = "new_email")
-	                                     fields
-	                                   |> Option.map snd
-	                                 in
-	                                 setEmailPending (fun _ -> true) ;
-	                                 setEmailPendingAddress (fun _ -> new_email) ;
-	                                 Js.Promise.resolve ()
-	                             | "confirm_email_change" ->
-	                                 setEmailModalOpen (fun _ -> false) ;
-	                                 setEmailPending (fun _ -> false) ;
-	                                 setEmailPendingAddress (fun _ -> None) ;
-	                                 Webapi.Dom.(
-	                                   location |> Location.reload) ;
-	                                 Js.Promise.resolve ()
-	                             | "cancel_email_change" ->
-	                                 setEmailPending (fun _ -> false) ;
-	                                 setEmailPendingAddress (fun _ -> None) ;
-	                                 setEmailModalOpen (fun _ -> false) ;
-	                                 Js.Promise.resolve ()
-	                             | _ ->
-	                                 Js.Promise.resolve ()
-	                           else (
-	                             setEmailErrorState (fun _ ->
-	                                 Some "An error occurred. Please try again." ) ;
-	                             Js.Promise.resolve () ) )
-	                    |> Js.Promise.catch (fun _ ->
-	                           setEmailLoading (fun _ -> false) ;
-	                           setEmailErrorState (fun _ ->
-	                               Some "An error occurred. Please try again." ) ;
-	                           Js.Promise.resolve () )
-	                  in
-	                  ()
-	                in
-	                <Aria.DialogTrigger defaultOpen=email_change_pending>
-		                <Input
-		                    name="email"
-							type_="email"
-		                    label="Email"
-		                    placeholder=email
-		                    showIndicator=false
-		                    disabled=true
-		                    trailing=(
-		                    <Aria.Pressable>
-		                        <button
-		                        type_="button"
-		                        className="p-1 hover:text-mana-100 cursor-pointer"
-		                        ariaLabel="Change email"
-		                        onClick=(fun _ -> setEmailModalOpen (fun _ -> true))>
-		                        <PencilLineIcon className="w-4 h-4" />
-		                        </button>
-		                    </Aria.Pressable>
-		                    )
-		                />
-		                <Aria.ModalOverlay
-		                    className="fixed inset-0 z-50 bg-mist-80/80 \
-		                                flex items-center justify-center"
-		                    isDismissable=(not emailPending)
-		                    isOpen=emailModalOpen
-		                    onOpenChange=(fun o -> setEmailModalOpen (fun _ -> o))
-		                    >
-		                    <Aria.Modal
-		                    className="bg-feather-100 border border-mist-60 rounded-xl \
-		                                px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
-		                    <Aria.Dialog className="outline-none">
-		                        <Aria.Heading
-		                        slot="title"
-		                        className="text-lg font-serif text-mana-200 mb-2">
-		                        (string "change email")
-		                        </Aria.Heading>
-		                        ( if emailPending then
-		                            <form
-		                              className="flex flex-col gap-y-3"
-		                              onSubmit=(fun e ->
-		                                  Event.Form.preventDefault e ;
-		                                  submitEmailForm "confirm_email_change"
-		                                    [|("token", emailTokenInput)|] )>
-		                            <p className="text-mist-100">
-		                                (string
-		                                    ( "Enter the verification code sent to "
-		                                    ^ Option.value emailPendingAddress
-		                                        ~default:"your new email"
-		                                    ^ "." ) )
-		                            </p>
-		                            <Input
-		                                name="token"
-		                                label="Verification code"
-		                                placeholder="A1B2C-3D4E5"
-			                            required=true
-			                            showIndicator=false
-		                                value=emailTokenInput
-		                                onChange=(fun e ->
-		                                    setEmailTokenInput (fun _ ->
-		                                        (Event.Form.target e)##value ) )
-		                            />
-		                            ( match emailErrorState with
-		                            | Some err ->
-		                                <span
-		                                    className="inline-flex items-center \
-		                                                text-phoenix-100 text-sm">
-		                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
-		                                    (string err)
-		                                </span>
-		                            | None ->
-		                                null )
-		                            <div className="flex flex-row gap-x-3 mt-2">
-		                                <Button
-		                                  type_="submit"
-		                                  disabled=emailLoading>
-		                                  (string (if emailLoading then "verifying..." else "verify"))
-		                                </Button>
-		                                <Button
-		                                  kind=`Secondary
-		                                  type_="button"
-		                                  disabled=emailLoading
-		                                  onClick=(fun _ ->
-		                                      submitEmailForm "cancel_email_change" [||])>
-		                                  (string "cancel")
-		                                </Button>
-		                            </div>
-		                            </form>
-		                        else
-		                            <form
-		                              className="flex flex-col gap-y-3"
-		                              onSubmit=(fun e ->
-		                                  Event.Form.preventDefault e ;
-		                                  submitEmailForm "request_email_change"
-		                                    [|("new_email", newEmailInput)|] )>
-		                            <Input
-		                                name="new_email"
-		                                label="New email address"
-		                                type_="email"
-			                            required=true
-			                            showIndicator=false
-		                                value=newEmailInput
-		                                onChange=(fun e ->
-		                                    setNewEmailInput (fun _ ->
-		                                        (Event.Form.target e)##value ) )
-		                            />
-		                            ( match emailErrorState with
-		                            | Some err ->
-		                                <span
-		                                    className="inline-flex items-center \
-		                                                text-phoenix-100 text-sm">
-		                                    <CircleAlertIcon className="w-4 h-4 mr-2" />
-		                                    (string err)
-		                                </span>
-		                            | None ->
-		                                null )
-		                            <div className="flex flex-row gap-x-3 mt-2">
-		                                <Button
-		                                  type_="submit"
-		                                  disabled=emailLoading>
-		                                  (string (if emailLoading then "sending..." else "send code"))
-		                                </Button>
-		                                <Button kind=`Tertiary
-		                                  className="text-mist-100 hover:text-mana-100"
-		                                  onClick=(fun _ -> setEmailModalOpen (fun _ -> false))>
-		                                  (string "cancel")
-		                                </Button>
-		                            </div>
-		                            </form> )
-		                    </Aria.Dialog>
-		                    </Aria.Modal>
-		                </Aria.ModalOverlay>
-	                </Aria.DialogTrigger> )]
+              <ClientOnly
+                fallback=(<Input
+                            name="email"
+                            type_="email"
+                            label="Email"
+                            placeholder=email
+                            required=true
+                            showIndicator=false
+                            disabled=true
+                            trailing=(<button
+                                        type_="button"
+                                        className="p-1 hover:text-mana-100 \
+                                                   cursor-pointer"
+                                        ariaLabel="Change email">
+                                        <PencilLineIcon className="w-4 h-4" />
+                                      </button>)
+                          />)>
+                [%browser_only
+                  fun () ->
+                    let module Aria = ReactAria in
+                    let submitEmailForm action fields =
+                      setEmailLoading (fun _ -> true) ;
+                      setEmailErrorState (fun _ -> None) ;
+                      let body =
+                        Fetch.BodyInit.make
+                          ( Webapi.Url.URLSearchParams.makeWithArray
+                              (Array.append
+                                 [| ("dream.csrf", csrf_token)
+                                  ; ("action", action) |]
+                                 fields )
+                          |> Webapi.Url.URLSearchParams.toString )
+                      in
+                      let _ =
+                        Fetch.fetchWithInit "/account"
+                          (Fetch.RequestInit.make ~method_:Post ~body
+                             ~headers:
+                               (Fetch.HeadersInit.makeWithArray
+                                  [| ( "Content-Type"
+                                     , "application/x-www-form-urlencoded" )
+                                  |] )
+                             () )
+                        |> Js.Promise.then_ (fun response ->
+                            setEmailLoading (fun _ -> false) ;
+                            if Fetch.Response.ok response then
+                              match action with
+                              | "request_email_change" ->
+                                  let new_email =
+                                    Array.find_opt
+                                      (fun (k, _) -> k = "new_email")
+                                      fields
+                                    |> Option.map snd
+                                  in
+                                  setEmailPending (fun _ -> true) ;
+                                  setEmailPendingAddress (fun _ -> new_email) ;
+                                  Js.Promise.resolve ()
+                              | "confirm_email_change" ->
+                                  setEmailModalOpen (fun _ -> false) ;
+                                  setEmailPending (fun _ -> false) ;
+                                  setEmailPendingAddress (fun _ -> None) ;
+                                  Webapi.Dom.(location |> Location.reload) ;
+                                  Js.Promise.resolve ()
+                              | "cancel_email_change" ->
+                                  setEmailPending (fun _ -> false) ;
+                                  setEmailPendingAddress (fun _ -> None) ;
+                                  setEmailModalOpen (fun _ -> false) ;
+                                  Js.Promise.resolve ()
+                              | _ ->
+                                  Js.Promise.resolve ()
+                            else (
+                              setEmailErrorState (fun _ ->
+                                  Some "An error occurred. Please try again." ) ;
+                              Js.Promise.resolve () ) )
+                        |> Js.Promise.catch (fun _ ->
+                            setEmailLoading (fun _ -> false) ;
+                            setEmailErrorState (fun _ ->
+                                Some "An error occurred. Please try again." ) ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                    in
+                    <Aria.DialogTrigger defaultOpen=email_change_pending>
+                      <Input
+                        name="email"
+                        type_="email"
+                        label="Email"
+                        placeholder=email
+                        showIndicator=false
+                        disabled=true
+                        trailing=(<Aria.Pressable>
+                                    <button
+                                      type_="button"
+                                      className="p-1 hover:text-mana-100 \
+                                                 cursor-pointer"
+                                      ariaLabel="Change email"
+                                      onClick=(fun _ ->
+                                                setEmailModalOpen (fun _ ->
+                                                    true ) )>
+                                      <PencilLineIcon className="w-4 h-4" />
+                                    </button>
+                                  </Aria.Pressable>)
+                      />
+                      <Aria.ModalOverlay
+                        className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                   items-center justify-center"
+                        isDismissable=(not emailPending)
+                        isOpen=emailModalOpen
+                        onOpenChange=(fun o -> setEmailModalOpen (fun _ -> o))>
+                        <Aria.Modal
+                          className="bg-feather-100 border border-mist-60 \
+                                     rounded-xl px-6 pb-6 pt-5 w-full max-w-sm \
+                                     mx-4 shadow-xl">
+                          <Aria.Dialog className="outline-none">
+                            <Aria.Heading
+                              slot="title"
+                              className="text-lg font-serif text-mana-200 mb-2">
+                              (string "change email")
+                            </Aria.Heading>
+                            ( if emailPending then
+                                <form
+                                  className="flex flex-col gap-y-3"
+                                  onSubmit=(fun e ->
+                                             Event.Form.preventDefault e ;
+                                             submitEmailForm
+                                               "confirm_email_change"
+                                               [|("token", emailTokenInput)|] )>
+                                  <p className="text-mist-100">
+                                    (string
+                                       ( "Enter the verification code sent to "
+                                       ^ Option.value emailPendingAddress
+                                           ~default:"your new email"
+                                       ^ "." ) )
+                                  </p>
+                                  <Input
+                                    name="token"
+                                    label="Verification code"
+                                    placeholder="A1B2C-3D4E5"
+                                    required=true
+                                    showIndicator=false
+                                    value=emailTokenInput
+                                    onChange=(fun e ->
+                                                 setEmailTokenInput (fun _ ->
+                                                     (Event.Form.target e)##value ) )
+                                  />
+                                  ( match emailErrorState with
+                                  | Some err ->
+                                      <span
+                                        className="inline-flex items-center \
+                                                   text-phoenix-100 text-sm">
+                                        <CircleAlertIcon
+                                          className="w-4 h-4 mr-2"
+                                        />
+                                        (string err)
+                                      </span>
+                                  | None ->
+                                      null )
+                                  <div className="flex flex-row gap-x-3 mt-2">
+                                    <Button
+                                      type_="submit" disabled=emailLoading>
+                                      (string
+                                         ( if emailLoading then "verifying..."
+                                           else "verify" ) )
+                                    </Button>
+                                    <Button
+                                      kind=`Secondary
+                                      type_="button"
+                                      disabled=emailLoading
+                                      onClick=(fun _ ->
+                                                submitEmailForm
+                                                  "cancel_email_change" [||] )>
+                                      (string "cancel")
+                                    </Button>
+                                  </div>
+                                </form>
+                              else
+                                <form
+                                  className="flex flex-col gap-y-3"
+                                  onSubmit=(fun e ->
+                                             Event.Form.preventDefault e ;
+                                             submitEmailForm
+                                               "request_email_change"
+                                               [|("new_email", newEmailInput)|] )>
+                                  <Input
+                                    name="new_email"
+                                    label="New email address"
+                                    type_="email"
+                                    required=true
+                                    showIndicator=false
+                                    value=newEmailInput
+                                    onChange=(fun e ->
+                                                 setNewEmailInput (fun _ ->
+                                                     (Event.Form.target e)##value ) )
+                                  />
+                                  ( match emailErrorState with
+                                  | Some err ->
+                                      <span
+                                        className="inline-flex items-center \
+                                                   text-phoenix-100 text-sm">
+                                        <CircleAlertIcon
+                                          className="w-4 h-4 mr-2"
+                                        />
+                                        (string err)
+                                      </span>
+                                  | None ->
+                                      null )
+                                  <div className="flex flex-row gap-x-3 mt-2">
+                                    <Button
+                                      type_="submit" disabled=emailLoading>
+                                      (string
+                                         ( if emailLoading then "sending..."
+                                           else "send code" ) )
+                                    </Button>
+                                    <Button
+                                      kind=`Tertiary
+                                      className="text-mist-100 \
+                                                 hover:text-mana-100"
+                                      onClick=(fun _ ->
+                                                setEmailModalOpen (fun _ ->
+                                                    false ) )>
+                                      (string "cancel")
+                                    </Button>
+                                  </div>
+                                </form> )
+                          </Aria.Dialog>
+                        </Aria.Modal>
+                      </Aria.ModalOverlay>
+                    </Aria.DialogTrigger>]
               </ClientOnly>
               ( if not email_confirmed then
-                  <ClientOnly fallback=(
-                    <span className="-mt-1.5 inline-flex items-center text-mist-80 text-sm">
-                      <CircleAlertIcon className="w-4 h-4 mr-2" />
-                      (string ("Your email address isn't confirmed " ^ {js|·|js}))
-                      <button
-                        type_="button"
-                        disabled=true
-                        className="ml-1 underline text-mana-100 hover:text-mana-200 cursor-pointer \
-                                   disabled:cursor-not-allowed">
-                        (string "send confirmation code")
-                      </button>
-                    </span>
-                  )>
-                  [%browser_only
-                    (fun () ->
+                  <ClientOnly
+                    fallback=(<span
+                                className="-mt-1.5 inline-flex items-center \
+                                           text-mist-80 text-sm">
+                                <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                (string
+                                   ( "Your email address isn't confirmed "
+                                   ^ {js|·|js} ) )
+                                <button
+                                  type_="button"
+                                  disabled=true
+                                  className="ml-1 underline text-mana-100 \
+                                             hover:text-mana-200 \
+                                             cursor-pointer \
+                                             disabled:cursor-not-allowed">
+                                  (string "send confirmation code")
+                                </button>
+                              </span>)>
+                    [%browser_only
+                      fun () ->
                         let submitConfirmEmailForm action fields =
                           setConfirmEmailLoading (fun _ -> true) ;
                           setConfirmEmailError (fun _ -> None) ;
                           let body =
                             Fetch.BodyInit.make
-                              (Webapi.Url.URLSearchParams.makeWithArray
-                                 (Array.append
-                                    [|("dream.csrf", csrf_token); ("action", action)|]
-                                    fields )
+                              ( Webapi.Url.URLSearchParams.makeWithArray
+                                  (Array.append
+                                     [| ("dream.csrf", csrf_token)
+                                      ; ("action", action) |]
+                                     fields )
                               |> Webapi.Url.URLSearchParams.toString )
                           in
                           let _ =
@@ -368,97 +395,116 @@ let[@react.component] make
                               (Fetch.RequestInit.make ~method_:Post ~body
                                  ~headers:
                                    (Fetch.HeadersInit.makeWithArray
-                                      [|("Content-Type", "application/x-www-form-urlencoded")|] )
+                                      [| ( "Content-Type"
+                                         , "application/x-www-form-urlencoded"
+                                         ) |] )
                                  () )
                             |> Js.Promise.then_ (fun response ->
-                                   setConfirmEmailLoading (fun _ -> false) ;
-                                   if Fetch.Response.ok response then
-                                     match action with
-                                     | "request_email_confirmation" ->
-                                         setConfirmEmailPending (fun _ -> true) ;
-                                         Js.Promise.resolve ()
-                                     | "confirm_email_confirmation" ->
-                                         Webapi.Dom.(
-                                           location |> Location.reload) ;
-                                         setSuccessMessage (fun _ -> Some "Email confirmed!") ;
-                                         Js.Promise.resolve ()
-                                     | "cancel_email_confirmation" ->
-                                         setConfirmEmailPending (fun _ -> false) ;
-                                         Js.Promise.resolve ()
-                                     | _ ->
-                                         Js.Promise.resolve ()
-                                   else (
-                                     setConfirmEmailError (fun _ ->
-                                         Some "An error occurred. Please try again." ) ;
-                                     Js.Promise.resolve () ) )
+                                setConfirmEmailLoading (fun _ -> false) ;
+                                if Fetch.Response.ok response then
+                                  match action with
+                                  | "request_email_confirmation" ->
+                                      setConfirmEmailPending (fun _ -> true) ;
+                                      Js.Promise.resolve ()
+                                  | "confirm_email_confirmation" ->
+                                      Webapi.Dom.(location |> Location.reload) ;
+                                      setSuccessMessage (fun _ ->
+                                          Some "Email confirmed!" ) ;
+                                      Js.Promise.resolve ()
+                                  | "cancel_email_confirmation" ->
+                                      setConfirmEmailPending (fun _ -> false) ;
+                                      Js.Promise.resolve ()
+                                  | _ ->
+                                      Js.Promise.resolve ()
+                                else (
+                                  setConfirmEmailError (fun _ ->
+                                      Some
+                                        "An error occurred. Please try again." ) ;
+                                  Js.Promise.resolve () ) )
                             |> Js.Promise.catch (fun _ ->
-                                   setConfirmEmailLoading (fun _ -> false) ;
-                                   setConfirmEmailError (fun _ ->
-                                       Some "An error occurred. Please try again." ) ;
-                                   Js.Promise.resolve () )
+                                setConfirmEmailLoading (fun _ -> false) ;
+                                setConfirmEmailError (fun _ ->
+                                    Some "An error occurred. Please try again." ) ;
+                                Js.Promise.resolve () )
                           in
                           ()
                         in
                         <div className="flex flex-col gap-y-3">
-                          <span className="-mt-1.5 inline-flex items-center text-mist-80 text-sm">
+                          <span
+                            className="-mt-1.5 inline-flex items-center \
+                                       text-mist-80 text-sm">
                             <CircleAlertIcon className="w-4 h-4 mr-2" />
-                            (string ("Your email address isn't confirmed " ^ {js|·|js}))
+                            (string
+                               ( "Your email address isn't confirmed "
+                               ^ {js|·|js} ) )
                             <button
                               type_="button"
                               disabled=confirmEmailLoading
-                              className="ml-1 underline text-mana-100 hover:text-mana-200 cursor-pointer \
+                              className="ml-1 underline text-mana-100 \
+                                         hover:text-mana-200 cursor-pointer \
                                          disabled:cursor-not-allowed"
                               onClick=(fun _ ->
-                                  submitConfirmEmailForm "request_email_confirmation" [||])>
-                              (string (if confirmEmailLoading then "sending..."
-                                else if confirmEmailPending then "resend confirmation code"
-                                else "send confirmation code"))
+                                        submitConfirmEmailForm
+                                          "request_email_confirmation" [||] )>
+                              (string
+                                 ( if confirmEmailLoading then "sending..."
+                                   else if confirmEmailPending then
+                                     "resend confirmation code"
+                                   else "send confirmation code" ) )
                             </button>
                           </span>
                           ( if confirmEmailPending then
                               <div className="flex flex-col gap-y-3">
-                              <Input
+                                <Input
                                   name="email_token"
                                   label="Confirmation code"
                                   placeholder="A1B2C-3D4E5"
                                   showIndicator=false
                                   value=confirmEmailTokenInput
                                   onChange=(fun e ->
-                                      setConfirmEmailTokenInput (fun _ ->
-                                          (Event.Form.target e)##value ) )
-                              />
-                              ( match confirmEmailError with
-                              | Some err ->
-                                  <span
+                                               setConfirmEmailTokenInput
+                                                 (fun _ ->
+                                                   (Event.Form.target e)##value ) )
+                                />
+                                ( match confirmEmailError with
+                                | Some err ->
+                                    <span
                                       className="inline-flex items-center \
-                                                  text-phoenix-100 text-sm">
-                                      <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                                 text-phoenix-100 text-sm">
+                                      <CircleAlertIcon className="w-4 h-4 mr-2"
+                                      />
                                       (string err)
-                                  </span>
-                              | None ->
-                                  null )
-                              <div className="flex flex-row gap-x-3">
+                                    </span>
+                                | None ->
+                                    null )
+                                <div className="flex flex-row gap-x-3">
                                   <Button
                                     type_="button"
                                     disabled=confirmEmailLoading
                                     onClick=(fun _ ->
-                                        submitConfirmEmailForm "confirm_email_confirmation"
-                                          [|("token", confirmEmailTokenInput)|])>
-                                    (string (if confirmEmailLoading then "confirming..." else "confirm"))
+                                              submitConfirmEmailForm
+                                                "confirm_email_confirmation"
+                                                [| ( "token"
+                                                   , confirmEmailTokenInput )
+                                                |] )>
+                                    (string
+                                       ( if confirmEmailLoading then
+                                           "confirming..."
+                                         else "confirm" ) )
                                   </Button>
                                   <Button
                                     kind=`Secondary
                                     type_="button"
                                     disabled=confirmEmailLoading
                                     onClick=(fun _ ->
-                                        submitConfirmEmailForm "cancel_email_confirmation" [||])>
+                                              submitConfirmEmailForm
+                                                "cancel_email_confirmation" [||] )>
                                     (string "cancel")
                                   </Button>
+                                </div>
                               </div>
-                              </div>
-                          else
-                              null )
-                        </div> )]
+                            else null )
+                        </div>]
                   </ClientOnly>
                 else null )
               <HandleInput
@@ -507,24 +553,25 @@ let[@react.component] make
               </h2>
               <p className="text-mist-100 mb-4">
                 (string
-                   "Export your data to back up or transfer to another PDS, or import from a CAR backup.")
+                   "Export your data to back up or transfer to another PDS, or \
+                    import from a CAR backup." )
               </p>
               <div className="flex flex-row gap-x-3">
                 <a
                   href=("/xrpc/com.atproto.sync.getRepo?did=" ^ current_user.did)
                   download=("repo-" ^ current_user.handle ^ ".car")
                   className="basis-1/2 grow">
-                  <Button kind=`Primary>
-                    (string "download")
-                  </Button>
+                  <Button kind=`Primary>(string "download")</Button>
                 </a>
-                <ClientOnly fallback=(
-                  <Button kind=`Secondary disabled=true className="basis-1/2 grow">
-                    (string "import")
-                  </Button>
-                )>
-                [%browser_only
-                  (fun () ->
+                <ClientOnly
+                  fallback=(<Button
+                              kind=`Secondary
+                              disabled=true
+                              className="basis-1/2 grow">
+                              (string "import")
+                            </Button>)>
+                  [%browser_only
+                    fun () ->
                       let handleFileChange e =
                         let files = (Event.Form.target e)##files in
                         if Js.Array.length files > 0 then begin
@@ -533,28 +580,31 @@ let[@react.component] make
                           setImportError (fun _ -> None) ;
                           setImportSuccess (fun _ -> false) ;
                           let _ =
-                            Fetch.fetchWithInit "/xrpc/com.atproto.repo.importRepo"
+                            Fetch.fetchWithInit
+                              "/xrpc/com.atproto.repo.importRepo"
                               (Fetch.RequestInit.make ~method_:Post
                                  ~body:(Fetch.BodyInit.makeWithBlob file)
                                  ~headers:
                                    (Fetch.HeadersInit.makeWithArray
-                                      [|("Content-Type", "application/vnd.ipld.car")|] )
+                                      [| ( "Content-Type"
+                                         , "application/vnd.ipld.car" ) |] )
                                  () )
                             |> Js.Promise.then_ (fun response ->
-                                   setImportLoading (fun _ -> false) ;
-                                   if Fetch.Response.ok response then begin
-                                     setImportSuccess (fun _ -> true) ;
-                                     Js.Promise.resolve ()
-                                   end else begin
-                                     setImportError (fun _ ->
-                                         Some "Import failed. Please try again." ) ;
-                                     Js.Promise.resolve ()
-                                   end )
+                                setImportLoading (fun _ -> false) ;
+                                if Fetch.Response.ok response then begin
+                                  setImportSuccess (fun _ -> true) ;
+                                  Js.Promise.resolve ()
+                                end
+                                else begin
+                                  setImportError (fun _ ->
+                                      Some "Import failed. Please try again." ) ;
+                                  Js.Promise.resolve ()
+                                end )
                             |> Js.Promise.catch (fun _ ->
-                                   setImportLoading (fun _ -> false) ;
-                                   setImportError (fun _ ->
-                                       Some "An error occurred. Please try again." ) ;
-                                   Js.Promise.resolve () )
+                                setImportLoading (fun _ -> false) ;
+                                setImportError (fun _ ->
+                                    Some "An error occurred. Please try again." ) ;
+                                Js.Promise.resolve () )
                           in
                           ()
                         end
@@ -571,32 +621,43 @@ let[@react.component] make
                           kind=`Secondary
                           disabled=importLoading
                           onClick=(fun _ ->
-                              match Js.Nullable.toOption fileInputRef.current with
-                              | Some el ->
-                                  let input = Webapi.Dom.Element.unsafeAsHtmlElement el in
-                                  Webapi.Dom.HtmlElement.click input
-                              | None -> () )>
-                          (string (if importLoading then "importing..." else "import"))
+                                    match
+                                      Js.Nullable.toOption fileInputRef.current
+                                    with
+                                    | Some el ->
+                                        let input =
+                                          Webapi.Dom.Element.unsafeAsHtmlElement
+                                            el
+                                        in
+                                        Webapi.Dom.HtmlElement.click input
+                                    | None ->
+                                        () )>
+                          (string
+                             (if importLoading then "importing..." else "import") )
                         </Button>
-                      </div> )]
+                      </div>]
                 </ClientOnly>
               </div>
               ( match importError with
               | Some err ->
-                  <span className="inline-flex items-center text-phoenix-100 text-sm mt-4">
-                    <CircleAlertIcon className="w-4 h-4 mr-2" />
-                    (string err)
+                  <span
+                    className="inline-flex items-center text-phoenix-100 \
+                               text-sm mt-4">
+                    <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
                   </span>
               | None when importSuccess ->
-                  <span className="inline-flex items-center text-mana-100 text-sm mt-4">
+                  <span
+                    className="inline-flex items-center text-mana-100 text-sm \
+                               mt-4">
                     (string "Repository imported successfully.")
                   </span>
               | None ->
                   <p className="text-mist-80 text-sm mt-4">
-                    (string "It is recommended to export a copy of your \
-                             repository before importing a backup. \
-                             The import process will overwrite any existing \
-                             data with the contents of the backup.")
+                    (string
+                       "It is recommended to export a copy of your repository \
+                        before importing a backup. The import process will \
+                        overwrite any existing data with the contents of the \
+                        backup." )
                   </p> )
             </section>
             <section className="mt-8">
@@ -625,157 +686,181 @@ let[@react.component] make
                     (string "deactivate account")
                   </Button>
                 </form>
-                <ClientOnly fallback=(
-                  <Button kind=`Danger className="flex-1">(string "delete account")</Button>
-                )>
-                [%browser_only
-                    (fun () ->
-                        let module Aria = ReactAria in
-                        let submitDeleteForm action fields =
-                          setDeleteLoading (fun _ -> true) ;
-                          setDeleteErrorState (fun _ -> None) ;
-                          let body =
-                            Fetch.BodyInit.make
-                              (Webapi.Url.URLSearchParams.makeWithArray
-                                 (Array.append
-                                    [|("dream.csrf", csrf_token); ("action", action)|]
-                                    fields )
-                              |> Webapi.Url.URLSearchParams.toString )
-                          in
-                          let _ =
-                            Fetch.fetchWithInit "/account"
-                              (Fetch.RequestInit.make ~method_:Post ~body
-                                 ~headers:
-                                   (Fetch.HeadersInit.makeWithArray
-                                      [|("Content-Type", "application/x-www-form-urlencoded")|] )
-                                 () )
-                            |> Js.Promise.then_ (fun response ->
-                                   setDeleteLoading (fun _ -> false) ;
-                                   if Fetch.Response.ok response then
-                                     match action with
-                                     | "request_delete" ->
-                                         setDeletePendingState (fun _ -> true) ;
-                                         Js.Promise.resolve ()
-                                     | "confirm_delete" ->
-                                         Webapi.Dom.(
-                                           Window.setLocation window "/account/login") ;
-                                         Js.Promise.resolve ()
-                                     | "cancel_delete" ->
-                                         setDeletePendingState (fun _ -> false) ;
-                                         setDeleteModalOpen (fun _ -> false) ;
-                                         Js.Promise.resolve ()
-                                     | _ ->
-                                         Js.Promise.resolve ()
-                                   else (
-                                     setDeleteErrorState (fun _ ->
-                                         Some "An error occurred. Please try again." ) ;
-                                     Js.Promise.resolve () ) )
-                            |> Js.Promise.catch (fun _ ->
-                                   setDeleteLoading (fun _ -> false) ;
-                                   setDeleteErrorState (fun _ ->
-                                       Some "An error occurred. Please try again." ) ;
-                                   Js.Promise.resolve () )
-                          in
-                          ()
+                <ClientOnly
+                  fallback=(<Button kind=`Danger className="flex-1">
+                              (string "delete account")
+                            </Button>)>
+                  [%browser_only
+                    fun () ->
+                      let module Aria = ReactAria in
+                      let submitDeleteForm action fields =
+                        setDeleteLoading (fun _ -> true) ;
+                        setDeleteErrorState (fun _ -> None) ;
+                        let body =
+                          Fetch.BodyInit.make
+                            ( Webapi.Url.URLSearchParams.makeWithArray
+                                (Array.append
+                                   [| ("dream.csrf", csrf_token)
+                                    ; ("action", action) |]
+                                   fields )
+                            |> Webapi.Url.URLSearchParams.toString )
                         in
-                        <Aria.DialogTrigger defaultOpen=delete_pending>
-	                        <Aria.Pressable>
-	                            <Button kind=`Danger className="flex-1" onClick=(fun _ -> setDeleteModalOpen (fun _ -> true))>
-	                              (string "delete account")
-	                            </Button>
-	                        </Aria.Pressable>
-	                        <Aria.ModalOverlay
-	                            className="fixed inset-0 z-50 bg-mist-80/80 \
-	                                        flex items-center justify-center"
-	                            isDismissable=(not deletePendingState)
-	                            isOpen=deleteModalOpen onOpenChange=(fun o -> setDeleteModalOpen (fun _ -> o))>
-	                            <Aria.Modal
-	                            className="bg-feather-100 border border-mist-60 rounded-xl \
-	                                        px-6 pb-6 pt-5 w-full max-w-sm mx-4 shadow-xl">
-	                            <Aria.Dialog className="outline-none">
-	                                <Aria.Heading
-	                                slot="title"
-	                                className="text-lg font-serif text-mana-200 mb-2">
-	                                  (string "delete account")
-	                                </Aria.Heading>
-	                                ( if deletePendingState then
-	                                    <form
-	                                      className="flex flex-col gap-y-3"
-	                                      onSubmit=(fun e ->
-	                                          Event.Form.preventDefault e ;
-	                                          submitDeleteForm "confirm_delete"
-	                                            [|("token", deleteTokenInput)|] )>
-	                                    <p className="text-mist-100 text-sm">
-	                                        (string
-	                                            "Enter the confirmation code sent to your email." )
-	                                    </p>
-	                                    <Input
-	                                        name="token"
-	                                        label="Confirmation code"
-	                                        placeholder="del-..."
-	                                        required=true
-	                                        showIndicator=false
-	                                        value=deleteTokenInput
-	                                        onChange=(fun e ->
-	                                            setDeleteTokenInput (fun _ ->
-	                                                (Event.Form.target e)##value ) )
-	                                    />
-	                                    ( match deleteErrorState with
-	                                    | Some err ->
-	                                        <span
-	                                            className="inline-flex items-center \
-	                                                        text-phoenix-100 text-sm">
-	                                            <CircleAlertIcon className="w-4 h-4 mr-2" />
-	                                            (string err)
-	                                        </span>
-	                                    | None ->
-	                                        null )
-	                                    <div className="flex flex-row gap-x-3 mt-2">
-	                                        <Button
-	                                          kind=`Danger
-	                                          type_="submit"
-	                                          disabled=deleteLoading>
-	                                          (string (if deleteLoading then "deleting..." else "confirm"))
-	                                        </Button>
-	                                        <Button
-	                                          kind=`Secondary
-	                                          type_="button"
-	                                          disabled=deleteLoading
-	                                          onClick=(fun _ ->
-	                                              submitDeleteForm "cancel_delete" [||])>
-	                                          (string "cancel")
-	                                        </Button>
-	                                    </div>
-	                                    </form>
-	                                else
-	                                    <form
-	                                      className="flex flex-col gap-y-3"
-	                                      onSubmit=(fun e ->
-	                                          Event.Form.preventDefault e ;
-	                                          submitDeleteForm "request_delete" [||] )>
-	                                    <p className="text-mist-100">
-	                                        (string
-	                                            "This action is irreversible. A confirmation \
-	                                            code will be sent to your email." )
-	                                    </p>
-	                                    <div className="flex flex-row gap-x-3 mt-2">
-	                                        <Button
-	                                          kind=`Danger
-	                                          type_="submit"
-	                                          disabled=deleteLoading>
-	                                          (string (if deleteLoading then "sending..." else "send code"))
-	                                        </Button>
-	                                        <Button kind=`Tertiary
-	                                          onClick=(fun _ -> setDeleteModalOpen (fun _ -> false))
-	                                          className="text-mist-100 hover:text-mana-100">
-	                                          (string "cancel")
-	                                        </Button>
-	                                    </div>
-	                                    </form> )
-	                            </Aria.Dialog>
-	                            </Aria.Modal>
-	                        </Aria.ModalOverlay>
-                        </Aria.DialogTrigger> )]
+                        let _ =
+                          Fetch.fetchWithInit "/account"
+                            (Fetch.RequestInit.make ~method_:Post ~body
+                               ~headers:
+                                 (Fetch.HeadersInit.makeWithArray
+                                    [| ( "Content-Type"
+                                       , "application/x-www-form-urlencoded" )
+                                    |] )
+                               () )
+                          |> Js.Promise.then_ (fun response ->
+                              setDeleteLoading (fun _ -> false) ;
+                              if Fetch.Response.ok response then
+                                match action with
+                                | "request_delete" ->
+                                    setDeletePendingState (fun _ -> true) ;
+                                    Js.Promise.resolve ()
+                                | "confirm_delete" ->
+                                    Webapi.Dom.(
+                                      Window.setLocation window "/account/login" ) ;
+                                    Js.Promise.resolve ()
+                                | "cancel_delete" ->
+                                    setDeletePendingState (fun _ -> false) ;
+                                    setDeleteModalOpen (fun _ -> false) ;
+                                    Js.Promise.resolve ()
+                                | _ ->
+                                    Js.Promise.resolve ()
+                              else (
+                                setDeleteErrorState (fun _ ->
+                                    Some "An error occurred. Please try again." ) ;
+                                Js.Promise.resolve () ) )
+                          |> Js.Promise.catch (fun _ ->
+                              setDeleteLoading (fun _ -> false) ;
+                              setDeleteErrorState (fun _ ->
+                                  Some "An error occurred. Please try again." ) ;
+                              Js.Promise.resolve () )
+                        in
+                        ()
+                      in
+                      <Aria.DialogTrigger defaultOpen=delete_pending>
+                        <Aria.Pressable>
+                          <Button
+                            kind=`Danger
+                            className="flex-1"
+                            onClick=(fun _ -> setDeleteModalOpen (fun _ -> true))>
+                            (string "delete account")
+                          </Button>
+                        </Aria.Pressable>
+                        <Aria.ModalOverlay
+                          className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                     items-center justify-center"
+                          isDismissable=(not deletePendingState)
+                          isOpen=deleteModalOpen
+                          onOpenChange=(fun o -> setDeleteModalOpen (fun _ -> o))>
+                          <Aria.Modal
+                            className="bg-feather-100 border border-mist-60 \
+                                       rounded-xl px-6 pb-6 pt-5 w-full \
+                                       max-w-sm mx-4 shadow-xl">
+                            <Aria.Dialog className="outline-none">
+                              <Aria.Heading
+                                slot="title"
+                                className="text-lg font-serif text-mana-200 \
+                                           mb-2">
+                                (string "delete account")
+                              </Aria.Heading>
+                              ( if deletePendingState then
+                                  <form
+                                    className="flex flex-col gap-y-3"
+                                    onSubmit=(fun e ->
+                                               Event.Form.preventDefault e ;
+                                               submitDeleteForm "confirm_delete"
+                                                 [|("token", deleteTokenInput)|] )>
+                                    <p className="text-mist-100 text-sm">
+                                      (string
+                                         "Enter the confirmation code sent to \
+                                          your email." )
+                                    </p>
+                                    <Input
+                                      name="token"
+                                      label="Confirmation code"
+                                      placeholder="del-..."
+                                      required=true
+                                      showIndicator=false
+                                      value=deleteTokenInput
+                                      onChange=(fun e ->
+                                                   setDeleteTokenInput (fun _ ->
+                                                       (Event.Form.target e)##value ) )
+                                    />
+                                    ( match deleteErrorState with
+                                    | Some err ->
+                                        <span
+                                          className="inline-flex items-center \
+                                                     text-phoenix-100 text-sm">
+                                          <CircleAlertIcon
+                                            className="w-4 h-4 mr-2"
+                                          />
+                                          (string err)
+                                        </span>
+                                    | None ->
+                                        null )
+                                    <div className="flex flex-row gap-x-3 mt-2">
+                                      <Button
+                                        kind=`Danger
+                                        type_="submit"
+                                        disabled=deleteLoading>
+                                        (string
+                                           ( if deleteLoading then "deleting..."
+                                             else "confirm" ) )
+                                      </Button>
+                                      <Button
+                                        kind=`Secondary
+                                        type_="button"
+                                        disabled=deleteLoading
+                                        onClick=(fun _ ->
+                                                  submitDeleteForm
+                                                    "cancel_delete" [||] )>
+                                        (string "cancel")
+                                      </Button>
+                                    </div>
+                                  </form>
+                                else
+                                  <form
+                                    className="flex flex-col gap-y-3"
+                                    onSubmit=(fun e ->
+                                               Event.Form.preventDefault e ;
+                                               submitDeleteForm "request_delete"
+                                                 [||] )>
+                                    <p className="text-mist-100">
+                                      (string
+                                         "This action is irreversible. A \
+                                          confirmation code will be sent to \
+                                          your email." )
+                                    </p>
+                                    <div className="flex flex-row gap-x-3 mt-2">
+                                      <Button
+                                        kind=`Danger
+                                        type_="submit"
+                                        disabled=deleteLoading>
+                                        (string
+                                           ( if deleteLoading then "sending..."
+                                             else "send code" ) )
+                                      </Button>
+                                      <Button
+                                        kind=`Tertiary
+                                        onClick=(fun _ ->
+                                                  setDeleteModalOpen (fun _ ->
+                                                      false ) )
+                                        className="text-mist-100 \
+                                                   hover:text-mana-100">
+                                        (string "cancel")
+                                      </Button>
+                                    </div>
+                                  </form> )
+                            </Aria.Dialog>
+                          </Aria.Modal>
+                        </Aria.ModalOverlay>
+                      </Aria.DialogTrigger>]
                 </ClientOnly>
               </div>
             </section>

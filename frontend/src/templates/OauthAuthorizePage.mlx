@@ -329,48 +329,48 @@ module ScopesTable = struct
                     <tbody>
                       ( coll_actions_list
                       |> List.map (fun (coll, actions) ->
-                             let star_create =
-                               Option.map (fun a -> a.create) star_actions
-                               |> Option.value ~default:false
-                             in
-                             let star_update =
-                               Option.map (fun a -> a.update) star_actions
-                               |> Option.value ~default:false
-                             in
-                             let star_delete =
-                               Option.map (fun a -> a.delete) star_actions
-                               |> Option.value ~default:false
-                             in
-                             <tr key=coll className="text-mist-100">
-                               <td className="py-0.5">
-                                 <span className="font-medium">
-                                   (string
-                                      ( if coll = "*" then "Any collection"
-                                        else coll ) )
-                                 </span>
-                               </td>
-                               <td className="text-center">
-                                 ( if star_create || actions.create then
-                                     <span className="text-mana-100">
-                                       (string {js|✓|js})
-                                     </span>
-                                   else null )
-                               </td>
-                               <td className="text-center">
-                                 ( if star_update || actions.update then
-                                     <span className="text-mana-100">
-                                       (string {js|✓|js})
-                                     </span>
-                                   else null )
-                               </td>
-                               <td className="text-center">
-                                 ( if star_delete || actions.delete then
-                                     <span className="text-mana-100">
-                                       (string {js|✓|js})
-                                     </span>
-                                   else null )
-                               </td>
-                             </tr> )
+                          let star_create =
+                            Option.map (fun a -> a.create) star_actions
+                            |> Option.value ~default:false
+                          in
+                          let star_update =
+                            Option.map (fun a -> a.update) star_actions
+                            |> Option.value ~default:false
+                          in
+                          let star_delete =
+                            Option.map (fun a -> a.delete) star_actions
+                            |> Option.value ~default:false
+                          in
+                          <tr key=coll className="text-mist-100">
+                            <td className="py-0.5">
+                              <span className="font-medium">
+                                (string
+                                   ( if coll = "*" then "Any collection"
+                                     else coll ) )
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              ( if star_create || actions.create then
+                                  <span className="text-mana-100">
+                                    (string {js|✓|js})
+                                  </span>
+                                else null )
+                            </td>
+                            <td className="text-center">
+                              ( if star_update || actions.update then
+                                  <span className="text-mana-100">
+                                    (string {js|✓|js})
+                                  </span>
+                                else null )
+                            </td>
+                            <td className="text-center">
+                              ( if star_delete || actions.delete then
+                                  <span className="text-mana-100">
+                                    (string {js|✓|js})
+                                  </span>
+                                else null )
+                            </td>
+                          </tr> )
                       |> Array.of_list |> array )
                     </tbody>
                   </table>
@@ -383,11 +383,11 @@ module ScopesTable = struct
           let aud_lxms_list =
             StringMap.bindings aud_lxms_map
             |> List.map (fun (aud, lxms) ->
-                   let sorted_lxms =
-                     if List.mem "*" lxms then ["*"]
-                     else List.sort String.compare lxms
-                   in
-                   (aud, sorted_lxms) )
+                let sorted_lxms =
+                  if List.mem "*" lxms then ["*"]
+                  else List.sort String.compare lxms
+                in
+                (aud, sorted_lxms) )
             |> List.sort (fun (a, _) (b, _) -> String.compare a b)
           in
           let has_full_access =
@@ -427,54 +427,52 @@ module ScopesTable = struct
                     <tbody>
                       ( aud_lxms_list
                       |> List.concat_map (fun (aud, lxms) ->
-                             let render_aud () =
-                               if aud = "*" then
-                                 <span className="text-mist-100 font-medium">
-                                   (string "Any service")
-                                 </span>
-                               else if
-                                 String.starts_with
-                                   ~prefix:"did:web:api.bsky.app#" aud
-                               then
-                                 <span className="text-mist-100" title=aud>
-                                   (string "Bluesky services")
-                                 </span>
-                               else if
-                                 String.starts_with
-                                   ~prefix:"did:web:api.bsky.chat#" aud
-                               then
-                                 <span className="text-mist-100" title=aud>
-                                   (string "Bluesky chat services")
-                                 </span>
-                               else if
-                                 String.starts_with ~prefix:"did:web:" aud
-                                 && String.contains aud '#'
-                               then
-                                 let domain =
-                                   String.sub aud 8 (String.index aud '#' - 8)
-                                 in
-                                 <span className="text-mist-100" title=aud>
-                                   (string ("Service by " ^ domain))
-                                 </span>
-                               else
-                                 <span className="text-mist-100">
-                                   (string aud)
-                                 </span>
-                             in
-                             List.map
-                               (fun lxm ->
-                                 <tr key=(aud ^ lxm) className="text-mist-100">
-                                   <td className="py-0.5">
-                                     <span
-                                       className="text-mist-100 font-medium">
-                                       (string
-                                          ( if lxm = "*" then "Any method"
-                                            else lxm ) )
-                                     </span>
-                                   </td>
-                                   <td className="py-0.5">(render_aud ())</td>
-                                 </tr> )
-                               lxms )
+                          let render_aud () =
+                            if aud = "*" then
+                              <span className="text-mist-100 font-medium">
+                                (string "Any service")
+                              </span>
+                            else if
+                              String.starts_with ~prefix:"did:web:api.bsky.app#"
+                                aud
+                            then
+                              <span className="text-mist-100" title=aud>
+                                (string "Bluesky services")
+                              </span>
+                            else if
+                              String.starts_with
+                                ~prefix:"did:web:api.bsky.chat#" aud
+                            then
+                              <span className="text-mist-100" title=aud>
+                                (string "Bluesky chat services")
+                              </span>
+                            else if
+                              String.starts_with ~prefix:"did:web:" aud
+                              && String.contains aud '#'
+                            then
+                              let domain =
+                                String.sub aud 8 (String.index aud '#' - 8)
+                              in
+                              <span className="text-mist-100" title=aud>
+                                (string ("Service by " ^ domain))
+                              </span>
+                            else
+                              <span className="text-mist-100">
+                                (string aud)
+                              </span>
+                          in
+                          List.map
+                            (fun lxm ->
+                              <tr key=(aud ^ lxm) className="text-mist-100">
+                                <td className="py-0.5">
+                                  <span className="text-mist-100 font-medium">
+                                    (string
+                                       (if lxm = "*" then "Any method" else lxm) )
+                                  </span>
+                                </td>
+                                <td className="py-0.5">(render_aud ())</td>
+                              </tr> )
+                            lxms )
                       |> Array.of_list |> array )
                     </tbody>
                   </table>
@@ -517,7 +515,7 @@ module ScopesTable = struct
               <div className="text-sm text-mist-100">
                 ( unknowns
                 |> List.map (fun s ->
-                       <span key=s className="block">(string s)</span> )
+                    <span key=s className="block">(string s)</span> )
                 |> Array.of_list |> array )
               </div>
             </div>
