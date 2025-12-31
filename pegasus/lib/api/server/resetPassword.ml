@@ -9,9 +9,7 @@ let reset_password ~token ~password db =
   | Some actor -> (
     match (actor.auth_code, actor.auth_code_expires_at) with
     | Some auth_code, Some auth_expires_at
-      when String.starts_with ~prefix:"pwd-" auth_code
-           && token = auth_code
-           && Util.now_ms () < auth_expires_at ->
+      when token = auth_code && Util.now_ms () < auth_expires_at ->
         let%lwt () = Data_store.update_password ~did:actor.did ~password db in
         Lwt.return_ok actor.did
     | _ ->

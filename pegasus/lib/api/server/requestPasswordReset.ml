@@ -2,13 +2,7 @@ open Lexicons.Com_atproto_server_requestPasswordReset.Main
 
 let request_password_reset (actor : Data_store.Types.actor) db =
   let did = actor.did in
-  let code =
-    "pwd-"
-    ^ String.sub
-        Digestif.SHA256.(
-          digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex )
-        0 8
-  in
+  let code = Util.make_code () in
   let expires_at = Util.now_ms () + (10 * 60 * 1000) in
   let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
   Util.send_email_or_log ~recipients:[To actor.email]

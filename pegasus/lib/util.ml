@@ -473,16 +473,11 @@ let str_contains ~affix str =
   with Not_found -> false
 
 let make_code () =
-  let () = Random.self_init () in
-  let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
-  let len = String.length chars in
-  let s = Bytes.create 10 in
-  for i = 0 to 9 do
-    let random_index = Random.int len in
-    Bytes.set s i chars.[random_index]
-  done ;
-  let str = Bytes.to_string s in
-  String.sub str 0 5 ^ "-" ^ String.sub str 5 5
+  let () = Mirage_crypto_rng_unix.use_default () in
+  let token =
+    Multibase.Base32.encode_string @@ Mirage_crypto_rng_unix.getrandom 32
+  in
+  String.sub token 0 5 ^ "-" ^ String.sub token 5 5
 
 module type Template = sig
   type props
