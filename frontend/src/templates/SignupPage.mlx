@@ -40,18 +40,23 @@ let[@react.component] make
       </Button>
     </form>
     <span className="text-sm text-mist-100">
-      (string "already have an account? ")
-      <a
-        href="/account/login"
-        className="text-mana-100 underline hover:text-mana-200">
-        (string "sign in")
-      </a>
-      (string " or ")
-      <a
-        href="/account/migrate"
-        className="text-mana-100 underline hover:text-mana-200">
-        (string "migrate from another PDS")
-      </a>
-      (string ".")
+      (string "already have an account?")
+      <ul className="mt-1 pl-2">
+        <li className="mb-1">
+          <a
+            className="text-mana-100 underline hover:text-mana-200"
+            href="/account/login">
+            (string "sign in")
+          </a>
+          (string ", or")
+        </li>
+        <li>
+          <a
+            className="text-mana-100 underline hover:text-mana-200"
+            href="/account/migrate">
+            (string "migrate from another PDS")
+          </a>
+        </li>
+      </ul>
     </span>
   </main>
