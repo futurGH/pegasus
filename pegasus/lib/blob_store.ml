@@ -68,7 +68,7 @@ let delete_s3 ~did ~cid : unit Lwt.t =
       | Ok () ->
           Lwt.return_unit
       | Error e ->
-          Dream.error (fun log ->
+          Log.err (fun log ->
               log "S3 delete failed for %s: %s" key (Util.s3_error_to_string e) ) ;
           Lwt.return_unit )
   | None ->

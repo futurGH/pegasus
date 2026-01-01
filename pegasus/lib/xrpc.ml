@@ -112,7 +112,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
             apply_rate_limits ~nsid rate_limits ctx ;
             try%lwt hdlr ctx
             with e ->
-              if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+              if not (is_xrpc_error e) then log_exn e ;
               exn_to_response e
           with Rate_limiter.Rate_limit_exceeded status ->
             rate_limit_response status )
@@ -124,7 +124,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
     | Rate_limiter.Rate_limit_exceeded status ->
         rate_limit_response status
     | e ->
-        if not (is_xrpc_error e) then log_exn ~req:init.req e ;
+        if not (is_xrpc_error e) then log_exn e ;
         exn_to_response e
   with Redirect r -> Dream.redirect init.req r
 
@@ -141,7 +141,7 @@ let parse_query (req : Dream.request)
     in
     match query_json |> of_yojson with
     | Error e ->
-        Dream.debug (fun log -> log "error parsing query: %s" e) ;
+        Log.debug (fun log -> log "error parsing query: %s" e) ;
         Errors.internal_error ()
     | Ok query ->
         query
@@ -173,9 +173,10 @@ let parse_body (req : Dream.request)
         | _ ->
             Lwt.return (`Assoc []) )
     in
+    Log.debug (fun l -> l "body: %s" (Yojson.Safe.to_string body_assoc)) ;
     match of_yojson body_assoc with
     | Error e ->
-        Dream.debug (fun log -> log "error parsing body: %s" e) ;
+        Log.debug (fun log -> log "error parsing body: %s" e) ;
         Errors.internal_error ()
     | Ok body ->
         Lwt.return body
@@ -267,7 +268,7 @@ let service_proxy ?lxm ?aud (ctx : context) =
                   Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
-              Dream.error (fun log ->
+              Log.err (fun log ->
                   log "error when proxying to %s: %s" (Uri.to_string uri)
                     (Http.Status.to_string e) ) ;
               Errors.internal_error ~msg:"failed to proxy request" () )
@@ -289,15 +290,14 @@ let service_proxy ?lxm ?aud (ctx : context) =
                   Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
           | e ->
               let%lwt () = Body.drain_body body in
-              Dream.error (fun log ->
+              Log.err (fun log ->
                   log "error when proxying to %s: %s" (Uri.to_string uri)
                     (Http.Status.to_string e) ) ;
               Errors.internal_error ~msg:"failed to proxy request" () )
       | _ ->
           Errors.invalid_request "unsupported method" )
   | Error e ->
-      Dream.error (fun log ->
-          log ~request:ctx.req "error when resolving destination service: %s" e ) ;
+      Log.err (fun log -> log "error when resolving destination service: %s" e) ;
       Errors.internal_error ~msg:"failed to resolve destination service" ()
 
 let service_proxy_handler db req =

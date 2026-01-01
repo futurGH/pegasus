@@ -498,7 +498,7 @@ module Bus = struct
                   Lexicons.([%xrpc post "com.atproto.sync.requestCrawl"])
                     ~hostname:Env.hostname client )
                 (fun exn ->
-                  Dream.warning (fun log ->
+                  Log.warn (fun log ->
                       log "failed to requestCrawl %s: %s" service
                         (Printexc.to_string exn) ) ) )
             Env.crawlers

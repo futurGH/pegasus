@@ -33,7 +33,6 @@ let handler =
             | Some actor ->
                 Lwt.return_some actor
             | None ->
-                Dream.log "password reset requested for unknown email: %s" email ;
                 Lwt.return_none )
       in
       match actor_opt with

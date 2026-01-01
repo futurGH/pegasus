@@ -185,11 +185,11 @@ let fetch_preferences client =
     Lwt.return_ok res.preferences
   with
   | Hermes.Xrpc_error {status; error; _} ->
-      Dream.warning (fun log ->
+      Log.warn (fun log ->
           log "migration: failed to fetch preferences: %d %s" status error ) ;
       Lwt.return_ok []
   | exn ->
-      Dream.warning (fun log ->
+      Log.warn (fun log ->
           log "migration: exception fetching preferences: %s"
             (Printexc.to_string exn) ) ;
       Lwt.return_ok []

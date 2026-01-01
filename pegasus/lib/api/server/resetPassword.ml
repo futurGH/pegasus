@@ -26,8 +26,7 @@ let handler =
     (fun {req; db; _} ->
       let%lwt {token; password} = Xrpc.parse_body req input_of_yojson in
       match%lwt reset_password ~token ~password db with
-      | Ok did ->
-          Dream.log "password reset completed for %s" did ;
+      | Ok _ ->
           Dream.empty `OK
       | Error InvalidToken ->
           Errors.invalid_request ~name:"InvalidToken" "invalid or expired token"

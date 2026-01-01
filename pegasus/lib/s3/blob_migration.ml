@@ -1,7 +1,7 @@
 let migrate_user ~did : (int * int) Lwt.t =
   match Env.s3_config with
   | Some config when config.blobs_enabled ->
-      Dream.info (fun log -> log "migrating blobs for user %s" did) ;
+      Log.info (fun log -> log "migrating blobs for user %s" did) ;
       let%lwt user_db = User_store.connect did in
       let migrated = ref 0 in
       let errors = ref 0 in
@@ -38,11 +38,11 @@ let migrate_user ~did : (int * int) Lwt.t =
                         Sys.remove local_path ; incr migrated ; Lwt.return_unit
                         )
                       else (
-                        Dream.warning (fun log ->
+                        Log.warn (fun log ->
                             log "local blob file not found: %s" local_path ) ;
                         Lwt.return_unit ) )
                     (fun e ->
-                      Dream.error (fun log ->
+                      Log.err (fun log ->
                           log "blob migration error for %s: %s"
                             (Cid.to_string cid) (Printexc.to_string e) ) ;
                       incr errors ;
@@ -53,18 +53,18 @@ let migrate_user ~did : (int * int) Lwt.t =
             migrate_batch (Cid.to_string last_cid)
       in
       let%lwt () = migrate_batch "" in
-      Dream.info (fun log ->
+      Log.info (fun log ->
           log "blob migration complete for %s: %d migrated, %d errors" did
             !migrated !errors ) ;
       Lwt.return (!migrated, !errors)
   | _ ->
-      Dream.error (fun log -> log "S3 blob storage not enabled") ;
+      Log.err (fun log -> log "S3 blob storage not enabled") ;
       Lwt.return (0, 0)
 
 let migrate_all () : unit Lwt.t =
   match Env.s3_config with
   | Some config when config.blobs_enabled ->
-      Dream.info (fun log -> log "migrating all blobs to S3") ;
+      Log.info (fun log -> log "migrating all blobs to S3") ;
       let%lwt ds = Data_store.connect () in
       let total_migrated = ref 0 in
       let total_errors = ref 0 in
@@ -87,10 +87,10 @@ let migrate_all () : unit Lwt.t =
             migrate_batch last.did
       in
       let%lwt () = migrate_batch "" in
-      Dream.info (fun log ->
+      Log.info (fun log ->
           log "blob migration complete: %d total migrated, %d total errors"
             !total_migrated !total_errors ) ;
       Lwt.return_unit
   | _ ->
-      Dream.error (fun log -> log "S3 blob storage not enabled") ;
+      Log.err (fun log -> log "S3 blob storage not enabled") ;
       Lwt.return_unit

@@ -105,5 +105,5 @@ let handler =
           Dream.empty `OK
       | Error e ->
           let msg = update_handle_error_to_string e in
-          Dream.error (fun log -> log ~request:req "%s" msg) ;
+          Log.err (fun log -> log "%s" msg) ;
           Errors.invalid_request ~name:"InvalidHandle" msg )

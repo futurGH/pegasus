@@ -159,7 +159,7 @@ let verify_dpop_proof ~mthd ~url ~dpop_header ?access_token () =
             else
               match header |> member "jwk" |> ec_jwk_of_yojson with
               | Error e ->
-                  Dream.debug (fun log -> log "error parsing jwk: %s" e) ;
+                  Log.debug (fun log -> log "error parsing jwk: %s" e) ;
                   Errors.internal_error ()
               | Ok jwk -> (
                   if

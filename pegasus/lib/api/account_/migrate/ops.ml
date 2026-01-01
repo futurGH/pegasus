@@ -117,7 +117,7 @@ let import_blobs_batch ~did ~cids client =
       (fun cid_str ->
         match%lwt Remote.fetch_blob ~did ~cid:cid_str client with
         | Error e ->
-            Dream.warning (fun log ->
+            Log.warn (fun log ->
                 log "migration %s: failed to fetch blob %s: %s" did cid_str e ) ;
             Lwt.return_error cid_str
         | Ok (data, mimetype) -> (

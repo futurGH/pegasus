@@ -159,7 +159,7 @@ let verify_service_jwt ~nsid ?did ~(verify_sig : string -> string -> 'a) token =
               let did = Option.value did ~default:iss_did in
               match%lwt Id_resolver.Did.resolve did with
               | Error e ->
-                  Dream.debug (fun log ->
+                  Log.debug (fun log ->
                       log "failed to resolve did %s: %s" did e ) ;
                   Lwt.return_error
                   @@ InternalError "could not resolve jwt issuer did"

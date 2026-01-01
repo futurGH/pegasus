@@ -27,7 +27,7 @@ let verify_bearer_jwt t token expected_scope =
       let now_s = int_of_float (Unix.gettimeofday ()) in
       match Jwt.symmetric_jwt_of_yojson payload with
       | Error e ->
-          Dream.debug (fun log -> log "bearer jwt decode error: %s" e) ;
+          Log.debug (fun log -> log "bearer jwt decode error: %s" e) ;
           Lwt.return_error "invalid token format"
       | Ok jwt ->
           if jwt.aud <> Env.did then Lwt.return_error "invalid aud"
@@ -259,7 +259,7 @@ module Verifiers = struct
     | Error "use_dpop_nonce" ->
         Lwt.return_error @@ Errors.use_dpop_nonce ()
     | Error e ->
-        Dream.debug (fun log -> log ~request:req "dpop error: %s" e) ;
+        Log.debug (fun log -> log "dpop error: %s" e) ;
         Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
     | Ok proof ->
         Lwt.return_ok (DPoP {proof})
@@ -268,7 +268,7 @@ module Verifiers = struct
    fun {req; db} ->
     match parse_dpop req with
     | Error e ->
-        Dream.debug (fun log -> log ~request:req "dpop error: %s" e) ;
+        Log.debug (fun log -> log "dpop error: %s" e) ;
         Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
     | Ok token -> (
       match
@@ -280,12 +280,12 @@ module Verifiers = struct
       | Error "use_dpop_nonce" ->
           Lwt.return_error @@ Errors.use_dpop_nonce ()
       | Error e ->
-          Dream.debug (fun log -> log ~request:req "dpop error: %s" e) ;
+          Log.debug (fun log -> log "dpop error: %s" e) ;
           Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
       | Ok proof -> (
         match Jwt.verify_jwt token ~pubkey:Env.jwt_pubkey with
         | Error e ->
-            Dream.debug (fun log -> log ~request:req "invalid jwt: %s" e) ;
+            Log.debug (fun log -> log "invalid jwt: %s" e) ;
             Lwt.return_error @@ Errors.auth_required e
         | Ok (_header, claims) -> (
             let open Yojson.Safe.Util in
@@ -400,7 +400,7 @@ module Verifiers = struct
       | Ok _ ->
           check_actor_status did db
       | Error e ->
-          Dream.debug (fun log -> log "service jwt verification failed: %s" e) ;
+          Log.debug (fun log -> log "service jwt verification failed: %s" e) ;
           Lwt.return_error
           @@ Errors.invalid_request ~name:"InvalidToken"
                "jwt signature does not match jwt issuer"

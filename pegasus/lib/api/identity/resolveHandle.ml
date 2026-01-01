@@ -18,5 +18,5 @@ let handler =
         | Error e -> (
           try%lwt Xrpc.service_proxy ctx
           with _ ->
-            Dream.error (fun log -> log "%s" e) ;
+            Log.err (fun log -> log "%s" e) ;
             Errors.internal_error ~msg:"could not resolve handle" () ) ) )

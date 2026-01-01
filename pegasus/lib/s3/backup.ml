@@ -14,10 +14,10 @@ let upload_to_s3 ~(config : Env.s3_config) ~file_path ~key : unit Lwt.t =
   in
   match result with
   | Ok _ ->
-      Dream.info (fun log -> log "S3 backup uploaded: %s" key) ;
+      Log.info (fun log -> log "S3 backup uploaded: %s" key) ;
       Lwt.return_unit
   | Error e ->
-      Dream.error (fun log ->
+      Log.err (fun log ->
           log "S3 backup upload failed for %s: %s" key
             (Util.s3_error_to_string e) ) ;
       Lwt.return_unit
@@ -27,10 +27,10 @@ let backup_main_db ~config : unit Lwt.t =
   if Sys.file_exists db_path then (
     let timestamp = timestamp_string () in
     let key = Printf.sprintf "backups/pegasus-%s.db" timestamp in
-    Dream.info (fun log -> log "starting main database backup") ;
+    Log.info (fun log -> log "starting main database backup") ;
     upload_to_s3 ~config ~file_path:db_path ~key )
   else (
-    Dream.warning (fun log -> log "main database not found: %s" db_path) ;
+    Log.warn (fun log -> log "main database not found: %s" db_path) ;
     Lwt.return_unit )
 
 let backup_user_db ~config ~did : unit Lwt.t =
@@ -43,12 +43,12 @@ let backup_user_db ~config ~did : unit Lwt.t =
   else Lwt.return_unit
 
 let backup_all_user_dbs ~config ~ds : unit Lwt.t =
-  Dream.info (fun log -> log "starting backup of user databases") ;
+  Log.info (fun log -> log "starting backup of user databases") ;
   let rec backup_batch cursor count =
     let%lwt actors = Data_store.list_actors ~cursor ~limit:100 ds in
     match actors with
     | [] ->
-        Dream.info (fun log -> log "backed up %d user databases" count) ;
+        Log.info (fun log -> log "backed up %d user databases" count) ;
         Lwt.return_unit
     | actors ->
         let%lwt () =
@@ -65,11 +65,11 @@ let backup_all_user_dbs ~config ~ds : unit Lwt.t =
 let do_backup () : unit Lwt.t =
   match Env.s3_config with
   | Some config when config.backups_enabled ->
-      Dream.info (fun log -> log "starting S3 backup") ;
+      Log.info (fun log -> log "starting S3 backup") ;
       let%lwt ds = Data_store.connect () in
       let%lwt () = backup_main_db ~config in
       let%lwt () = backup_all_user_dbs ~config ~ds in
-      Dream.info (fun log -> log "S3 backup completed") ;
+      Log.info (fun log -> log "S3 backup completed") ;
       Lwt.return_unit
   | _ ->
       Lwt.return_unit
@@ -77,13 +77,12 @@ let do_backup () : unit Lwt.t =
 let queue_backups () : unit Lwt.t =
   match Env.s3_config with
   | Some config when config.backups_enabled ->
-      Dream.info (fun log -> log "starting hourly S3 backups") ;
+      Log.info (fun log -> log "starting hourly S3 backups") ;
       let%lwt () =
         Lwt.catch
           (fun () -> do_backup ())
           (fun e ->
-            Dream.error (fun log ->
-                log "backup failed: %s" (Printexc.to_string e) ) ;
+            Log.err (fun log -> log "backup failed: %s" (Printexc.to_string e)) ;
             Lwt.return_unit )
       in
       let rec loop () =
@@ -92,7 +91,7 @@ let queue_backups () : unit Lwt.t =
           Lwt.catch
             (fun () -> do_backup ())
             (fun e ->
-              Dream.error (fun log ->
+              Log.err (fun log ->
                   log "backup failed: %s" (Printexc.to_string e) ) ;
               Lwt.return_unit )
         in

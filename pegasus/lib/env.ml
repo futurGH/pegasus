@@ -56,7 +56,7 @@ let dpop_nonce_secret =
   match getenv_opt "PDS_DPOP_NONCE_SECRET" ~default:"" with
   | "" ->
       let secret = Mirage_crypto_rng_unix.getrandom 32 in
-      Dream.warning (fun log ->
+      Log.warn (fun log ->
           log "PDS_DPOP_NONCE_SECRET not set; using PDS_DPOP_NONCE_SECRET=%s"
             ( Base64.(encode ~alphabet:uri_safe_alphabet ~pad:false) secret
             |> Result.get_ok ) ) ;

@@ -91,7 +91,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
           | Ok () ->
               (true, None)
           | Error e ->
-              Dream.warning (fun log ->
+              Log.warn (fun log ->
                   log "migration %s: failed to deactivate old account: %s" did e ) ;
               (false, Some e)
         in
@@ -131,7 +131,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
     | Some session -> (
       match%lwt Remote.request_plc_signature old_client with
       | Error e ->
-          Dream.warning (fun log ->
+          Log.warn (fun log ->
               log "migration %s: failed to request PLC signature: %s" did e ) ;
           let%lwt () =
             State.set ctx.req
@@ -396,7 +396,7 @@ and handle_resumable_migration ctx ~old_client ~csrf_token ~invite_required
         | Ok () ->
             (true, None)
         | Error err ->
-            Dream.warning (fun log ->
+            Log.warn (fun log ->
                 log "migration %s: failed to deactivate old account: %s" did err ) ;
             (false, Some err)
       in
@@ -442,20 +442,20 @@ and perform_data_import ctx ~old_client ~csrf_token ~invite_required ~hostname
         let%lwt () =
           match%lwt Ops.check_account_status ~did with
           | Ok status ->
-              Dream.info (fun log ->
+              Log.info (fun log ->
                   log
                     "migration %s: repo imported, indexed_records=%d, \
                      expected_blobs=%d"
                     did status.indexed_records status.expected_blobs ) ;
               Lwt.return_unit
           | Error e ->
-              Dream.warning (fun log ->
+              Log.warn (fun log ->
                   log "migration %s: failed to check account status: %s" did e ) ;
               Lwt.return_unit
         in
         match%lwt Ops.list_missing_blobs ~did ~limit:50 () with
         | Error e ->
-            Dream.warning (fun log ->
+            Log.warn (fun log ->
                 log "migration %s: failed to list missing blobs: %s" did e ) ;
             transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle
               ~email ~blobs_imported:0 ~blobs_failed:0
@@ -514,7 +514,7 @@ and handle_continue_blobs (ctx : Xrpc.context) ~csrf_token ~invite_required
           Ops.list_missing_blobs ~did:state.did ~limit:50 ?cursor ()
         with
         | Error e ->
-            Dream.warning (fun log ->
+            Log.warn (fun log ->
                 log "migration %s: failed to list missing blobs: %s" state.did e ) ;
             transition_to_plc_token_step ctx ~old_client ~old_pds:state.old_pds
               ~did:state.did ~handle:state.handle ~email:state.email
@@ -581,7 +581,7 @@ and handle_submit_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
               | Ok _ ->
                   Lwt.return []
               | Error e ->
-                  Dream.warning (fun log ->
+                  Log.warn (fun log ->
                       log "migration %s: failed to get old PDS credentials: %s"
                         state.did e ) ;
                   Lwt.return []
@@ -632,7 +632,7 @@ and handle_submit_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
                       let%lwt () =
                         match%lwt Ops.check_account_status ~did:state.did with
                         | Ok status ->
-                            Dream.info (fun log ->
+                            Log.info (fun log ->
                                 log
                                   "migration %s: activating account, \
                                    imported_blobs=%d/%d"
@@ -640,7 +640,7 @@ and handle_submit_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
                                   status.expected_blobs ) ;
                             Lwt.return_unit
                         | Error e ->
-                            Dream.warning (fun log ->
+                            Log.warn (fun log ->
                                 log
                                   "migration %s: failed to check status before \
                                    activation: %s"
@@ -659,7 +659,7 @@ and handle_submit_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
                         | Ok () ->
                             (true, None)
                         | Error e ->
-                            Dream.warning (fun log ->
+                            Log.warn (fun log ->
                                 log
                                   "migration %s: failed to deactivate old \
                                    account: %s"
@@ -861,7 +861,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
                   | Ok () ->
                       (true, None)
                   | Error e ->
-                      Dream.warning (fun log ->
+                      Log.warn (fun log ->
                           log
                             "migration %s: failed to deactivate old account: %s"
                             did e ) ;
@@ -895,7 +895,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
                 | Ok () -> (
                   match%lwt Ops.list_missing_blobs ~did ~limit:50 () with
                   | Error e ->
-                      Dream.warning (fun log ->
+                      Log.warn (fun log ->
                           log "migration %s: failed to list missing blobs: %s"
                             did e ) ;
                       transition_to_plc_token_step ctx ~old_client:client

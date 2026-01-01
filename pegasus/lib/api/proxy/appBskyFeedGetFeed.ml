@@ -49,7 +49,7 @@ let handler =
                 | None ->
                     Errors.invalid_request "missing proxy header" )
             with e ->
-              Dream.error (fun log ->
+              Log.err (fun log ->
                   log "failed to fetch feed generator record: %s"
                     (Printexc.to_string e) ) ;
               Errors.internal_error ~msg:"failed to fetch feed generator record"

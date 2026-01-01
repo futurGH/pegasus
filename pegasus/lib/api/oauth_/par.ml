@@ -8,7 +8,7 @@ let post_handler =
       let%lwt client =
         try%lwt Client.fetch_client_metadata req.client_id
         with e ->
-          Errors.log_exn ~req:ctx.req e ;
+          Errors.log_exn e ;
           Errors.invalid_request "failed to fetch client metadata"
       in
       if req.response_type <> "code" then

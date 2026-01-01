@@ -53,30 +53,28 @@ let exn_to_response exn =
   in
   match exn with
   | InvalidRequestError (error, message) ->
-      Dream.debug (fun log -> log "invalid request: %s - %s" error message) ;
+      Log.debug (fun log -> log "invalid request: %s - %s" error message) ;
       format_response error message `Bad_Request
   | InternalServerError (error, message) ->
-      Dream.debug (fun log ->
-          log "internal server error: %s - %s" error message ) ;
+      Log.debug (fun log -> log "internal server error: %s - %s" error message) ;
       format_response error message `Internal_Server_Error
   | AuthError (error, message) ->
-      Dream.debug (fun log -> log "auth error: %s - %s" error message) ;
+      Log.debug (fun log -> log "auth error: %s - %s" error message) ;
       format_response error message `Unauthorized
   | NotFoundError (error, message) ->
-      Dream.debug (fun log -> log "not found error: %s - %s" error message) ;
+      Log.debug (fun log -> log "not found error: %s - %s" error message) ;
       format_response error message `Not_Found
   | UseDpopNonceError ->
-      Dream.debug (fun log -> log "use_dpop_nonce error") ;
+      Log.debug (fun log -> log "use_dpop_nonce error") ;
       Dream.json ~status:`Bad_Request
         ~headers:
           [ ("WWW-Authenticate", {|DPoP error="use_dpop_nonce"|})
           ; ("Access-Control-Expose-Headers", "DPoP-Nonce, WWW-Authenticate") ]
         {|{ "error": "use_dpop_nonce" }|}
   | e ->
-      Dream.warning (fun log ->
+      Log.warn (fun log ->
           log "unexpected internal error: %s" (Printexc.to_string e) ) ;
       format_response "InternalServerError" "Internal server error"
         `Internal_Server_Error
 
-let log_exn ?req exn =
-  Dream.error (fun log -> log ?request:req "%s" (Printexc.to_string exn))
+let log_exn = Log.log_exn

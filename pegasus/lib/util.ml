@@ -561,7 +561,7 @@ let send_email_or_log ~(recipients : Letters.recipient list) ~subject
             recipients
           |> Option.get
         in
-        Dream.log "email to %s: %s" to_addr text
+        Log.info (fun log -> log "email to %s: %s" to_addr text)
   in
   match (Env.smtp_config, Env.smtp_sender) with
   | Some config, Some sender -> (
@@ -571,7 +571,7 @@ let send_email_or_log ~(recipients : Letters.recipient list) ~subject
     | Ok message -> (
       try%lwt Letters.send ~config ~sender ~recipients ~message
       with e ->
-        Errors.log_exn e ;
+        Log.log_exn e ;
         Lwt.return (log_email ()) ) )
   | _ ->
       Lwt.return (log_email ())
