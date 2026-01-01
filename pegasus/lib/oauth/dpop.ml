@@ -122,20 +122,21 @@ let verify_signature jwt jwk =
       let x = x |> Jwt.b64_decode |> Bytes.of_string in
       let y = y |> Jwt.b64_decode |> Bytes.of_string in
       let pubkey = Bytes.cat (Bytes.of_string "\x04") (Bytes.cat x y) in
-      let pubkey =
-        ( pubkey
-        , match crv with
-          | "secp256k1" ->
-              (module Kleidos.K256 : Kleidos.CURVE)
-          | "P-256" ->
-              (module Kleidos.P256 : Kleidos.CURVE)
-          | _ ->
-              failwith "unsupported algorithm" )
-      in
       let sig_bytes = Jwt.b64_decode sig_b64 |> Bytes.of_string in
       let r = Bytes.sub sig_bytes 0 32 in
       let s = Bytes.sub sig_bytes 32 32 in
       let signature = Bytes.cat r s in
+      let pubkey, signature =
+        match crv with
+        | "secp256k1" ->
+            ( (pubkey, (module Kleidos.K256 : Kleidos.CURVE))
+            , Kleidos.K256.low_s_normalize_signature signature )
+        | "P-256" ->
+            ( (pubkey, (module Kleidos.P256 : Kleidos.CURVE))
+            , Kleidos.P256.low_s_normalize_signature signature )
+        | _ ->
+            failwith "unsupported algorithm"
+      in
       Kleidos.verify ~pubkey ~msg ~signature
   | _ ->
       false

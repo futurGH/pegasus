@@ -29,6 +29,8 @@ module type CURVE = sig
 
   val normalize_pubkey_to_raw : bytes -> bytes
 
+  val low_s_normalize_signature : bytes -> bytes
+
   val sign : privkey:bytes -> msg:bytes -> bytes
 
   val verify : pubkey:bytes -> msg:bytes -> signature:bytes -> bool
@@ -73,6 +75,8 @@ module K256 : CURVE = struct
           failwith "invalid compressed key" )
     | len ->
         failwith ("invalid key length: " ^ string_of_int len)
+
+  let low_s_normalize_signature = Low_s.normalize_k256
 
   let sign ~privkey ~msg : bytes =
     let hashed = SHA2_256.hash msg in
@@ -141,6 +145,8 @@ module P256 : CURVE = struct
           failwith "invalid compressed key" )
     | len ->
         failwith ("invalid key length: " ^ string_of_int len)
+
+  let low_s_normalize_signature = Low_s.normalize_p256
 
   let sign ~privkey ~msg : bytes =
     let hashed = SHA2_256.hash msg in
