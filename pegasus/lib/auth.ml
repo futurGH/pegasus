@@ -151,7 +151,8 @@ let get_session_info identifier db =
     ; handle= actor.handle
     ; email= Some actor.email
     ; email_confirmed= Some (actor.email_confirmed_at <> None)
-    ; email_auth_factor= Some true
+    ; email_auth_factor=
+        Some (actor.email_2fa_enabled = 1 || actor.totp_verified_at <> None)
     ; active
     ; status }
 

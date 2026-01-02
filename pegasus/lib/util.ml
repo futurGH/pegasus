@@ -475,7 +475,8 @@ let str_contains ~affix str =
 let make_code () =
   let () = Mirage_crypto_rng_unix.use_default () in
   let token =
-    Multibase.Base32.encode_string @@ Mirage_crypto_rng_unix.getrandom 32
+    Multibase.Base32.encode_string ~pad:false
+    @@ Mirage_crypto_rng_unix.getrandom 8
   in
   String.sub token 0 5 ^ "-" ^ String.sub token 5 5
 

@@ -3,135 +3,220 @@
 open Melange_json.Primitives
 open React
 
+type two_fa_methods =
+  { totp: bool [@default false]
+  ; email: bool [@default false]
+  ; backup_code: bool [@default false] }
+[@@deriving json]
+
 type props =
   { redirect_url: string
   ; csrf_token: string
-  ; error: string option [@default None] }
+  ; error: string option [@default None]
+  ; two_fa_required: bool [@default false]
+  ; pending_2fa_token: string option [@default None]
+  ; two_fa_methods: two_fa_methods option [@default None] }
 [@@deriving json]
 
-let[@react.component] make ~props:({redirect_url; csrf_token; error} : props) ()
-    =
+let[@react.component] make
+    ~props:
+      ({ redirect_url
+       ; csrf_token
+       ; error
+       ; two_fa_required
+       ; pending_2fa_token
+       ; two_fa_methods } :
+        props ) () =
   let passkeyError, setPasskeyError = useState (fun () -> None) in
   let passkeyLoading, setPasskeyLoading = useState (fun () -> false) in
   let currentOptions = useRef (None : Js.Json.t option) in
   let _ =
     React.useEffect0 (fun () ->
-        let _ =
-          WebAuthn.browserSupportsWebAuthnAutofill ()
-          |> Js.Promise.then_ (fun supported ->
-              if supported then begin
-                Fetch.fetch "/account/passkeys/login/options"
-                |> Js.Promise.then_ (fun response ->
-                    if Fetch.Response.ok response then
-                      Fetch.Response.json response
-                    else Js.Exn.raiseError "Failed to get options" )
-                |> Js.Promise.then_ (fun options ->
-                    currentOptions.current <- Some options ;
-                    WebAuthn.startAuthentication
-                      {optionsJSON= options; useBrowserAutofill= true} )
-                |> Js.Promise.then_ (fun credential ->
-                    setPasskeyLoading (fun _ -> true) ;
-                    let challenge =
-                      match currentOptions.current with
-                      | Some opts ->
-                          Js.Dict.unsafeGet (Obj.magic opts) "challenge"
-                      | None ->
-                          Js.Json.string ""
-                    in
-                    let body =
-                      Js.Json.object_
-                        (Js.Dict.fromArray
-                           [| ( "response"
-                              , Js.Json.string (Js.Json.stringify credential) )
-                            ; ("challenge", challenge) |] )
-                    in
-                    Fetch.fetchWithInit
-                      ( "/account/passkeys/login/verify?redirect_url="
-                      ^ Js.Global.encodeURIComponent redirect_url )
-                      (Fetch.RequestInit.make ~method_:Post
-                         ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
-                         ~headers:
-                           (Fetch.HeadersInit.makeWithArray
-                              [|("Content-Type", "application/json")|] )
-                         () ) )
-                |> Js.Promise.then_ (fun response ->
-                    setPasskeyLoading (fun _ -> false) ;
-                    if Fetch.Response.ok response then
-                      Fetch.Response.json response
-                      |> Js.Promise.then_ (fun json ->
-                          let redirect =
-                            Js.Dict.unsafeGet (Obj.magic json) "redirect"
-                            |> Js.Json.decodeString
-                            |> Option.value ~default:"/account"
-                          in
-                          Webapi.Dom.(Window.setLocation window redirect) ;
-                          Js.Promise.resolve () )
-                    else begin
-                      setPasskeyError (fun _ ->
-                          Some "Passkey authentication failed" ) ;
-                      Js.Promise.resolve ()
-                    end )
-                |> Js.Promise.catch (fun _ ->
-                    (* user cancelled or error *)
-                    Js.Promise.resolve () )
-              end
-              else Js.Promise.resolve () )
-        in
-        None )
+        (* only start passkey autofill if not in 2FA step *)
+        if not two_fa_required then
+          let _ =
+            WebAuthn.browserSupportsWebAuthnAutofill ()
+            |> Js.Promise.then_ (fun supported ->
+                if supported then begin
+                  Fetch.fetch "/account/passkeys/login/options"
+                  |> Js.Promise.then_ (fun response ->
+                      if Fetch.Response.ok response then
+                        Fetch.Response.json response
+                      else Js.Exn.raiseError "Failed to get options" )
+                  |> Js.Promise.then_ (fun options ->
+                      currentOptions.current <- Some options ;
+                      WebAuthn.startAuthentication
+                        {optionsJSON= options; useBrowserAutofill= true} )
+                  |> Js.Promise.then_ (fun credential ->
+                      setPasskeyLoading (fun _ -> true) ;
+                      let challenge =
+                        match currentOptions.current with
+                        | Some opts ->
+                            Js.Dict.unsafeGet (Obj.magic opts) "challenge"
+                        | None ->
+                            Js.Json.string ""
+                      in
+                      let body =
+                        Js.Json.object_
+                          (Js.Dict.fromArray
+                             [| ( "response"
+                                , Js.Json.string (Js.Json.stringify credential)
+                                )
+                              ; ("challenge", challenge) |] )
+                      in
+                      Fetch.fetchWithInit
+                        ( "/account/passkeys/login/verify?redirect_url="
+                        ^ Js.Global.encodeURIComponent redirect_url )
+                        (Fetch.RequestInit.make ~method_:Post
+                           ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                           ~headers:
+                             (Fetch.HeadersInit.makeWithArray
+                                [|("Content-Type", "application/json")|] )
+                           () ) )
+                  |> Js.Promise.then_ (fun response ->
+                      setPasskeyLoading (fun _ -> false) ;
+                      if Fetch.Response.ok response then
+                        Fetch.Response.json response
+                        |> Js.Promise.then_ (fun json ->
+                            let redirect =
+                              Js.Dict.unsafeGet (Obj.magic json) "redirect"
+                              |> Js.Json.decodeString
+                              |> Option.value ~default:"/account"
+                            in
+                            Webapi.Dom.(Window.setLocation window redirect) ;
+                            Js.Promise.resolve () )
+                      else begin
+                        setPasskeyError (fun _ ->
+                            Some "Passkey authentication failed" ) ;
+                        Js.Promise.resolve ()
+                      end )
+                  |> Js.Promise.catch (fun _ ->
+                      (* user cancelled or error *)
+                      Js.Promise.resolve () )
+                end
+                else Js.Promise.resolve () )
+          in
+          None
+        else None )
   in
   <main className="w-full h-auto max-w-xs px-4 sm:px-0 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
-      (string "sign in")
+      (string (if two_fa_required then "verify your identity" else "sign in"))
     </h1>
-    <span className="w-full text-balance text-mist-100">
-      (string "Enter your handle, email address, or DID, and your password.")
-    </span>
-    <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
-      <input type_="hidden" name="dream.csrf" value=csrf_token />
-      <Input
-        sr_only=true
-        name="identifier"
-        type_="text"
-        label="identifier"
-        autoComplete="username webauthn"
-      />
-      <Input sr_only=true name="password" type_="password" label="password" />
-      <input type_="hidden" name="redirect_url" value=redirect_url />
-      ( match error with
-      | Some err ->
-          <span className="inline-flex items-center text-phoenix-100 text-sm">
-            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+    ( if two_fa_required then
+        (* 2FA verification step *)
+        let methods =
+          Option.value
+            ~default:{totp= false; email= false; backup_code= false}
+            two_fa_methods
+        in
+        <div>
+          <span className="w-full text-balance text-mist-100">
+            ( if methods.totp then
+                string "Enter the 6-digit code from your authenticator app."
+              else if methods.email then
+                string "Enter the verification code sent to your email."
+              else string "Enter your verification code." )
           </span>
-      | None ->
-          null )
-      ( match passkeyError with
-      | Some err ->
-          <span className="inline-flex items-center text-phoenix-100 text-sm">
-            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+          <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input
+              type_="hidden"
+              name="pending_2fa_token"
+              value=(Option.value ~default:"" pending_2fa_token)
+            />
+            <input type_="hidden" name="redirect_url" value=redirect_url />
+            <Input
+              sr_only=true
+              name="two_fa_code"
+              type_="text"
+              label="verification code"
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              pattern="[0-9A-Za-z\\-]*"
+            />
+            ( match error with
+            | Some err ->
+                <span
+                  className="inline-flex items-center text-phoenix-100 text-sm">
+                  <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+                </span>
+            | None ->
+                null )
+            <Button type_="submit" formMethod="post" className="mt-2">
+              (string "verify")
+            </Button>
+          </form>
+          ( if methods.backup_code then
+              <span className="text-sm text-mist-80">
+                (string "Lost access? You can use a backup code instead.")
+              </span>
+            else null )
+          <div className="mt-4">
+            <a
+              className="text-sm text-mana-100 hover:text-mana-200"
+              href="/account/login">
+              (string "cancel and start over")
+            </a>
+          </div>
+        </div>
+      else
+        <div>
+          <span className="w-full text-balance text-mist-100">
+            (string
+               "Enter your handle, email address, or DID, and your password." )
           </span>
-      | None ->
-          null )
-      <Button type_="submit" formMethod="post" className="mt-2">
-        (string (if passkeyLoading then "signing in..." else "sign in"))
-      </Button>
-    </form>
-    <span className="text-sm text-mist-100">
-      (string "or: ")
-      <ul className="mt-1 pl-2">
-        <li className="mb-1">
-          <a
-            className="text-mana-100 underline hover:text-mana-200"
-            href="/account/signup">
-            (string "create an account")
-          </a>
-        </li>
-        <li>
-          <a
-            className="text-mana-100 underline hover:text-mana-200"
-            href="/account/migrate">
-            (string "migrate from another PDS")
-          </a>
-        </li>
-      </ul>
-    </span>
+          <form className="w-full flex flex-col mt-4 mb-2 gap-y-2">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <Input
+              sr_only=true
+              name="identifier"
+              type_="text"
+              label="identifier"
+              autoComplete="username webauthn"
+            />
+            <Input
+              sr_only=true name="password" type_="password" label="password"
+            />
+            <input type_="hidden" name="redirect_url" value=redirect_url />
+            ( match error with
+            | Some err ->
+                <span
+                  className="inline-flex items-center text-phoenix-100 text-sm">
+                  <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+                </span>
+            | None ->
+                null )
+            ( match passkeyError with
+            | Some err ->
+                <span
+                  className="inline-flex items-center text-phoenix-100 text-sm">
+                  <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+                </span>
+            | None ->
+                null )
+            <Button type_="submit" formMethod="post" className="mt-2">
+              (string (if passkeyLoading then "signing in..." else "sign in"))
+            </Button>
+          </form>
+          <span className="text-sm text-mist-100">
+            (string "or: ")
+            <ul className="mt-1 pl-2">
+              <li className="mb-1">
+                <a
+                  className="text-mana-100 underline hover:text-mana-200"
+                  href="/account/signup">
+                  (string "create an account")
+                </a>
+              </li>
+              <li>
+                <a
+                  className="text-mana-100 underline hover:text-mana-200"
+                  href="/account/migrate">
+                  (string "migrate from another PDS")
+                </a>
+              </li>
+            </ul>
+          </span>
+        </div> )
   </main>

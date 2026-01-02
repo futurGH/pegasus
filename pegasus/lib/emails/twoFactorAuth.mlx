@@ -1,0 +1,45 @@
+open EmailStyles
+
+let html_body ~handle ~code : JSX.element =
+  <div>
+    <p style=Styles.paragraph>
+      (JSX.string "Hello, ")
+      <span style=Styles.link>(JSX.string handle)</span>
+      (JSX.string "!")
+    </p>
+    <p style=Styles.paragraph>
+      (JSX.string "Your login verification code is:")
+    </p>
+    <div style=Styles.code_block>(JSX.string code)</div>
+    <p style=Styles.small_text>
+      (JSX.string "This code will expire in 10 minutes.")
+    </p>
+    <p style=Styles.small_text>
+      (JSX.string
+         "If you didn't try to sign in, you should change your password \
+          immediately." )
+    </p>
+  </div>
+
+let plain_text ~handle ~code : string =
+  Printf.sprintf
+    "Hello, %s!\n\n\
+     Your login verification code is:\n\n\
+     %s\n\n\
+     This code will expire in 10 minutes.\n\n\
+     If you didn't try to sign in, you should change your password immediately."
+    handle code
+
+let make ~handle ~code : Letters.body =
+  let html_content = html_body ~handle ~code in
+  let template_content =
+    EmailTemplate.
+      { title= "Login verification code for " ^ handle
+      ; heading= "verify your identity"
+      ; body= html_content
+      ; footer= Some ("This is an automated message from " ^ Env.hostname ^ ".")
+      }
+  in
+  let html = EmailTemplate.make ~content:template_content () |> JSX.render in
+  let plain = plain_text ~handle ~code in
+  Mixed (plain, html, None)

@@ -113,6 +113,13 @@ end
 
 open Raw
 
+let get_current_did_exn req =
+  match%lwt get_current_did req with
+  | None ->
+      Errors.auth_required "not authorized"
+  | Some did ->
+      Lwt.return did
+
 let log_in_did req did =
   match%lwt get_session req with
   | Some {logged_in_dids; session_id; admin_authenticated; _} ->

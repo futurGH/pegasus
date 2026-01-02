@@ -47,19 +47,6 @@ let get_handler =
               let email_change_pending = has_valid_email_change_code actor in
               let pending_email = actor.pending_email in
               let delete_pending = has_valid_delete_code actor in
-              let%lwt passkeys_raw =
-                Passkey.get_credentials_for_user ~did ctx.db
-              in
-              let passkeys =
-                List.map
-                  (fun (pk : Passkey.Types.passkey) ->
-                    Frontend.AccountPage.
-                      { id= pk.id
-                      ; name= pk.name
-                      ; created_at= pk.created_at
-                      ; last_used_at= pk.last_used_at } )
-                  passkeys_raw
-              in
               Util.render_html ~title:"Account"
                 (module Frontend.AccountPage)
                 ~props:
@@ -78,8 +65,7 @@ let get_handler =
                   ; delete_pending
                   ; error= None
                   ; success= None
-                  ; delete_error= None
-                  ; passkeys } ) )
+                  ; delete_error= None } ) )
 
 let post_handler =
   Xrpc.handler (fun ctx ->
@@ -115,19 +101,6 @@ let post_handler =
                 let email_change_pending = has_valid_email_change_code actor in
                 let pending_email = actor.pending_email in
                 let delete_pending = has_valid_delete_code actor in
-                let%lwt passkeys_raw =
-                  Passkey.get_credentials_for_user ~did ctx.db
-                in
-                let passkeys =
-                  List.map
-                    (fun (pk : Passkey.Types.passkey) ->
-                      Frontend.AccountPage.
-                        { id= pk.id
-                        ; name= pk.name
-                        ; created_at= pk.created_at
-                        ; last_used_at= pk.last_used_at } )
-                    passkeys_raw
-                in
                 Util.render_html ~title:"Account"
                   (module Frontend.AccountPage)
                   ~props:
@@ -146,8 +119,7 @@ let post_handler =
                     ; delete_pending
                     ; error
                     ; success
-                    ; delete_error
-                    ; passkeys }
+                    ; delete_error }
               in
               match%lwt Dream.form ctx.req with
               | `Ok fields -> (
@@ -158,7 +130,6 @@ let post_handler =
                         List.assoc_opt "handle" fields
                         |> Option.value ~default:actor.handle
                       in
-                      let new_password = List.assoc_opt "password" fields in
                       (* update handle if changed *)
                       let%lwt handle_result =
                         if new_handle <> actor.handle then
@@ -176,15 +147,6 @@ let post_handler =
                       | Error (InternalServerError _) ->
                           render_page ~error:"Internal server error" ()
                       | Ok () ->
-                          (* update password if provided *)
-                          let%lwt () =
-                            match new_password with
-                            | Some pw when String.length pw > 0 ->
-                                Data_store.update_password ~did ~password:pw
-                                  ctx.db
-                            | _ ->
-                                Lwt.return_unit
-                          in
                           render_page ~success:"Changes saved." () )
                   | Some "reactivate" ->
                       let%lwt () = Data_store.activate_actor did ctx.db in

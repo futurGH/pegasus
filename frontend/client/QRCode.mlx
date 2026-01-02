@@ -1,0 +1,11 @@
+module SVG = struct
+  external make :
+       value:string
+    -> ?size:int
+    -> ?title:string
+    -> ?bgColor:string
+    -> ?fgColor:string
+    -> React.element = "QRCodeSVG"
+  [@@mel.module "qrcode.react"] [@@react.component]
+end
+[@@platform js]

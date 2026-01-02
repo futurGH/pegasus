@@ -6,8 +6,9 @@ type actor = AccountSwitcher.actor
 
 let pages =
   [ ("Account", "/account")
-  ; ("Permissions", "/account/permissions")
-  ; ("Identity", "/account/identity") ]
+  ; ("Security", "/account/security")
+  ; ("Identity", "/account/identity")
+  ; ("Permissions", "/account/permissions") ]
 
 let[@react.component] make ~current_user ~logged_in_users ~active_page () =
   <Sidebar
@@ -19,7 +20,10 @@ let[@react.component] make ~current_user ~logged_in_users ~active_page () =
     footer=(<a
               href=( "/account/logout?did="
                    ^ Js.Global.encodeURIComponent current_user.did )>
-              <Button kind=`Secondary className="mt-2 justify-start pl-0 active:shadow-none focus-visible:shadow-none">
+              <Button
+                kind=`Secondary
+                className="mt-2 justify-start pl-0 active:shadow-none \
+                           focus-visible:shadow-none">
                 (string "log out")
               </Button>
             </a>)

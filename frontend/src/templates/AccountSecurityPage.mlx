@@ -1,0 +1,719 @@
+[@@@ocaml.warning "-26-27"]
+
+open Melange_json.Primitives
+open React
+
+type actor = AccountSwitcher.actor =
+  {did: string; handle: string; avatar_data_uri: string option [@default None]}
+[@@deriving json]
+
+type passkey_display =
+  { id: int
+  ; name: string
+  ; created_at: int
+  ; last_used_at: int option [@default None] }
+[@@deriving json]
+
+type props =
+  { current_user: actor
+  ; logged_in_users: actor list
+  ; csrf_token: string
+  ; passkeys: passkey_display list [@default []]
+  ; totp_enabled: bool [@default false]
+  ; email_2fa_enabled: bool [@default false]
+  ; backup_codes_remaining: int [@default 10]
+  ; error: string option [@default None]
+  ; success: string option [@default None] }
+[@@deriving json]
+
+let[@react.component] make
+    ~props:
+      ({ current_user
+       ; logged_in_users
+       ; csrf_token
+       ; passkeys
+       ; totp_enabled
+       ; email_2fa_enabled
+       ; backup_codes_remaining
+       ; error
+       ; success } :
+        props ) () =
+  (* passkeys state *)
+  let passkeysState, setPasskeysState = useState (fun () -> passkeys) in
+  let addingPasskey, setAddingPasskey = useState (fun () -> false) in
+  let passkeyName, setPasskeyName = useState (fun () -> "") in
+  let passkeyError, setPasskeyError = useState (fun () -> None) in
+  let webauthnSupported, setWebauthnSupported = useState (fun () -> false) in
+  let currentWebAuthnOptions = useRef None in
+  (* TOTP state *)
+  let totpEnabled, setTotpEnabled = useState (fun () -> totp_enabled) in
+  let settingUpTotp, setSettingUpTotp = useState (fun () -> false) in
+  let totpSecret, setTotpSecret = useState (fun () -> "") in
+  let totpUri, setTotpUri = useState (fun () -> "") in
+  let totpCode, setTotpCode = useState (fun () -> "") in
+  let totpError, setTotpError = useState (fun () -> None) in
+  let totpLoading, setTotpLoading = useState (fun () -> false) in
+  let backupCodes, setBackupCodes =
+    useState (fun () -> ([||] : string array))
+  in
+  let showBackupCodes, setShowBackupCodes = useState (fun () -> false) in
+  (* email 2FA state *)
+  let email2faEnabled, setEmail2faEnabled =
+    useState (fun () -> email_2fa_enabled)
+  in
+  let email2faLoading, setEmail2faLoading = useState (fun () -> false) in
+  (* backup codes state *)
+  let backupCodesRemaining, setBackupCodesRemaining =
+    useState (fun () -> backup_codes_remaining)
+  in
+  let regeneratingCodes, setRegeneratingCodes = useState (fun () -> false) in
+  (* success/error state *)
+  let successMessage, setSuccessMessage = useState (fun () -> success) in
+  let errorMessage, setErrorMessage = useState (fun () -> error) in
+  let _ =
+    React.useEffect0 (fun () ->
+        setWebauthnSupported (fun _ -> WebAuthn.browserSupportsWebAuthn ()) ;
+        None )
+  in
+  <div
+    className="w-full h-full max-w-[816px] px-8 pt-16 mx-auto flex flex-col \
+               md:flex-row gap-8">
+    <AccountSidebar current_user logged_in_users active_page="/account/security"
+    />
+    <main className="flex-1 w-full md:max-w-lg">
+      <h1 className="text-2xl font-serif text-mana-200 mb-1">
+        (string "security")
+      </h1>
+      <p className="text-mist-100">
+        (string "Manage your authentication methods and security settings.")
+      </p>
+      ( match errorMessage with
+      | Some err ->
+          <span
+            className="inline-flex items-center text-phoenix-100 text-sm my-2">
+            <CircleAlertIcon className="w-4 h-4 mr-2" /> (string err)
+          </span>
+      | None ->
+          null )
+      ( match successMessage with
+      | Some err ->
+          <span className="inline-flex items-center text-mana-100 text-sm my-2">
+            (string err)
+          </span>
+      | None ->
+          null )
+      <section>
+        <h2 className="text-xl font-serif text-mana-200 mb-1 mt-2">
+          (string "password")
+        </h2>
+        <p className="text-mist-100 mb-4">
+          (string "Change your account password.")
+        </p>
+        <form className="flex flex-col gap-y-2">
+          <input type_="hidden" name="dream.csrf" value=csrf_token />
+          <input type_="hidden" name="action" value="change_password" />
+          <Input
+            name="current_password"
+            type_="password"
+            label="Current password"
+            autoComplete="current-password"
+            showIndicator=false
+          />
+          <Input
+            name="new_password"
+            type_="password"
+            label="New password"
+            autoComplete="new-password"
+            showIndicator=false
+          />
+          <Input
+            name="confirm_password"
+            type_="password"
+            label="Confirm new password"
+            autoComplete="new-password"
+            showIndicator=false
+          />
+          <Button type_="submit" formMethod="post" className="mt-2">
+            (string "change password")
+          </Button>
+        </form>
+      </section>
+      <section className="mt-8">
+        <h2 className="text-xl font-serif text-mana-200 mb-1">
+          (string "passkeys")
+        </h2>
+        <p className="text-mist-100 mb-4">
+          (string
+             "Passkeys provide a more convenient alternative to a password for \
+              logging into your account dashboard." )
+        </p>
+        <ClientOnly
+          fallback=(array
+                      [| <p className="text-mist-80 text-sm mb-4">
+                           (string "Loading passkeys...")
+                         </p>
+                       ; <div className="flex flex-row gap-x-3">
+                           <div className="flex-1">
+                             <Input
+                               name="passkey_name"
+                               label="Passkey name"
+                               placeholder="My Little Passkey"
+                               showIndicator=false
+                             />
+                           </div>
+                           <div className="self-end min-w-40">
+                             <Button type_="button">(string "add")</Button>
+                           </div>
+                         </div> |] )>
+          [%browser_only
+            fun () ->
+              let formatDate ts =
+                let d = Js.Date.fromFloat (Float.of_int ts) in
+                Js.Date.toLocaleDateString d
+              in
+              let addPasskey () =
+                setAddingPasskey (fun _ -> true) ;
+                setPasskeyError (fun _ -> None) ;
+                let _ =
+                  Fetch.fetch "/account/passkeys/register/options"
+                  |> Js.Promise.then_ (fun response ->
+                      if Fetch.Response.ok response then
+                        Fetch.Response.json response
+                      else Js.Exn.raiseError "Failed to get options" )
+                  |> Js.Promise.then_ (fun options ->
+                      currentWebAuthnOptions.current <- Some options ;
+                      WebAuthn.startRegistration {optionsJSON= options} )
+                  |> Js.Promise.then_ (fun credential ->
+                      let challenge =
+                        Js.Dict.unsafeGet
+                          (Obj.magic currentWebAuthnOptions.current)
+                          "challenge"
+                      in
+                      let body =
+                        Js.Json.object_
+                          (Js.Dict.fromArray
+                             [| ( "response"
+                                , Js.Json.string (Js.Json.stringify credential)
+                                )
+                              ; ("challenge", challenge)
+                              ; ( "name"
+                                , Js.Json.string
+                                    ( if passkeyName = "" then "Passkey"
+                                      else passkeyName ) ) |] )
+                      in
+                      Fetch.fetchWithInit "/account/passkeys/register/verify"
+                        (Fetch.RequestInit.make ~method_:Post
+                           ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                           ~headers:
+                             (Fetch.HeadersInit.makeWithArray
+                                [|("Content-Type", "application/json")|] )
+                           () ) )
+                  |> Js.Promise.then_ (fun response ->
+                      setAddingPasskey (fun _ -> false) ;
+                      if Fetch.Response.ok response then begin
+                        setPasskeyName (fun _ -> "") ;
+                        Fetch.fetch "/account/passkeys"
+                        |> Js.Promise.then_ (fun r -> Fetch.Response.json r)
+                        |> Js.Promise.then_ (fun json ->
+                            let pks : passkey_display list =
+                              Js.Dict.unsafeGet (Obj.magic json) "passkeys"
+                              |> Obj.magic |> Array.to_list
+                            in
+                            setPasskeysState (fun _ -> pks) ;
+                            Js.Promise.resolve () )
+                      end
+                      else begin
+                        setPasskeyError (fun _ ->
+                            Some "Failed to register passkey" ) ;
+                        Js.Promise.resolve ()
+                      end )
+                  |> Js.Promise.catch (fun _ ->
+                      setAddingPasskey (fun _ -> false) ;
+                      setPasskeyError (fun _ ->
+                          Some "Passkey registration cancelled or failed" ) ;
+                      Js.Promise.resolve () )
+                in
+                ()
+              in
+              let deletePasskey id =
+                let _ =
+                  Fetch.fetchWithInit
+                    ("/account/passkeys/" ^ string_of_int id)
+                    (Fetch.RequestInit.make ~method_:Delete ())
+                  |> Js.Promise.then_ (fun response ->
+                      if Fetch.Response.ok response then
+                        setPasskeysState (fun ps ->
+                            List.filter
+                              (fun p -> (p : passkey_display).id <> id)
+                              ps ) ;
+                      Js.Promise.resolve () )
+                in
+                ()
+              in
+              if not webauthnSupported then
+                <p className="text-mist-80 text-sm">
+                  (string "Your browser doesn't support passkeys.")
+                </p>
+              else
+                <div>
+                  ( if List.length passkeysState = 0 then
+                      <p className="text-mist-80 text-sm mb-4">
+                        (string "You haven't added any passkeys yet.")
+                      </p>
+                    else
+                      <ul className="mb-4 space-y-2">
+                        ( List.map
+                            (fun (pk : passkey_display) ->
+                              <li
+                                key=(string_of_int pk.id)
+                                className="flex items-center p-3 outline-1 \
+                                           outline-mana-40/50 rounded-lg">
+                                <span
+                                  className="font-medium text-mist-100 truncate">
+                                  (string pk.name)
+                                </span>
+                                <span
+                                  className="text-sm text-mist-80 ml-2 \
+                                             min-w-fit">
+                                  (string
+                                     ({js|⸱ |js} ^ formatDate pk.created_at) )
+                                </span>
+                                <button
+                                  type_="button"
+                                  className="p-1 ml-auto text-phoenix-100 \
+                                             hover:text-phoenix-200 \
+                                             cursor-pointer"
+                                  onClick=(fun _ -> deletePasskey pk.id)>
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </li> )
+                            passkeysState
+                        |> Array.of_list |> React.array )
+                      </ul> )
+                  <div className="flex flex-row gap-x-3">
+                    <div className="flex-1">
+                      <Input
+                        name="passkey_name"
+                        label="Passkey name"
+                        placeholder="My Little Passkey"
+                        showIndicator=false
+                        value=passkeyName
+                        onChange=(fun e ->
+                                     setPasskeyName (fun _ ->
+                                         (Event.Form.target e)##value ) )
+                      />
+                    </div>
+                    <div className="self-end min-w-40">
+                      <Button
+                        type_="button"
+                        disabled=addingPasskey
+                        onClick=(fun _ -> addPasskey ())>
+                        (string (if addingPasskey then "adding..." else "add"))
+                      </Button>
+                    </div>
+                  </div>
+                  ( match passkeyError with
+                  | Some err ->
+                      <span
+                        className="inline-flex items-center text-phoenix-100 \
+                                   text-sm mt-2">
+                        <CircleAlertIcon className="w-4 h-4 mr-2" />
+                        (string err)
+                      </span>
+                  | None ->
+                      null )
+                </div>]
+        </ClientOnly>
+      </section>
+      <section className="mt-8">
+        <h2 className="text-xl font-serif text-mana-200 mb-1">
+          (string "two-factor authentication")
+        </h2>
+        <p className="text-mist-100 mb-6">
+          (string "Add an extra layer of security to your account.")
+        </p>
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-mana-200 mb-2">
+            (string "email verification")
+          </h3>
+          <p className="text-mist-100 text-sm mb-4">
+            (string
+               "Receive a verification code via email when signing in. Note \
+                that this will have no effect if you have an authenticator app \
+                set up." )
+          </p>
+          <form className="w-full sm:w-1/2">
+            <input type_="hidden" name="dream.csrf" value=csrf_token />
+            <input
+              type_="hidden"
+              name="action"
+              value=( if email2faEnabled then "disable_email_2fa"
+                      else "enable_email_2fa" )
+            />
+            <Button
+              kind=(if email2faEnabled then `Danger else `Primary)
+              formMethod="post"
+              type_="submit">
+              (string (if email2faEnabled then "disable" else "enable"))
+            </Button>
+          </form>
+        </div>
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-mana-200 mb-2">
+            (string "authenticator app")
+          </h3>
+          <p className="text-mist-100 text-sm mb-4">
+            (string "Use an authenticator app to generate verification codes.")
+          </p>
+          <ClientOnly
+            fallback=(<div className="w-full sm:w-1/2">
+                        ( if totpEnabled then
+                            <Button kind=`Danger type_="button">
+                              (string "disable")
+                            </Button>
+                          else <Button type_="button">(string "set up")</Button>
+                        )
+                      </div>)>
+            [%browser_only
+              fun () ->
+                let module Aria = ReactAria in
+                let startTotpSetup () =
+                  setTotpLoading (fun _ -> true) ;
+                  setTotpError (fun _ -> None) ;
+                  let _ =
+                    Fetch.fetch "/account/security/totp/setup"
+                    |> Js.Promise.then_ (fun response ->
+                        if Fetch.Response.ok response then
+                          Fetch.Response.json response
+                        else begin
+                          setTotpError (fun _ ->
+                              Some "Failed to start TOTP setup" ) ;
+                          Js.Exn.raiseError "Failed"
+                        end )
+                    |> Js.Promise.then_ (fun json ->
+                        let secret =
+                          Js.Dict.unsafeGet (Obj.magic json) "secret"
+                          |> Js.Json.decodeString |> Option.value ~default:""
+                        in
+                        let uri =
+                          Js.Dict.unsafeGet (Obj.magic json) "uri"
+                          |> Js.Json.decodeString |> Option.value ~default:""
+                        in
+                        setTotpSecret (fun _ -> secret) ;
+                        setTotpUri (fun _ -> uri) ;
+                        setSettingUpTotp (fun _ -> true) ;
+                        setTotpLoading (fun _ -> false) ;
+                        Js.Promise.resolve () )
+                    |> Js.Promise.catch (fun _ ->
+                        setTotpLoading (fun _ -> false) ;
+                        Js.Promise.resolve () )
+                  in
+                  ()
+                in
+                let verifyTotp () =
+                  setTotpLoading (fun _ -> true) ;
+                  setTotpError (fun _ -> None) ;
+                  let body =
+                    Js.Json.object_
+                      (Js.Dict.fromArray [|("code", Js.Json.string totpCode)|])
+                  in
+                  let _ =
+                    Fetch.fetchWithInit "/account/security/totp/verify"
+                      (Fetch.RequestInit.make ~method_:Post
+                         ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                         ~headers:
+                           (Fetch.HeadersInit.makeWithArray
+                              [|("Content-Type", "application/json")|] )
+                         () )
+                    |> Js.Promise.then_ (fun response ->
+                        setTotpLoading (fun _ -> false) ;
+                        if Fetch.Response.ok response then begin
+                          Fetch.Response.json response
+                          |> Js.Promise.then_ (fun json ->
+                              let codes =
+                                Js.Dict.get (Obj.magic json) "backup_codes"
+                                |> Option.map (fun c ->
+                                    Obj.magic c |> Js.Json.decodeArray
+                                    |> Option.value ~default:[||]
+                                    |> Array.map (fun s ->
+                                        Js.Json.decodeString s
+                                        |> Option.value ~default:"" ) )
+                                |> Option.value ~default:[||]
+                              in
+                              if Array.length codes > 0 then begin
+                                setBackupCodes (fun _ -> codes) ;
+                                setShowBackupCodes (fun _ -> true)
+                              end ;
+                              setTotpEnabled (fun _ -> true) ;
+                              setSettingUpTotp (fun _ -> false) ;
+                              setTotpCode (fun _ -> "") ;
+                              setBackupCodesRemaining (fun _ ->
+                                  Array.length codes ) ;
+                              Js.Promise.resolve () )
+                        end
+                        else begin
+                          setTotpError (fun _ -> Some "Invalid code") ;
+                          Js.Promise.resolve ()
+                        end )
+                    |> Js.Promise.catch (fun _ ->
+                        setTotpLoading (fun _ -> false) ;
+                        setTotpError (fun _ ->
+                            Some "An error occurred. Please try again." ) ;
+                        Js.Promise.resolve () )
+                  in
+                  ()
+                in
+                let disableTotp () =
+                  setTotpLoading (fun _ -> true) ;
+                  let _ =
+                    Fetch.fetchWithInit "/account/security/totp/disable"
+                      (Fetch.RequestInit.make ~method_:Post
+                         ~headers:
+                           (Fetch.HeadersInit.makeWithArray
+                              [|("Content-Type", "application/json")|] )
+                         () )
+                    |> Js.Promise.then_ (fun response ->
+                        setTotpLoading (fun _ -> false) ;
+                        if Fetch.Response.ok response then
+                          setTotpEnabled (fun _ -> false) ;
+                        Js.Promise.resolve () )
+                    |> Js.Promise.catch (fun _ ->
+                        setTotpLoading (fun _ -> false) ;
+                        Js.Promise.resolve () )
+                  in
+                  ()
+                in
+                <div className="w-full sm:w-1/2">
+                  ( if totpEnabled then
+                      <Button
+                        kind=`Danger
+                        onClick=(fun _ -> disableTotp ())
+                        type_="button">
+                        (string "disable")
+                      </Button>
+                    else
+                      <Button
+                        onClick=(fun _ -> startTotpSetup ()) type_="button">
+                        (string "set up")
+                      </Button> )
+                  <Aria.DialogTrigger
+                    isOpen=settingUpTotp
+                    onOpenChange=(fun o ->
+                                   if not o then begin
+                                     setSettingUpTotp (fun _ -> false) ;
+                                     setTotpCode (fun _ -> "") ;
+                                     setTotpError (fun _ -> None)
+                                   end )>
+                    <Aria.ModalOverlay
+                      className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                 items-center justify-center"
+                      isDismissable=true>
+                      <Aria.Modal
+                        className="bg-feather-100 border border-mist-60 \
+                                   rounded-xl px-6 pb-6 pt-5 w-full max-w-sm \
+                                   mx-4 shadow-xl">
+                        <Aria.Dialog className="outline-none">
+                          <Aria.Heading
+                            slot="title"
+                            className="text-lg font-serif text-mana-200 mb-2">
+                            (string "set up authenticator")
+                          </Aria.Heading>
+                          <div className="flex flex-col gap-y-3">
+                            <p className="text-mist-100 text-sm">
+                              (string
+                                 "Scan this QR code with your authenticator \
+                                  app, or enter the secret manually, then \
+                                  enter the generated one-time password:" )
+                            </p>
+                            <div className="flex justify-center p-4 rounded-lg">
+                              <QRCode.SVG
+                                value=totpUri
+                                size=200
+                                title="Authenticator QR code"
+                                bgColor="#c8cfd2" (* feather-100 *)
+                                fgColor="#312b4d" (* mana-200 *)
+                              />
+                            </div>
+                            <div
+                              className="p-3 bg-mist-20 rounded-lg text-center \
+                                         font-mono text-mana-200 text-sm \
+                                         break-all">
+                              (string totpSecret)
+                            </div>
+                            <Input
+                              name="totp_code"
+                              label="One-time password"
+                              placeholder="123456"
+                              showIndicator=false
+                              inputMode="numeric"
+                              value=totpCode
+                              onChange=(fun e ->
+                                           setTotpCode (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                            ( match totpError with
+                            | Some err ->
+                                <span
+                                  className="inline-flex items-center \
+                                             text-phoenix-100 text-sm">
+                                  <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                  (string err)
+                                </span>
+                            | None ->
+                                null )
+                            <div className="flex flex-row gap-x-3 mt-2">
+                              <Button
+                                type_="button"
+                                disabled=totpLoading
+                                onClick=(fun _ -> verifyTotp ())>
+                                (string
+                                   ( if totpLoading then "verifying..."
+                                     else "verify" ) )
+                              </Button>
+                              <Button
+                                kind=`Tertiary
+                                type_="button"
+                                onClick=(fun _ ->
+                                          setSettingUpTotp (fun _ -> false) )>
+                                (string "cancel")
+                              </Button>
+                            </div>
+                          </div>
+                        </Aria.Dialog>
+                      </Aria.Modal>
+                    </Aria.ModalOverlay>
+                  </Aria.DialogTrigger>
+                  <Aria.DialogTrigger
+                    isOpen=showBackupCodes
+                    onOpenChange=(fun o ->
+                                   if not o then
+                                     setShowBackupCodes (fun _ -> false) )>
+                    <Aria.ModalOverlay
+                      className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                 items-center justify-center"
+                      isDismissable=true>
+                      <Aria.Modal
+                        className="bg-feather-100 border border-mist-60 \
+                                   rounded-xl px-6 pb-6 pt-5 w-full max-w-sm \
+                                   mx-4 shadow-xl">
+                        <Aria.Dialog className="outline-none">
+                          <Aria.Heading
+                            slot="title"
+                            className="text-lg font-serif text-mana-200 mb-2">
+                            (string "backup codes")
+                          </Aria.Heading>
+                          <div className="flex flex-col gap-y-3">
+                            <p className="text-mist-100 text-sm">
+                              (string
+                                 "Save these backup codes in a secure \
+                                  location. You can use them to access your \
+                                  account if you lose your authenticator \
+                                  device." )
+                            </p>
+                            <div
+                              className="grid grid-cols-2 gap-2 rounded-lg \
+                                         font-mono text-sm">
+                              ( Array.map
+                                  (fun code ->
+                                    <div
+                                      key=code
+                                      className="text-center p-2 text-mana-200 \
+                                                 bg-mist-20 rounded-sm">
+                                      (string code)
+                                    </div> )
+                                  backupCodes
+                              |> React.array )
+                            </div>
+                            <Button
+                              type_="button"
+                              onClick=(fun _ ->
+                                        setShowBackupCodes (fun _ -> false) )>
+                              (string "noted!")
+                            </Button>
+                          </div>
+                        </Aria.Dialog>
+                      </Aria.Modal>
+                    </Aria.ModalOverlay>
+                  </Aria.DialogTrigger>
+                </div>]
+          </ClientOnly>
+        </div>
+        ( if totpEnabled then
+            <div>
+              <h3 className="text-lg font-medium text-mana-200 mb-2">
+                (string "backup codes")
+              </h3>
+              <p className="text-mist-100 text-sm mb-2">
+                (string
+                   "Backup codes can be used to access your account if you \
+                    lose access to your authenticator device." )
+              </p>
+              <ClientOnly
+                fallback=(<div className="flex flex-col sm:w-1/2">
+                            <span className="text-sm text-mist-80 mb-4">
+                              (string
+                                 ( string_of_int backupCodesRemaining
+                                 ^ " backup codes remaining" ) )
+                            </span>
+                            <Button type_="button">
+                              (string "regenerate")
+                            </Button>
+                          </div>)>
+                [%browser_only
+                  fun () ->
+                    let regenerateCodes () =
+                      setRegeneratingCodes (fun _ -> true) ;
+                      let _ =
+                        Fetch.fetchWithInit
+                          "/account/security/backup-codes/regenerate"
+                          (Fetch.RequestInit.make ~method_:Post
+                             ~headers:
+                               (Fetch.HeadersInit.makeWithArray
+                                  [|("Content-Type", "application/json")|] )
+                             () )
+                        |> Js.Promise.then_ (fun response ->
+                            setRegeneratingCodes (fun _ -> false) ;
+                            if Fetch.Response.ok response then
+                              Fetch.Response.json response
+                              |> Js.Promise.then_ (fun json ->
+                                  let codes =
+                                    Js.Dict.unsafeGet (Obj.magic json) "codes"
+                                    |> Obj.magic |> Js.Json.decodeArray
+                                    |> Option.value ~default:[||]
+                                    |> Array.map (fun s ->
+                                        Js.Json.decodeString s
+                                        |> Option.value ~default:"" )
+                                  in
+                                  setBackupCodes (fun _ -> codes) ;
+                                  setShowBackupCodes (fun _ -> true) ;
+                                  setBackupCodesRemaining (fun _ ->
+                                      Array.length codes ) ;
+                                  Js.Promise.resolve () )
+                            else Js.Promise.resolve () )
+                        |> Js.Promise.catch (fun _ ->
+                            setRegeneratingCodes (fun _ -> false) ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                    in
+                    <div className="flex flex-col sm:w-1/2">
+                      <span className="text-sm text-mist-80 mb-4">
+                        (string
+                           ( string_of_int backupCodesRemaining
+                           ^ " backup codes remaining" ) )
+                      </span>
+                      <Button
+                        type_="button"
+                        disabled=regeneratingCodes
+                        onClick=(fun _ -> regenerateCodes ())>
+                        (string
+                           ( if regeneratingCodes then "regenerating..."
+                             else "regenerate" ) )
+                      </Button>
+                    </div>]
+              </ClientOnly>
+            </div>
+          else null )
+      </section>
+    </main>
+  </div>

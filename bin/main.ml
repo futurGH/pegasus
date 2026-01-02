@@ -31,6 +31,23 @@ let handlers =
   ; (* account ui *)
     (get, "/account", Api.Account_.Index.get_handler)
   ; (post, "/account", Api.Account_.Index.post_handler)
+  ; (get, "/account/security", Api.Account_.Security.Index.get_handler)
+  ; (post, "/account/security", Api.Account_.Security.Index.post_handler)
+  ; ( get
+    , "/account/security/backup-codes"
+    , Api.Account_.Security.Backup_codes.count_handler )
+  ; ( post
+    , "/account/security/backup-codes/regenerate"
+    , Api.Account_.Security.Backup_codes.regenerate_handler )
+  ; ( get
+    , "/account/security/totp/setup"
+    , Api.Account_.Security.Totp.setup_handler )
+  ; ( post
+    , "/account/security/totp/verify"
+    , Api.Account_.Security.Totp.verify_handler )
+  ; ( post
+    , "/account/security/totp/disable"
+    , Api.Account_.Security.Totp.disable_handler )
   ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
   ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
   ; (get, "/account/identity", Api.Account_.Identity.get_handler)

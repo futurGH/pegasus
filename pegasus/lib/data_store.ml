@@ -14,7 +14,10 @@ module Types = struct
     ; deactivated_at: int option
     ; auth_code: string option
     ; auth_code_expires_at: int option
-    ; pending_email: string option }
+    ; pending_email: string option
+    ; email_2fa_enabled: int
+    ; totp_secret: bytes option
+    ; totp_verified_at: int option }
 
   type invite_code = {code: string; did: string; remaining: int}
 
@@ -52,7 +55,7 @@ module Queries = struct
   let get_actor_by_identifier id =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}, COALESCE(@int{email_2fa_enabled}, 0), @Blob?{totp_secret}, @int?{totp_verified_at}
               FROM actors WHERE did = %string{id} OR handle = %string{id} OR email = %string{id}
               LIMIT 1
         |sql}
@@ -85,7 +88,7 @@ module Queries = struct
   let list_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}, COALESCE(@int{email_2fa_enabled}, 0), @Blob?{totp_secret}, @int?{totp_verified_at}
               FROM actors
               WHERE did > %string{cursor}
               AND deactivated_at IS NULL
@@ -149,7 +152,7 @@ module Queries = struct
   let list_actors_filtered =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}, COALESCE(@int{email_2fa_enabled}, 0), @Blob?{totp_secret}, @int?{totp_verified_at}
               FROM actors
               WHERE (did LIKE '%' || %string{filter} || '%'
                   OR handle LIKE '%' || %string{filter} || '%'
@@ -162,7 +165,7 @@ module Queries = struct
   let list_all_actors =
     [%rapper
       get_many
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}, COALESCE(@int{email_2fa_enabled}, 0), @Blob?{totp_secret}, @int?{totp_verified_at}
               FROM actors
               WHERE did > %string{cursor}
               ORDER BY did ASC LIMIT %int{limit}
@@ -232,7 +235,7 @@ module Queries = struct
   let get_actor_by_auth_code code =
     [%rapper
       get_opt
-        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}
+        {sql| SELECT @int{id}, @string{did}, @string{handle}, @string{email}, @int?{email_confirmed_at}, @string{password_hash}, @string{signing_key}, @Json{preferences}, @int{created_at}, @int?{deactivated_at}, @string?{auth_code}, @int?{auth_code_expires_at}, @string?{pending_email}, COALESCE(@int{email_2fa_enabled}, 0), @Blob?{totp_secret}, @int?{totp_verified_at}
               FROM actors WHERE auth_code = %string{code}
               LIMIT 1
         |sql}

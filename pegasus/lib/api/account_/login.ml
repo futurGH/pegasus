@@ -9,7 +9,13 @@ let get_handler =
       let csrf_token = Dream.csrf_token ctx.req in
       Util.render_html ~title:"Login"
         (module Frontend.LoginPage)
-        ~props:{redirect_url; csrf_token; error= None} )
+        ~props:
+          { redirect_url
+          ; csrf_token
+          ; error= None
+          ; two_fa_required= false
+          ; pending_2fa_token= None
+          ; two_fa_methods= None } )
 
 type switch_account_response =
   {success: bool; error: string option [@default None]}
@@ -49,27 +55,134 @@ let post_handler =
       let csrf_token = Dream.csrf_token ctx.req in
       match%lwt Dream.form ctx.req with
       | `Ok fields -> (
-          let identifier = List.assoc "identifier" fields in
-          let password = List.assoc "password" fields in
           let redirect_url =
             List.assoc_opt "redirect_url" fields
             |> Option.value ~default:"/account"
           in
-          let%lwt actor =
-            Data_store.try_login ~id:identifier ~password ctx.db
-          in
-          match actor with
-          | None ->
-              let error = "Invalid username or password. Please try again." in
-              Util.render_html ~status:`Unauthorized ~title:"Login"
-                (module Frontend.LoginPage)
-                ~props:{redirect_url; csrf_token; error= Some error}
-          | Some {did; _} ->
-              let%lwt () = Session.log_in_did ctx.req did in
-              Dream.redirect ctx.req redirect_url )
+          (* check if this is a 2FA verification step *)
+          let pending_token = List.assoc_opt "pending_2fa_token" fields in
+          let two_fa_code = List.assoc_opt "two_fa_code" fields in
+          match (pending_token, two_fa_code) with
+          | Some token, Some code -> (
+            match%lwt
+              Two_factor.get_pending_session ~session_token:token ctx.db
+            with
+            | None ->
+                let error = "Session expired. Please try again." in
+                Util.render_html ~status:`Unauthorized ~title:"Login"
+                  (module Frontend.LoginPage)
+                  ~props:
+                    { redirect_url
+                    ; csrf_token
+                    ; error= Some error
+                    ; two_fa_required= false
+                    ; pending_2fa_token= None
+                    ; two_fa_methods= None }
+            | Some pending -> (
+                (* try TOTP, then backup code, then email *)
+                let%lwt result =
+                  let%lwt totp_result =
+                    Two_factor.verify_totp_code ~session_token:token ~code
+                      ctx.db
+                  in
+                  match totp_result with
+                  | Ok did ->
+                      Lwt.return_ok did
+                  | Error _ -> (
+                      let%lwt backup_result =
+                        Two_factor.verify_backup_code ~session_token:token ~code
+                          ctx.db
+                      in
+                      match backup_result with
+                      | Ok did ->
+                          Lwt.return_ok did
+                      | Error _ ->
+                          Two_factor.verify_email_code_by_token
+                            ~session_token:token ~code ctx.db )
+                in
+                match result with
+                | Ok did ->
+                    let%lwt () =
+                      Two_factor.delete_pending_session ~session_token:token
+                        ctx.db
+                    in
+                    let%lwt () = Session.log_in_did ctx.req did in
+                    Dream.redirect ctx.req redirect_url
+                | Error _ ->
+                    let%lwt methods =
+                      Two_factor.get_available_methods ~did:pending.did ctx.db
+                    in
+                    Util.render_html ~status:`Unauthorized ~title:"Login"
+                      (module Frontend.LoginPage)
+                      ~props:
+                        { redirect_url
+                        ; csrf_token
+                        ; error= Some "Invalid verification code"
+                        ; two_fa_required= true
+                        ; pending_2fa_token= Some token
+                        ; two_fa_methods= Some methods } ) )
+          | _ -> (
+              let identifier = List.assoc "identifier" fields in
+              let password = List.assoc "password" fields in
+              let%lwt actor =
+                Data_store.try_login ~id:identifier ~password ctx.db
+              in
+              match actor with
+              | None ->
+                  let error =
+                    "Invalid username or password. Please try again."
+                  in
+                  Util.render_html ~status:`Unauthorized ~title:"Login"
+                    (module Frontend.LoginPage)
+                    ~props:
+                      { redirect_url
+                      ; csrf_token
+                      ; error= Some error
+                      ; two_fa_required= false
+                      ; pending_2fa_token= None
+                      ; two_fa_methods= None }
+              | Some actor ->
+                  let%lwt is_2fa_enabled =
+                    Two_factor.is_2fa_enabled ~did:actor.did ctx.db
+                  in
+                  if is_2fa_enabled then
+                    let%lwt session_token =
+                      Two_factor.create_pending_session ~did:actor.did ctx.db
+                    in
+                    let%lwt methods =
+                      Two_factor.get_available_methods ~did:actor.did ctx.db
+                    in
+                    (* if email-only 2FA, send email code now *)
+                    let%lwt () =
+                      if methods.email && not methods.totp then
+                        let%lwt () =
+                          Two_factor.send_email_code ~session_token ~actor
+                            ctx.db
+                        in
+                        Lwt.return ()
+                      else Lwt.return ()
+                    in
+                    Util.render_html ~title:"Login"
+                      (module Frontend.LoginPage)
+                      ~props:
+                        { redirect_url
+                        ; csrf_token
+                        ; error= None
+                        ; two_fa_required= true
+                        ; pending_2fa_token= Some session_token
+                        ; two_fa_methods= Some methods }
+                  else
+                    let%lwt () = Session.log_in_did ctx.req actor.did in
+                    Dream.redirect ctx.req redirect_url ) )
       | _ ->
           let redirect_url = "/account" in
           let error = "Something went wrong, go back and try again." in
           Util.render_html ~status:`Unauthorized ~title:"Login"
             (module Frontend.LoginPage)
-            ~props:{redirect_url; csrf_token; error= Some error} )
+            ~props:
+              { redirect_url
+              ; csrf_token
+              ; error= Some error
+              ; two_fa_required= false
+              ; pending_2fa_token= None
+              ; two_fa_methods= None } )
