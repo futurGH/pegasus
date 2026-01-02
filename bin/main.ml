@@ -48,6 +48,21 @@ let handlers =
   ; ( post
     , "/account/security/totp/disable"
     , Api.Account_.Security.Totp.disable_handler )
+  ; ( get
+    , "/account/security/keys"
+    , Api.Account_.Security.Security_key.list_handler )
+  ; ( post
+    , "/account/security/keys/setup"
+    , Api.Account_.Security.Security_key.setup_handler )
+  ; ( post
+    , "/account/security/keys/:id/verify"
+    , Api.Account_.Security.Security_key.verify_handler )
+  ; ( post
+    , "/account/security/keys/:id/resync"
+    , Api.Account_.Security.Security_key.resync_handler )
+  ; ( delete
+    , "/account/security/keys/:id"
+    , Api.Account_.Security.Security_key.delete_handler )
   ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
   ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
   ; (get, "/account/identity", Api.Account_.Identity.get_handler)

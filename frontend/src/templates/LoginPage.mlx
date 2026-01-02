@@ -6,7 +6,8 @@ open React
 type two_fa_methods =
   { totp: bool [@default false]
   ; email: bool [@default false]
-  ; backup_code: bool [@default false] }
+  ; backup_code: bool [@default false]
+  ; security_key: bool [@default false] }
 [@@deriving json]
 
 type props =
@@ -107,13 +108,18 @@ let[@react.component] make
         (* 2FA verification step *)
         let methods =
           Option.value
-            ~default:{totp= false; email= false; backup_code= false}
+            ~default:
+              { totp= false
+              ; email= false
+              ; backup_code= false
+              ; security_key= false }
             two_fa_methods
         in
         <div>
           <span className="w-full text-balance text-mist-100">
-            ( if methods.totp then
-                string "Enter the 6-digit code from your authenticator app."
+            ( if methods.totp || methods.security_key then
+                string
+                  "Enter the code from your authenticator app or security key."
               else if methods.email then
                 string "Enter the verification code sent to your email."
               else string "Enter your verification code." )

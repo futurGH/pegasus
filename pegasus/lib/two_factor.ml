@@ -3,10 +3,13 @@ let pending_session_expiry_ms = 5 * 60 * 1000
 let email_code_expiry_ms = 10 * 60 * 1000
 
 module Types = struct
-  type two_factor_method = TOTP | Email | BackupCode
+  type two_factor_method = TOTP | Email | BackupCode | SecurityKey
 
   type two_factor_status =
-    {totp_enabled: bool; email_2fa_enabled: bool; backup_codes_remaining: int}
+    { totp_enabled: bool
+    ; email_2fa_enabled: bool
+    ; backup_codes_remaining: int
+    ; security_keys_count: int }
   [@@deriving yojson {strict= false}]
 
   type pending_2fa =
@@ -20,7 +23,7 @@ module Types = struct
     ; created_at: int }
 
   type available_methods = Frontend.LoginPage.two_fa_methods =
-    {totp: bool; email: bool; backup_code: bool}
+    {totp: bool; email: bool; backup_code: bool; security_key: bool}
   [@@deriving yojson {strict= false}]
 end
 
@@ -85,7 +88,10 @@ module Queries = struct
     [%rapper
       get_opt
         {sql| SELECT CASE
-                  WHEN totp_verified_at IS NOT NULL OR email_2fa_enabled = 1 THEN 1
+                  WHEN totp_verified_at IS NOT NULL
+                    OR email_2fa_enabled = 1
+                    OR EXISTS(SELECT 1 FROM security_keys WHERE security_keys.did = actors.did AND security_keys.verified_at IS NOT NULL)
+                  THEN 1
                   ELSE 0
               END AS @int{result}
               FROM actors
@@ -114,10 +120,14 @@ let get_status ~did db =
         Lwt.return_false
   in
   let%lwt backup_count = Totp.Backup_codes.get_remaining_count ~did db in
+  let%lwt security_keys_count =
+    Security_key.count_verified_security_keys ~did db
+  in
   Lwt.return
     { totp_enabled
     ; email_2fa_enabled= email_2fa
-    ; backup_codes_remaining= backup_count }
+    ; backup_codes_remaining= backup_count
+    ; security_keys_count }
 
 let get_available_methods ~did db =
   let%lwt totp_enabled = Totp.is_enabled ~did db in
@@ -129,7 +139,12 @@ let get_available_methods ~did db =
         Lwt.return_false
   in
   let%lwt has_backup = Totp.Backup_codes.has_backup_codes ~did db in
-  Lwt.return {totp= totp_enabled; email= email_2fa; backup_code= has_backup}
+  let%lwt has_security_key = Security_key.has_security_keys ~did db in
+  Lwt.return
+    { totp= totp_enabled
+    ; email= email_2fa
+    ; backup_code= has_backup
+    ; security_key= has_security_key }
 
 (* create a pending 2FA session after password verification *)
 let create_pending_session ~did db =

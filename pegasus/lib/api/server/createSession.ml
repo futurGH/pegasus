@@ -27,17 +27,22 @@ let complete_login (actor : Data_store.Types.actor) =
 
 let verify_2fa_code ~(actor : Data_store.Types.actor) ~code db =
   let did = actor.did in
-  let%lwt totp_valid = Totp.verify_login_code ~did ~code db in
-  if totp_valid then Lwt.return_ok ()
+  let%lwt sk_valid = Security_key.verify_login ~did ~code db in
+  if sk_valid then Lwt.return_ok ()
   else
-    let%lwt backup_valid = Totp.Backup_codes.verify_and_consume ~did ~code db in
-    if backup_valid then Lwt.return_ok ()
+    let%lwt totp_valid = Totp.verify_login_code ~did ~code db in
+    if totp_valid then Lwt.return_ok ()
     else
-      match%lwt Two_factor.verify_email_code_by_did ~did ~code db with
-      | Ok _ ->
-          Lwt.return_ok ()
-      | Error e ->
-          Lwt.return_error e
+      let%lwt backup_valid =
+        Totp.Backup_codes.verify_and_consume ~did ~code db
+      in
+      if backup_valid then Lwt.return_ok ()
+      else
+        match%lwt Two_factor.verify_email_code_by_did ~did ~code db with
+        | Ok _ ->
+            Lwt.return_ok ()
+        | Error e ->
+            Lwt.return_error e
 
 let handler =
   Xrpc.handler (fun {req; db; _} ->
@@ -59,8 +64,8 @@ let handler =
         Lwt_result.catch @@ fun () -> Data_store.try_login ~id ~password db
       with
       | Ok (Some actor) -> (
-          let is_2fa_enabled =
-            actor.email_2fa_enabled = 1 || actor.totp_verified_at <> None
+          let%lwt is_2fa_enabled =
+            Two_factor.is_2fa_enabled ~did:actor.did db
           in
           if not is_2fa_enabled then complete_login actor
           else
@@ -78,7 +83,10 @@ let handler =
                 in
                 (* only send code to email if email is the only method *)
                 let%lwt () =
-                  if methods.email && not methods.totp then
+                  if
+                    methods.email && (not methods.totp)
+                    && not methods.security_key
+                  then
                     let%lwt session_token =
                       Two_factor.create_pending_session ~did:actor.did db
                     in

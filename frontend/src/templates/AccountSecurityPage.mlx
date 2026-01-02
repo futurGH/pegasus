@@ -14,11 +14,20 @@ type passkey_display =
   ; last_used_at: int option [@default None] }
 [@@deriving json]
 
+type security_key_display =
+  { id: int
+  ; name: string
+  ; created_at: int
+  ; last_used_at: int option [@default None]
+  ; verified: bool [@default false] }
+[@@deriving json]
+
 type props =
   { current_user: actor
   ; logged_in_users: actor list
   ; csrf_token: string
   ; passkeys: passkey_display list [@default []]
+  ; security_keys: security_key_display list [@default []]
   ; totp_enabled: bool [@default false]
   ; email_2fa_enabled: bool [@default false]
   ; backup_codes_remaining: int [@default 10]
@@ -32,6 +41,7 @@ let[@react.component] make
        ; logged_in_users
        ; csrf_token
        ; passkeys
+       ; security_keys
        ; totp_enabled
        ; email_2fa_enabled
        ; backup_codes_remaining
@@ -45,6 +55,26 @@ let[@react.component] make
   let passkeyError, setPasskeyError = useState (fun () -> None) in
   let webauthnSupported, setWebauthnSupported = useState (fun () -> false) in
   let currentWebAuthnOptions = useRef None in
+  (* security key state *)
+  let securityKeysState, setSecurityKeysState =
+    useState (fun () -> security_keys)
+  in
+  let settingUpSecurityKey, setSettingUpSecurityKey =
+    useState (fun () -> false)
+  in
+  let securityKeyName, setSecurityKeyName = useState (fun () -> "") in
+  let securityKeyId, setSecurityKeyId = useState (fun () -> None) in
+  let securityKeyUri, setSecurityKeyUri = useState (fun () -> "") in
+  let securityKeySecret, setSecurityKeySecret = useState (fun () -> "") in
+  let securityKeyCode, setSecurityKeyCode = useState (fun () -> "") in
+  let securityKeyError, setSecurityKeyError = useState (fun () -> None) in
+  let securityKeyLoading, setSecurityKeyLoading = useState (fun () -> false) in
+  (* resync state *)
+  let resyncingKeyId, setResyncingKeyId = useState (fun () -> None) in
+  let resyncCode1, setResyncCode1 = useState (fun () -> "") in
+  let resyncCode2, setResyncCode2 = useState (fun () -> "") in
+  let resyncError, setResyncError = useState (fun () -> None) in
+  let resyncLoading, setResyncLoading = useState (fun () -> false) in
   (* TOTP state *)
   let totpEnabled, setTotpEnabled = useState (fun () -> totp_enabled) in
   let settingUpTotp, setSettingUpTotp = useState (fun () -> false) in
@@ -635,6 +665,517 @@ let[@react.component] make
                       </Aria.Modal>
                     </Aria.ModalOverlay>
                   </Aria.DialogTrigger>
+                </div>]
+          </ClientOnly>
+        </div>
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-mana-200 mb-2">
+            (string "security keys")
+          </h3>
+          <p className="text-mist-100 text-sm mb-4">
+            (string
+               "Use a hardware security key for two-factor authentication via \
+                a 6-digit OATH-HOTP code." )
+          </p>
+          <ClientOnly
+            fallback=(<div>
+                        <p className="text-mist-80 text-sm mb-4">
+                          (string "Loading security keys...")
+                        </p>
+                      </div>)>
+            [%browser_only
+              fun () ->
+                let module Aria = ReactAria in
+                let formatDate ts =
+                  let d = Js.Date.fromFloat (Float.of_int ts) in
+                  Js.Date.toLocaleDateString d
+                in
+                let startSetup () =
+                  setSecurityKeyLoading (fun _ -> true) ;
+                  setSecurityKeyError (fun _ -> None) ;
+                  let body =
+                    Js.Json.object_
+                      (Js.Dict.fromArray
+                         [| ( "name"
+                            , Js.Json.string
+                                ( if securityKeyName = "" then "Security Key"
+                                  else securityKeyName ) ) |] )
+                  in
+                  let _ =
+                    Fetch.fetchWithInit "/account/security/keys/setup"
+                      (Fetch.RequestInit.make ~method_:Post
+                         ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                         ~headers:
+                           (Fetch.HeadersInit.makeWithArray
+                              [|("Content-Type", "application/json")|] )
+                         () )
+                    |> Js.Promise.then_ (fun response ->
+                        setSecurityKeyLoading (fun _ -> false) ;
+                        if Fetch.Response.ok response then
+                          Fetch.Response.json response
+                          |> Js.Promise.then_ (fun json ->
+                              let id =
+                                Js.Dict.unsafeGet (Obj.magic json) "id"
+                                |> Obj.magic
+                              in
+                              let uri =
+                                Js.Dict.unsafeGet (Obj.magic json) "uri"
+                                |> Js.Json.decodeString
+                                |> Option.value ~default:""
+                              in
+                              let secret =
+                                Js.Dict.unsafeGet (Obj.magic json) "secret"
+                                |> Js.Json.decodeString
+                                |> Option.value ~default:""
+                              in
+                              setSecurityKeyId (fun _ -> Some id) ;
+                              setSecurityKeyUri (fun _ -> uri) ;
+                              setSecurityKeySecret (fun _ -> secret) ;
+                              setSettingUpSecurityKey (fun _ -> true) ;
+                              Js.Promise.resolve () )
+                        else begin
+                          Fetch.Response.json response
+                          |> Js.Promise.then_ (fun json ->
+                              let msg =
+                                Js.Dict.get (Obj.magic json) "message"
+                                |> Option.map Js.Json.decodeString
+                                |> Option.join
+                                |> Option.value ~default:"Setup failed"
+                              in
+                              setSecurityKeyError (fun _ -> Some msg) ;
+                              Js.Promise.resolve () )
+                          |> Js.Promise.catch (fun _ ->
+                              setSecurityKeyError (fun _ ->
+                                  Some "Setup failed" ) ;
+                              Js.Promise.resolve () )
+                        end )
+                    |> Js.Promise.catch (fun _ ->
+                        setSecurityKeyLoading (fun _ -> false) ;
+                        setSecurityKeyError (fun _ -> Some "Setup failed") ;
+                        Js.Promise.resolve () )
+                  in
+                  ()
+                in
+                let verifySetup () =
+                  match securityKeyId with
+                  | None ->
+                      ()
+                  | Some id ->
+                      setSecurityKeyLoading (fun _ -> true) ;
+                      setSecurityKeyError (fun _ -> None) ;
+                      let body =
+                        Js.Json.object_
+                          (Js.Dict.fromArray
+                             [|("code", Js.Json.string securityKeyCode)|] )
+                      in
+                      let _ =
+                        Fetch.fetchWithInit
+                          ( "/account/security/keys/" ^ string_of_int id
+                          ^ "/verify" )
+                          (Fetch.RequestInit.make ~method_:Post
+                             ~body:
+                               (Fetch.BodyInit.make (Js.Json.stringify body))
+                             ~headers:
+                               (Fetch.HeadersInit.makeWithArray
+                                  [|("Content-Type", "application/json")|] )
+                             () )
+                        |> Js.Promise.then_ (fun response ->
+                            setSecurityKeyLoading (fun _ -> false) ;
+                            if Fetch.Response.ok response then begin
+                              let new_key : security_key_display =
+                                { id
+                                ; name=
+                                    ( if securityKeyName = "" then "Security Key"
+                                      else securityKeyName )
+                                ; created_at= (Obj.magic (Js.Date.now ()) : int)
+                                ; last_used_at= None
+                                ; verified= true }
+                              in
+                              setSecurityKeysState (fun keys ->
+                                  new_key :: keys ) ;
+                              setSettingUpSecurityKey (fun _ -> false) ;
+                              setSecurityKeyName (fun _ -> "") ;
+                              setSecurityKeyCode (fun _ -> "") ;
+                              setSecurityKeyUri (fun _ -> "") ;
+                              setSecurityKeySecret (fun _ -> "") ;
+                              setSecurityKeyId (fun _ -> None) ;
+                              Js.Promise.resolve ()
+                            end
+                            else begin
+                              Fetch.Response.json response
+                              |> Js.Promise.then_ (fun json ->
+                                  let msg =
+                                    Js.Dict.get (Obj.magic json) "message"
+                                    |> Option.map Js.Json.decodeString
+                                    |> Option.join
+                                    |> Option.value
+                                         ~default:"Verification failed"
+                                  in
+                                  setSecurityKeyError (fun _ -> Some msg) ;
+                                  Js.Promise.resolve () )
+                              |> Js.Promise.catch (fun _ ->
+                                  setSecurityKeyError (fun _ ->
+                                      Some "Verification failed" ) ;
+                                  Js.Promise.resolve () )
+                            end )
+                        |> Js.Promise.catch (fun _ ->
+                            setSecurityKeyLoading (fun _ -> false) ;
+                            setSecurityKeyError (fun _ ->
+                                Some "Verification failed" ) ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                in
+                let cancelSetup () =
+                  match securityKeyId with
+                  | Some id ->
+                      let _ =
+                        Fetch.fetchWithInit
+                          ("/account/security/keys/" ^ string_of_int id)
+                          (Fetch.RequestInit.make ~method_:Delete ())
+                      in
+                      ()
+                  | None ->
+                      () ;
+                      setSettingUpSecurityKey (fun _ -> false) ;
+                      setSecurityKeyName (fun _ -> "") ;
+                      setSecurityKeyCode (fun _ -> "") ;
+                      setSecurityKeyUri (fun _ -> "") ;
+                      setSecurityKeySecret (fun _ -> "") ;
+                      setSecurityKeyId (fun _ -> None) ;
+                      setSecurityKeyError (fun _ -> None)
+                in
+                let deleteKey id =
+                  let _ =
+                    Fetch.fetchWithInit
+                      ("/account/security/keys/" ^ string_of_int id)
+                      (Fetch.RequestInit.make ~method_:Delete ())
+                    |> Js.Promise.then_ (fun response ->
+                        if Fetch.Response.ok response then
+                          setSecurityKeysState (fun keys ->
+                              List.filter
+                                (fun sk -> (sk : security_key_display).id <> id)
+                                keys ) ;
+                        Js.Promise.resolve () )
+                  in
+                  ()
+                in
+                let startResync id =
+                  setResyncingKeyId (fun _ -> Some id) ;
+                  setResyncCode1 (fun _ -> "") ;
+                  setResyncCode2 (fun _ -> "") ;
+                  setResyncError (fun _ -> None)
+                in
+                let cancelResync () =
+                  setResyncingKeyId (fun _ -> None) ;
+                  setResyncCode1 (fun _ -> "") ;
+                  setResyncCode2 (fun _ -> "") ;
+                  setResyncError (fun _ -> None)
+                in
+                let doResync () =
+                  match resyncingKeyId with
+                  | None ->
+                      ()
+                  | Some id ->
+                      setResyncLoading (fun _ -> true) ;
+                      setResyncError (fun _ -> None) ;
+                      let body =
+                        Js.Json.object_
+                          (Js.Dict.fromArray
+                             [| ("code1", Js.Json.string resyncCode1)
+                              ; ("code2", Js.Json.string resyncCode2) |] )
+                      in
+                      let _ =
+                        Fetch.fetchWithInit
+                          ( "/account/security/keys/" ^ string_of_int id
+                          ^ "/resync" )
+                          (Fetch.RequestInit.make ~method_:Post
+                             ~body:
+                               (Fetch.BodyInit.make (Js.Json.stringify body))
+                             ~headers:
+                               (Fetch.HeadersInit.makeWithArray
+                                  [|("Content-Type", "application/json")|] )
+                             () )
+                        |> Js.Promise.then_ (fun response ->
+                            setResyncLoading (fun _ -> false) ;
+                            if Fetch.Response.ok response then begin
+                              setResyncingKeyId (fun _ -> None) ;
+                              setResyncCode1 (fun _ -> "") ;
+                              setResyncCode2 (fun _ -> "") ;
+                              Js.Promise.resolve ()
+                            end
+                            else begin
+                              Fetch.Response.json response
+                              |> Js.Promise.then_ (fun json ->
+                                  let msg =
+                                    Js.Dict.get (Obj.magic json) "message"
+                                    |> Option.map Js.Json.decodeString
+                                    |> Option.join
+                                    |> Option.value ~default:"Resync failed"
+                                  in
+                                  setResyncError (fun _ -> Some msg) ;
+                                  Js.Promise.resolve () )
+                              |> Js.Promise.catch (fun _ ->
+                                  setResyncError (fun _ ->
+                                      Some "Resync failed" ) ;
+                                  Js.Promise.resolve () )
+                            end )
+                        |> Js.Promise.catch (fun _ ->
+                            setResyncLoading (fun _ -> false) ;
+                            setResyncError (fun _ -> Some "Resync failed") ;
+                            Js.Promise.resolve () )
+                      in
+                      ()
+                in
+                <div>
+                  ( if List.length securityKeysState = 0 then
+                      <p className="text-mist-80 text-sm mb-4">
+                        (string "You haven't registered any security keys yet.")
+                      </p>
+                    else
+                      <ul className="mb-4 space-y-2">
+                        ( List.map
+                            (fun (sk : security_key_display) ->
+                              <li
+                                key=(string_of_int sk.id)
+                                className="flex items-center p-3 outline-1 \
+                                           outline-mana-40/50 rounded-lg">
+                                <span
+                                  className="font-medium text-mist-100 truncate">
+                                  (string sk.name)
+                                </span>
+                                ( if not sk.verified then
+                                    <span
+                                      className="text-xs text-phoenix-100 ml-2">
+                                      (string "(pending)")
+                                    </span>
+                                  else null )
+                                <span
+                                  className="text-sm text-mist-80 ml-2 \
+                                             min-w-fit">
+                                  (string
+                                     ({js|⸱ |js} ^ formatDate sk.created_at) )
+                                </span>
+                                ( if sk.verified then
+                                    <button
+                                      type_="button"
+                                      className="p-1 ml-2 text-mana-100 \
+                                                 hover:text-mana-200 \
+                                                 cursor-pointer text-sm"
+                                      onClick=(fun _ -> startResync sk.id)>
+                                      (string "resync")
+                                    </button>
+                                  else null )
+                                <button
+                                  type_="button"
+                                  className="p-1 ml-auto text-phoenix-100 \
+                                             hover:text-phoenix-200 \
+                                             cursor-pointer"
+                                  onClick=(fun _ -> deleteKey sk.id)>
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </li> )
+                            securityKeysState
+                        |> Array.of_list |> React.array )
+                      </ul> )
+                  <Aria.DialogTrigger
+                    isOpen=(Option.is_some resyncingKeyId)
+                    onOpenChange=(fun o -> if not o then cancelResync ())>
+                    <Aria.ModalOverlay
+                      className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                 items-center justify-center"
+                      isDismissable=true>
+                      <Aria.Modal
+                        className="bg-feather-100 border border-mist-60 \
+                                   rounded-xl px-6 pb-6 pt-5 w-full max-w-sm \
+                                   mx-4 shadow-xl">
+                        <Aria.Dialog className="outline-none">
+                          <Aria.Heading
+                            slot="title"
+                            className="text-lg font-serif text-mana-200 mb-2">
+                            (string "resync security key")
+                          </Aria.Heading>
+                          <div className="flex flex-col gap-y-3">
+                            <p className="text-mist-100 text-sm">
+                              (string
+                                 "Enter two consecutive codes from your \
+                                  security key to resynchronize the counter:" )
+                            </p>
+                            <Input
+                              name="resync_code1"
+                              label="First code"
+                              placeholder="123456"
+                              showIndicator=false
+                              inputMode="numeric"
+                              value=resyncCode1
+                              onChange=(fun e ->
+                                           setResyncCode1 (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                            <Input
+                              name="resync_code2"
+                              label="Second code"
+                              placeholder="234567"
+                              showIndicator=false
+                              inputMode="numeric"
+                              value=resyncCode2
+                              onChange=(fun e ->
+                                           setResyncCode2 (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                            ( match resyncError with
+                            | Some err ->
+                                <span
+                                  className="inline-flex items-center \
+                                             text-phoenix-100 text-sm">
+                                  <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                  (string err)
+                                </span>
+                            | None ->
+                                null )
+                            <div className="flex flex-row gap-x-3 mt-2">
+                              <Button
+                                type_="button"
+                                disabled=resyncLoading
+                                onClick=(fun _ -> doResync ())>
+                                (string
+                                   ( if resyncLoading then "resyncing..."
+                                     else "resync" ) )
+                              </Button>
+                              <Button
+                                kind=`Tertiary
+                                type_="button"
+                                onClick=(fun _ -> cancelResync ())>
+                                (string "cancel")
+                              </Button>
+                            </div>
+                          </div>
+                        </Aria.Dialog>
+                      </Aria.Modal>
+                    </Aria.ModalOverlay>
+                  </Aria.DialogTrigger>
+                  ( if List.length securityKeysState < 5 then
+                      <div className="flex flex-col gap-y-2">
+                        <div className="flex flex-row gap-x-3">
+                          <div className="flex-1">
+                            <Input
+                              name="security_key_name"
+                              label="Security key name"
+                              placeholder="My Security Key"
+                              showIndicator=false
+                              value=securityKeyName
+                              onChange=(fun e ->
+                                           setSecurityKeyName (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                          </div>
+                          <div className="self-end min-w-32">
+                            <Button
+                              type_="button"
+                              disabled=securityKeyLoading
+                              onClick=(fun _ -> startSetup ())>
+                              (string
+                                 ( if securityKeyLoading then "setting up..."
+                                   else "add" ) )
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    else
+                      <p className="text-sm text-mist-80">
+                        (string "Maximum 5 security keys registered.")
+                      </p> )
+                  <Aria.DialogTrigger
+                    isOpen=settingUpSecurityKey
+                    onOpenChange=(fun o -> if not o then cancelSetup ())>
+                    <Aria.ModalOverlay
+                      className="fixed inset-0 z-50 bg-mist-80/80 flex \
+                                 items-center justify-center"
+                      isDismissable=true>
+                      <Aria.Modal
+                        className="bg-feather-100 border border-mist-60 \
+                                   rounded-xl px-6 pb-6 pt-5 w-full max-w-sm \
+                                   mx-4 shadow-xl">
+                        <Aria.Dialog className="outline-none">
+                          <Aria.Heading
+                            slot="title"
+                            className="text-lg font-serif text-mana-200 mb-2">
+                            (string "set up security key")
+                          </Aria.Heading>
+                          <div className="flex flex-col gap-y-3">
+                            <p className="text-mist-100 text-sm">
+                              (string
+                                 "Scan this QR code with your security key \
+                                  app, or enter the secret manually, then \
+                                  enter the generated code:" )
+                            </p>
+                            <div className="flex justify-center p-4 rounded-lg">
+                              <QRCode.SVG
+                                value=securityKeyUri
+                                size=200
+                                title="Security Key QR code"
+                                bgColor="#c8cfd2"
+                                fgColor="#312b4d"
+                              />
+                            </div>
+                            <div
+                              className="p-3 bg-mist-20 rounded-lg text-center \
+                                         font-mono text-mana-200 text-sm \
+                                         break-all">
+                              (string securityKeySecret)
+                            </div>
+                            <Input
+                              name="security_key_code"
+                              label="Verification code"
+                              placeholder="123456"
+                              showIndicator=false
+                              inputMode="numeric"
+                              value=securityKeyCode
+                              onChange=(fun e ->
+                                           setSecurityKeyCode (fun _ ->
+                                               (Event.Form.target e)##value ) )
+                            />
+                            ( match securityKeyError with
+                            | Some err ->
+                                <span
+                                  className="inline-flex items-center \
+                                             text-phoenix-100 text-sm">
+                                  <CircleAlertIcon className="w-4 h-4 mr-2" />
+                                  (string err)
+                                </span>
+                            | None ->
+                                null )
+                            <div className="flex flex-row gap-x-3 mt-2">
+                              <Button
+                                type_="button"
+                                disabled=securityKeyLoading
+                                onClick=(fun _ -> verifySetup ())>
+                                (string
+                                   ( if securityKeyLoading then "verifying..."
+                                     else "verify" ) )
+                              </Button>
+                              <Button
+                                kind=`Tertiary
+                                type_="button"
+                                onClick=(fun _ -> cancelSetup ())>
+                                (string "cancel")
+                              </Button>
+                            </div>
+                          </div>
+                        </Aria.Dialog>
+                      </Aria.Modal>
+                    </Aria.ModalOverlay>
+                  </Aria.DialogTrigger>
+                  ( match securityKeyError with
+                  | Some err ->
+                      <span
+                        className="inline-flex items-center text-phoenix-100 \
+                                   text-sm mt-2">
+                        <CircleAlertIcon className="w-4 h-4 mr-2" />
+                        (string err)
+                      </span>
+                  | None ->
+                      null )
                 </div>]
           </ClientOnly>
         </div>

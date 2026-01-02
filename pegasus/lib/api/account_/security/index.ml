@@ -38,6 +38,18 @@ let get_handler =
                   : Frontend.AccountSecurityPage.passkey_display ) )
               passkeys
           in
+          let%lwt security_keys = Security_key.get_keys_for_user ~did ctx.db in
+          let security_key_list =
+            List.map
+              (fun (sk : Security_key.Types.security_key) ->
+                ( { id= sk.id
+                  ; name= sk.name
+                  ; created_at= sk.created_at
+                  ; last_used_at= sk.last_used_at
+                  ; verified= Option.is_some sk.verified_at }
+                  : Frontend.AccountSecurityPage.security_key_display ) )
+              security_keys
+          in
           let%lwt two_fa_status = Two_factor.get_status ~did ctx.db in
           let error = Dream.query ctx.req "error" in
           let success = Dream.query ctx.req "success" in
@@ -48,6 +60,7 @@ let get_handler =
               ; logged_in_users
               ; csrf_token
               ; passkeys= passkey_list
+              ; security_keys= security_key_list
               ; totp_enabled= two_fa_status.totp_enabled
               ; email_2fa_enabled= two_fa_status.email_2fa_enabled
               ; backup_codes_remaining= two_fa_status.backup_codes_remaining
