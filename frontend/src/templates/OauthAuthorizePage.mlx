@@ -211,7 +211,7 @@ module ScopesTable = struct
               <MailIcon className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-serif text-mana-100">(string "Email")</div>
+              <div className="font-serif text-mana-100">(string "email")</div>
               <div className="text-sm text-mist-100">
                 (string
                    ( if level = `Manage then
@@ -233,12 +233,12 @@ module ScopesTable = struct
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-serif text-mana-100">
-                (string "Identity")
+                (string "identity")
               </div>
               <div className="text-sm text-mist-100">
                 (string
                    ( if level = `Full then
-                       "Manage your full identity including your @handle"
+                       "Manage your full identity including your @handle, with the ability to move your account to another PDS or permanently lock you out of your account."
                      else "Change your @handle" ) )
               </div>
             </div>
@@ -254,7 +254,7 @@ module ScopesTable = struct
               <BlueskyIcon className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-serif text-mana-100">(string "Bluesky")</div>
+              <div className="font-serif text-mana-100">(string "bluesky")</div>
               <div className="text-sm text-mist-100">
                 (string "Manage your profile, posts, likes and follows")
               </div>
@@ -270,7 +270,7 @@ module ScopesTable = struct
               <MessageIcon className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-serif text-mana-100">(string "Chat")</div>
+              <div className="font-serif text-mana-100">(string "chat")</div>
               <div className="text-sm text-mist-100">
                 (string "Read and send messages")
               </div>
@@ -300,7 +300,7 @@ module ScopesTable = struct
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-serif text-mana-100">
-                (string "Repository")
+                (string "repository")
               </div>
               <div className="text-sm text-mist-100">
                 (string
@@ -404,7 +404,7 @@ module ScopesTable = struct
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-serif text-mana-100">
-                (string "Authenticate")
+                (string "authenticate")
               </div>
               <div className="text-sm text-mist-100">
                 (string
@@ -490,7 +490,7 @@ module ScopesTable = struct
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-serif text-mana-100">
-                (string "File Upload")
+                (string "file upload")
               </div>
               <div className="text-sm text-mist-100">
                 (string
@@ -510,7 +510,7 @@ module ScopesTable = struct
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-serif text-mana-100">
-                (string "Other Permissions")
+                (string "other permissions")
               </div>
               <div className="text-sm text-mist-100">
                 ( unknowns
