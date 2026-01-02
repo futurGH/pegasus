@@ -215,11 +215,18 @@ let[@react.component] make
                   (string "create an account")
                 </a>
               </li>
-              <li>
+              <li className="mb-1">
                 <a
                   className="text-mana-100 underline hover:text-mana-200"
                   href="/account/migrate">
                   (string "migrate from another PDS")
+                </a>
+              </li>
+              <li>
+                <a
+                  className="text-mana-100 underline hover:text-mana-200"
+                  href="/account/password-reset">
+                  (string "reset your password")
                 </a>
               </li>
             </ul>

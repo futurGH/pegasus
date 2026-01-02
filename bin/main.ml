@@ -78,6 +78,8 @@ let handlers =
   ; (post, "/account/migrate", Api.Account_.Migrate.post_handler)
   ; (post, "/account/switch", Api.Account_.Login.switch_account_handler)
   ; (get, "/account/logout", Api.Account_.Logout.handler)
+  ; (get, "/account/reset", Api.Account_.Password_reset.get_handler)
+  ; (post, "/account/reset", Api.Account_.Password_reset.post_handler)
   ; (* passkey management (authed) *)
     (get, "/account/passkeys", Api.Account_.Passkeys.list_handler)
   ; ( get

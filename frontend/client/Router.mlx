@@ -16,6 +16,7 @@ let routes =
   [ {path= "/"; template= (module RootPage)}
   ; {path= "/oauth/authorize"; template= (module OauthAuthorizePage)}
   ; {path= "/account/login"; template= (module LoginPage)}
+  ; {path= "/account/reset"; template= (module PasswordResetPage)}
   ; {path= "/account/signup"; template= (module SignupPage)}
   ; {path= "/account/migrate"; template= (module MigratePage)}
   ; {path= "/account"; template= (module AccountPage)}
