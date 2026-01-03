@@ -189,15 +189,15 @@ let generate_secret () =
   let () = Mirage_crypto_rng_unix.use_default () in
   Bytes.of_string (Mirage_crypto_rng_unix.getrandom secret_length)
 
-let make_provisioning_uri ~secret ~email ~issuer =
+let make_provisioning_uri ~secret ~did ~issuer =
   let secret_b32 =
     Multibase.Base32.encode_exn ~pad:false (Bytes.to_string secret)
   in
-  let encoded_email = Uri.pct_encode email in
+  let encoded_did = Uri.pct_encode did in
   let encoded_issuer = Uri.pct_encode issuer in
   Printf.sprintf
     "otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=%d&period=%d"
-    encoded_issuer encoded_email secret_b32 encoded_issuer code_digits time_step
+    encoded_issuer encoded_did secret_b32 encoded_issuer code_digits time_step
 
 let hotp ~(secret : bytes) ~(counter : int64) : string =
   (* convert counter to 8-byte big-endian *)

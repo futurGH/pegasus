@@ -24,7 +24,7 @@ let setup_handler =
             let secret = Totp.generate_secret () in
             let issuer = "Pegasus PDS (" ^ Env.hostname ^ ")" in
             let uri =
-              Totp.make_provisioning_uri ~secret ~email:actor.email ~issuer
+              Totp.make_provisioning_uri ~secret ~did:actor.did ~issuer
             in
             let secret_b32 =
               Multibase.Base32.encode_exn ~pad:false (Bytes.to_string secret)
