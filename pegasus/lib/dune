@@ -18,6 +18,7 @@
   ipld
   kleidos
   letters
+  lexicons
   lwt
   lwt.unix
   mist
