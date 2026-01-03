@@ -29,12 +29,12 @@ module Main = struct
   }
 [@@deriving yojson {strict= false}]
 
-  type result =
+  type result_ =
   | ResultAvailable of result_available
   | ResultUnavailable of result_unavailable
   | Unknown of Yojson.Safe.t
 
-let result_of_yojson json =
+let result__of_yojson json =
   let open Yojson.Safe.Util in
   try
     match json |> member "$type" |> to_string with
@@ -49,7 +49,7 @@ let result_of_yojson json =
     | _ -> Ok (Unknown json)
   with _ -> Error "failed to parse union"
 
-let result_to_yojson = function
+let result__to_yojson = function
   | ResultAvailable v ->
       (match result_available_to_yojson v with
        | `Assoc fields -> `Assoc (("$type", `String "com.atproto.temp.checkHandleAvailability#resultAvailable") :: fields)
@@ -63,7 +63,7 @@ let result_to_yojson = function
 type output =
   {
     handle: string;
-    result: result;
+    result_: result_ [@key "result"];
   }
 [@@deriving yojson {strict= false}]
 

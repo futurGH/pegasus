@@ -7,11 +7,11 @@ module Main = struct
   type params =
   {
     did: string;
-    cids: string list;
+    cids: string list [@of_yojson Hermes_util.query_string_list_of_yojson] [@to_yojson Hermes_util.query_string_list_to_yojson];
   }
 [@@deriving yojson {strict= false}]
 
-  (** Raw bytes output with content type *)
+  (** raw bytes output with content type *)
   type output = string * string
 
   let call

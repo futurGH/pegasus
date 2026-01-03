@@ -6,7 +6,7 @@ module Main = struct
 
   type params =
   {
-    list: string;
+    list_: string [@key "list"];
     limit: int option [@default None];
     cursor: string option [@default None];
   }
@@ -20,11 +20,11 @@ module Main = struct
 [@@deriving yojson {strict= false}]
 
   let call
-      ~list
+      ~list_
       ?limit
       ?cursor
       (client : Hermes.client) : output Lwt.t =
-    let params : params = {list; limit; cursor} in
+    let params : params = {list_; limit; cursor} in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
 

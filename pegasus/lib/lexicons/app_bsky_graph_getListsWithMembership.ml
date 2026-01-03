@@ -2,7 +2,7 @@
 
 type list_with_membership =
   {
-    list: App_bsky_graph_defs.list_view;
+    list_: App_bsky_graph_defs.list_view [@key "list"];
     list_item: App_bsky_graph_defs.list_item_view option [@key "listItem"] [@default None];
   }
 [@@deriving yojson {strict= false}]
@@ -16,7 +16,7 @@ module Main = struct
     actor: string;
     limit: int option [@default None];
     cursor: string option [@default None];
-    purposes: string list option [@default None];
+    purposes: string list option [@default None] [@of_yojson Hermes_util.query_string_list_option_of_yojson] [@to_yojson Hermes_util.query_string_list_option_to_yojson];
   }
 [@@deriving yojson {strict= false}]
 

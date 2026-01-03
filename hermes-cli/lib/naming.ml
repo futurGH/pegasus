@@ -55,7 +55,19 @@ let reserved_keywords =
   ; "virtual"
   ; "when"
   ; "while"
-  ; "with" ]
+  ; "with"
+  ; "option"
+  ; "list"
+  ; "result"
+  ; "unit"
+  ; "int"
+  ; "string"
+  ; "bool"
+  ; "float"
+  ; "char"
+  ; "bytes"
+  ; "array"
+  ; "ref" ]
 
 let is_reserved name = List.mem (String.lowercase_ascii name) reserved_keywords
 

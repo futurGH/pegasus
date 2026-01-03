@@ -3,7 +3,7 @@
 type status_attr =
   {
     applied: bool;
-    ref: string option [@default None];
+    ref_: string option [@key "ref"] [@default None];
   }
 [@@deriving yojson {strict= false}]
 

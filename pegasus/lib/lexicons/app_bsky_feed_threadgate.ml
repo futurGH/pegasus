@@ -2,7 +2,7 @@
 
 type list_rule =
   {
-    list: string;
+    list_: string [@key "list"];
   }
 [@@deriving yojson {strict= false}]
 

@@ -1,5 +1,70 @@
 open Hermes_cli
 
+let dune_file =
+  Printf.sprintf
+    {|(library
+ (name %s)
+ (libraries hermes yojson lwt)
+ (preprocess (pps ppx_deriving_yojson)))|}
+
+let util_file =
+  Printf.sprintf
+    {|let query_string_list_of_yojson = function
+  | `List l ->
+      Ok (List.filter_map (function `String s -> Some s | _ -> None) l)
+  | `String s ->
+      Ok [s]
+  | `Null ->
+      Ok []
+  | _ ->
+      Error "expected string or string list"
+
+let query_string_list_to_yojson l = `List (List.map (fun s -> `String s) l)
+
+let query_int_list_of_yojson = function
+  | `List l ->
+      Ok (List.filter_map (function `Int i -> Some i | _ -> None) l)
+  | `Int i ->
+      Ok [i]
+  | `Null ->
+      Ok []
+  | _ ->
+      Error "expected int or int list"
+
+let query_int_list_to_yojson l = `List (List.map (fun i -> `Int i) l)
+
+let query_string_list_option_of_yojson = function
+  | `List l ->
+      Ok (Some (List.filter_map (function `String s -> Some s | _ -> None) l))
+  | `String s ->
+      Ok (Some [s])
+  | `Null ->
+      Ok None
+  | _ ->
+      Error "expected string or string list"
+
+let query_string_list_option_to_yojson = function
+  | Some l ->
+      `List (List.map (fun s -> `String s) l)
+  | None ->
+      `Null
+
+let query_int_list_option_of_yojson = function
+  | `List l ->
+      Ok (Some (List.filter_map (function `Int i -> Some i | _ -> None) l))
+  | `Int i ->
+      Ok (Some [i])
+  | `Null ->
+      Ok None
+  | _ ->
+      Error "expected int or int list"
+
+let query_int_list_option_to_yojson = function
+  | Some l ->
+      `List (List.map (fun i -> `Int i) l)
+  | None ->
+      `Null|}
+
 (* recursively find all json files in a path (file or directory) *)
 let find_json_files path =
   let rec aux acc p =
@@ -108,12 +173,17 @@ let generate ~inputs ~output_dir ~module_name =
   (* generate dune file *)
   let dune_path = Filename.concat output_dir "dune" in
   let oc = open_out dune_path in
-  Printf.fprintf oc "(library\n" ;
-  Printf.fprintf oc " (name %s)\n" (String.lowercase_ascii module_name) ;
-  Printf.fprintf oc " (libraries hermes yojson lwt)\n" ;
-  Printf.fprintf oc " (preprocess (pps ppx_deriving_yojson)))\n" ;
+  Out_channel.output_string oc (dune_file (String.lowercase_ascii module_name)) ;
   close_out oc ;
   Printf.printf "Generated dune file\n" ;
+  (* generate util file *)
+  let util_path = Filename.concat output_dir "hermes_util.ml" in
+  let oc = open_out util_path in
+  Printf.fprintf oc "(* %s - generated from atproto lexicons *)\n\n" module_name ;
+  (* export each lexicon as a module alias *)
+  Out_channel.output_string oc util_file ;
+  close_out oc ;
+  Printf.printf "Generated util file: %s\n" util_path ;
   Printf.printf "Done! Generated %d modules\n" (List.length lexicons)
 
 let inputs =

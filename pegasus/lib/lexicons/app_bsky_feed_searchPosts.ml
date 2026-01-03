@@ -15,7 +15,7 @@ module Main = struct
     lang: string option [@default None];
     domain: string option [@default None];
     url: string option [@default None];
-    tag: string list option [@default None];
+    tag: string list option [@default None] [@of_yojson Hermes_util.query_string_list_option_of_yojson] [@to_yojson Hermes_util.query_string_list_option_to_yojson];
     limit: int option [@default None];
     cursor: string option [@default None];
   }

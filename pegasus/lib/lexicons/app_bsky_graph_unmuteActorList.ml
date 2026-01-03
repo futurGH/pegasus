@@ -9,7 +9,7 @@ module Main = struct
 
   type input =
     {
-      list: string;
+      list_: string [@key "list"];
     }
   [@@deriving yojson {strict= false}]
 
@@ -17,10 +17,10 @@ module Main = struct
   let output_of_yojson _ = Ok ()
 
   let call
-      ~list
+      ~list_
       (client : Hermes.client) : output Lwt.t =
     let params = () in
-    let input = Some ({list} |> input_to_yojson) in
+    let input = Some ({list_} |> input_to_yojson) in
     Hermes.procedure client nsid (params_to_yojson params) input output_of_yojson
 end
 

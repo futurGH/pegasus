@@ -20,7 +20,7 @@ module Main = struct
 
   type params =
   {
-    reasons: string list option [@default None];
+    reasons: string list option [@default None] [@of_yojson Hermes_util.query_string_list_option_of_yojson] [@to_yojson Hermes_util.query_string_list_option_to_yojson];
     limit: int option [@default None];
     priority: bool option [@default None];
     cursor: string option [@default None];

@@ -14,14 +14,14 @@ type chat_preference =
 type filterable_preference =
   {
     include_: string [@key "include"];
-    list: bool;
+    list_: bool [@key "list"];
     push: bool;
   }
 [@@deriving yojson {strict= false}]
 
 type preference =
   {
-    list: bool;
+    list_: bool [@key "list"];
     push: bool;
   }
 [@@deriving yojson {strict= false}]

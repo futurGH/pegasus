@@ -56,7 +56,7 @@ type list_viewer_state =
   }
 [@@deriving yojson {strict= false}]
 
-(** String type with known values *)
+(** string type with known values *)
 type list_purpose = string
 let list_purpose_of_yojson = function
   | `String s -> Ok s
@@ -390,7 +390,7 @@ type hidden_posts_pref =
   }
 [@@deriving yojson {strict= false}]
 
-(** String type with known values *)
+(** string type with known values *)
 type muted_word_target = string
 let muted_word_target_of_yojson = function
   | `String s -> Ok s
@@ -1411,7 +1411,7 @@ type starter_pack_view =
     cid: string;
     record: Yojson.Safe.t;
     creator: profile_view_basic;
-    list: list_view_basic option [@default None];
+    list_: list_view_basic option [@key "list"] [@default None];
     list_items_sample: list_item_view list option [@key "listItemsSample"] [@default None];
     feeds: generator_view list option [@default None];
     joined_week_count: int option [@key "joinedWeekCount"] [@default None];

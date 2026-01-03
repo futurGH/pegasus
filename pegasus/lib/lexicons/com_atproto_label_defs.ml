@@ -45,7 +45,7 @@ type label_value_definition =
   }
 [@@deriving yojson {strict= false}]
 
-(** String type with known values *)
+(** string type with known values *)
 type label_value = string
 let label_value_of_yojson = function
   | `String s -> Ok s

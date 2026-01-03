@@ -3,7 +3,7 @@
 type main =
   {
     subject: string;
-    list: string;
+    list_: string [@key "list"];
     created_at: string [@key "createdAt"];
   }
 [@@deriving yojson {strict= false}]

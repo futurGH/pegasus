@@ -297,6 +297,30 @@ let is_json_encoding encoding = encoding = "application/json" || encoding = ""
 let is_bytes_encoding encoding =
   encoding <> "" && encoding <> "application/json"
 
+(* generate custom of_yojson/to_yojson attrs for query param array types *)
+let gen_query_array_yojson_attrs ~is_required (type_def : type_def) =
+  match type_def with
+  | Array {items; _} -> (
+    match items with
+    | String _ ->
+        if is_required then
+          ( " [@of_yojson Hermes_util.query_string_list_of_yojson]"
+          , " [@to_yojson Hermes_util.query_string_list_to_yojson]" )
+        else
+          ( " [@of_yojson Hermes_util.query_string_list_option_of_yojson]"
+          , " [@to_yojson Hermes_util.query_string_list_option_to_yojson]" )
+    | Integer _ ->
+        if is_required then
+          ( " [@of_yojson Hermes_util.query_int_list_of_yojson]"
+          , " [@to_yojson Hermes_util.query_int_list_to_yojson]" )
+        else
+          ( " [@of_yojson Hermes_util.query_int_list_option_of_yojson]"
+          , " [@to_yojson Hermes_util.query_int_list_option_to_yojson]" )
+    | _ ->
+        ("", "") )
+  | _ ->
+      ("", "")
+
 (* generate params type for query/procedure *)
 let gen_params_type nsid out (spec : params_spec) =
   let required = Option.value spec.required ~default:[] in
@@ -310,9 +334,12 @@ let gen_params_type nsid out (spec : params_spec) =
       let type_str = if is_required then base_type else base_type ^ " option" in
       let key_attr = Naming.key_annotation prop_name ocaml_name in
       let default_attr = if is_required then "" else " [@default None]" in
+      let of_yojson_attr, to_yojson_attr =
+        gen_query_array_yojson_attrs ~is_required prop.type_def
+      in
       emitln out
-        (Printf.sprintf "    %s: %s%s%s;" ocaml_name type_str key_attr
-           default_attr ) )
+        (Printf.sprintf "    %s: %s%s%s%s%s;" ocaml_name type_str key_attr
+           default_attr of_yojson_attr to_yojson_attr ) )
     spec.properties ;
   emitln out "  }" ;
   emitln out "[@@deriving yojson {strict= false}]" ;

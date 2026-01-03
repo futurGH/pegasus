@@ -6,7 +6,7 @@ module Main = struct
 
   type params =
   {
-    actors: string list;
+    actors: string list [@of_yojson Hermes_util.query_string_list_of_yojson] [@to_yojson Hermes_util.query_string_list_to_yojson];
   }
 [@@deriving yojson {strict= false}]
 

@@ -9,7 +9,7 @@ module Main = struct
     actor: string;
     limit: int option [@default None];
     cursor: string option [@default None];
-    purposes: string list option [@default None];
+    purposes: string list option [@default None] [@of_yojson Hermes_util.query_string_list_option_of_yojson] [@to_yojson Hermes_util.query_string_list_option_to_yojson];
   }
 [@@deriving yojson {strict= false}]
 

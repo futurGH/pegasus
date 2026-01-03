@@ -1,13 +1,13 @@
 (* generated from app.bsky.ageassurance.defs *)
 
-(** String type with known values: The access level granted based on Age Assurance data we've processed. *)
+(** string type with known values: The access level granted based on Age Assurance data we've processed. *)
 type access = string
 let access_of_yojson = function
   | `String s -> Ok s
   | _ -> Error "access: expected string"
 let access_to_yojson s = `String s
 
-(** String type with known values: The status of the Age Assurance process. *)
+(** string type with known values: The status of the Age Assurance process. *)
 type status = string
 let status_of_yojson = function
   | `String s -> Ok s
