@@ -21,12 +21,16 @@ jobs:
 
             - uses: actions/checkout@v6
 
+            - name: Set short rev
+              id: rev_parse
+              run: echo "git_rev=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
             - name: Build and push
               uses: docker/build-push-action@v6
               with:
                   push: true
                   tags: ghcr.io/futurgh/pegasus:${{ github.sha }}-amd64
-                  build-args: GIT_REV=${{ github.sha }}
+                  build-args: GIT_REV=${{ steps.rev_parse.outputs.git_rev }}
                   cache-from: type=gha,scope=amd64
                   cache-to: type=gha,scope=amd64,mode=max
 
@@ -45,12 +49,16 @@ jobs:
 
             - uses: actions/checkout@v6
 
+            - name: Set short rev
+              id: rev_parse
+              run: echo "git_rev=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
             - name: Build and push
               uses: docker/build-push-action@v6
               with:
                   push: true
                   tags: ghcr.io/futurgh/pegasus:${{ github.sha }}-arm64
-                  build-args: GIT_REV=${{ github.sha }}
+                  build-args: GIT_REV=${{ steps.rev_parse.outputs.git_rev }}
                   cache-from: type=gha,scope=arm64
                   cache-to: type=gha,scope=arm64,mode=max
 
