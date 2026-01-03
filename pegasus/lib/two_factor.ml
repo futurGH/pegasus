@@ -242,3 +242,47 @@ let is_email_2fa_enabled ~did db =
       Lwt.return_true
   | _ ->
       Lwt.return_false
+
+let verify_code ~did ~code db =
+  let%lwt sk_valid = Security_key.verify_login ~did ~code db in
+  if sk_valid then Lwt.return_ok ()
+  else
+    let%lwt totp_valid = Totp.verify_login_code ~did ~code db in
+    if totp_valid then Lwt.return_ok ()
+    else
+      let%lwt backup_valid =
+        Totp.Backup_codes.verify_and_consume ~did ~code db
+      in
+      if backup_valid then Lwt.return_ok ()
+      else
+        match%lwt verify_email_code_by_did ~did ~code db with
+        | Ok _ ->
+            Lwt.return_ok ()
+        | Error e ->
+            Lwt.return_error e
+
+let verify_code_with_pending_session ~(pending : Types.pending_2fa) ~code db =
+  let did = pending.did in
+  let%lwt sk_valid = Security_key.verify_login ~did ~code db in
+  if sk_valid then Lwt.return_ok did
+  else
+    let%lwt totp_valid = Totp.verify_login_code ~did ~code db in
+    if totp_valid then Lwt.return_ok did
+    else
+      let%lwt backup_valid =
+        Totp.Backup_codes.verify_and_consume ~did ~code db
+      in
+      if backup_valid then Lwt.return_ok did
+      else
+        match%lwt _verify_email_code ~code ~session:pending with
+        | Ok did ->
+            Lwt.return_ok did
+        | Error e ->
+            Lwt.return_error e
+
+let verify_code_by_session_token ~session_token ~code db =
+  match%lwt get_pending_session ~session_token db with
+  | None ->
+      Lwt.return_error "Invalid or expired session"
+  | Some pending ->
+      verify_code_with_pending_session ~pending ~code db

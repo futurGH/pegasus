@@ -79,26 +79,9 @@ let post_handler =
                     ; pending_2fa_token= None
                     ; two_fa_methods= None }
             | Some pending -> (
-                (* try TOTP, then backup code, then email *)
                 let%lwt result =
-                  let%lwt totp_result =
-                    Two_factor.verify_totp_code ~session_token:token ~code
-                      ctx.db
-                  in
-                  match totp_result with
-                  | Ok did ->
-                      Lwt.return_ok did
-                  | Error _ -> (
-                      let%lwt backup_result =
-                        Two_factor.verify_backup_code ~session_token:token ~code
-                          ctx.db
-                      in
-                      match backup_result with
-                      | Ok did ->
-                          Lwt.return_ok did
-                      | Error _ ->
-                          Two_factor.verify_email_code_by_token
-                            ~session_token:token ~code ctx.db )
+                  Two_factor.verify_code_with_pending_session ~pending ~code
+                    ctx.db
                 in
                 match result with
                 | Ok did ->

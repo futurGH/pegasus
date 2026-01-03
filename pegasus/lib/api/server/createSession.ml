@@ -25,25 +25,6 @@ let complete_login (actor : Data_store.Types.actor) =
        ; status
        ; did_doc= None }
 
-let verify_2fa_code ~(actor : Data_store.Types.actor) ~code db =
-  let did = actor.did in
-  let%lwt sk_valid = Security_key.verify_login ~did ~code db in
-  if sk_valid then Lwt.return_ok ()
-  else
-    let%lwt totp_valid = Totp.verify_login_code ~did ~code db in
-    if totp_valid then Lwt.return_ok ()
-    else
-      let%lwt backup_valid =
-        Totp.Backup_codes.verify_and_consume ~did ~code db
-      in
-      if backup_valid then Lwt.return_ok ()
-      else
-        match%lwt Two_factor.verify_email_code_by_did ~did ~code db with
-        | Ok _ ->
-            Lwt.return_ok ()
-        | Error e ->
-            Lwt.return_error e
-
 let handler =
   Xrpc.handler (fun {req; db; _} ->
       let%lwt {identifier; password; auth_factor_token; _} =
@@ -71,7 +52,7 @@ let handler =
           else
             match auth_factor_token with
             | Some token when token <> "" -> (
-              match%lwt verify_2fa_code ~actor ~code:token db with
+              match%lwt Two_factor.verify_code ~did:actor.did ~code:token db with
               | Ok () ->
                   complete_login actor
               | Error msg ->
