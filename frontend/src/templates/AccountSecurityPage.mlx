@@ -827,23 +827,25 @@ let[@react.component] make
                       ()
                 in
                 let cancelSetup () =
-                  match securityKeyId with
-                  | Some id ->
-                      let _ =
-                        Fetch.fetchWithInit
-                          ("/account/security/keys/" ^ string_of_int id)
-                          (Fetch.RequestInit.make ~method_:Delete ())
-                      in
-                      ()
-                  | None ->
-                      () ;
-                      setSettingUpSecurityKey (fun _ -> false) ;
-                      setSecurityKeyName (fun _ -> "") ;
-                      setSecurityKeyCode (fun _ -> "") ;
-                      setSecurityKeyUri (fun _ -> "") ;
-                      setSecurityKeySecret (fun _ -> "") ;
-                      setSecurityKeyId (fun _ -> None) ;
-                      setSecurityKeyError (fun _ -> None)
+                  let () =
+                    match securityKeyId with
+                    | Some id ->
+                        let _ =
+                          Fetch.fetchWithInit
+                            ("/account/security/keys/" ^ string_of_int id)
+                            (Fetch.RequestInit.make ~method_:Delete ())
+                        in
+                        ()
+                    | None ->
+                        ()
+                  in
+                  setSettingUpSecurityKey (fun _ -> false) ;
+                  setSecurityKeyName (fun _ -> "") ;
+                  setSecurityKeyCode (fun _ -> "") ;
+                  setSecurityKeyUri (fun _ -> "") ;
+                  setSecurityKeySecret (fun _ -> "") ;
+                  setSecurityKeyId (fun _ -> None) ;
+                  setSecurityKeyError (fun _ -> None)
                 in
                 let deleteKey id =
                   let _ =
