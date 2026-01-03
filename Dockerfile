@@ -1,7 +1,7 @@
 FROM ocaml/opam:debian-12-ocaml-5.2 AS build
 
 ARG NODE_VERSION=v24.11.1
-ARG OPAM_VERSION=2.5.0
+ARG OPAM_VERSION=2.5
 ARG DUNE_VERSION=3.20.2
 
 ARG GIT_REV
@@ -9,9 +9,7 @@ ENV GIT_REV=$GIT_REV
 
 USER root
 RUN apt-get update && apt-get install -y cmake git libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config
-
-RUN bash -c "curl -fsSL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh | bash -s -- --version $OPAM_VERSION"
-RUN bash -c "chown opam:opam /bin/opam"
+RUN ln -nsf /usr/bin/opam-${OPAM_VERSION} /usr/bin/opam
 USER opam
 
 WORKDIR /home/opam/pegasus
