@@ -31,72 +31,70 @@ let[@react.component] make
   let passkeyError, setPasskeyError = useState (fun () -> None) in
   let passkeyLoading, setPasskeyLoading = useState (fun () -> false) in
   let currentOptions = useRef (None : Js.Json.t option) in
+  let%browser_only triggerPasskeyAutofill () =
+    WebAuthn.browserSupportsWebAuthnAutofill ()
+    |> Js.Promise.then_ (fun supported ->
+        if supported then begin
+          Fetch.fetch "/account/passkeys/login/options"
+          |> Js.Promise.then_ (fun response ->
+              if Fetch.Response.ok response then Fetch.Response.json response
+              else Js.Exn.raiseError "Failed to get options" )
+          |> Js.Promise.then_ (fun options ->
+              currentOptions.current <- Some options ;
+              WebAuthn.startAuthentication
+                {optionsJSON= options; useBrowserAutofill= true} )
+          |> Js.Promise.then_ (fun credential ->
+              setPasskeyLoading (fun _ -> true) ;
+              let challenge =
+                match currentOptions.current with
+                | Some opts ->
+                    Js.Dict.unsafeGet (Obj.magic opts) "challenge"
+                | None ->
+                    Js.Json.string ""
+              in
+              let body =
+                Js.Json.object_
+                  (Js.Dict.fromArray
+                     [| ( "response"
+                        , Js.Json.string (Js.Json.stringify credential) )
+                      ; ("challenge", challenge) |] )
+              in
+              Fetch.fetchWithInit
+                ( "/account/passkeys/login/verify?redirect_url="
+                ^ Js.Global.encodeURIComponent redirect_url )
+                (Fetch.RequestInit.make ~method_:Post
+                   ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
+                   ~headers:
+                     (Fetch.HeadersInit.makeWithArray
+                        [|("Content-Type", "application/json")|] )
+                   () ) )
+          |> Js.Promise.then_ (fun response ->
+              setPasskeyLoading (fun _ -> false) ;
+              if Fetch.Response.ok response then
+                Fetch.Response.json response
+                |> Js.Promise.then_ (fun json ->
+                    let redirect =
+                      Js.Dict.unsafeGet (Obj.magic json) "redirect"
+                      |> Js.Json.decodeString
+                      |> Option.value ~default:"/account"
+                    in
+                    Webapi.Dom.(Window.setLocation window redirect) ;
+                    Js.Promise.resolve () )
+              else begin
+                setPasskeyError (fun _ -> Some "Passkey authentication failed") ;
+                Js.Promise.resolve ()
+              end )
+          |> Js.Promise.catch (fun _ ->
+              (* user cancelled or error *)
+              Js.Promise.resolve () )
+        end
+        else Js.Promise.resolve () )
+  in
   let _ =
     React.useEffect0 (fun () ->
         (* only start passkey autofill if not in 2FA step *)
         if not two_fa_required then
-          let _ =
-            WebAuthn.browserSupportsWebAuthnAutofill ()
-            |> Js.Promise.then_ (fun supported ->
-                if supported then begin
-                  Fetch.fetch "/account/passkeys/login/options"
-                  |> Js.Promise.then_ (fun response ->
-                      if Fetch.Response.ok response then
-                        Fetch.Response.json response
-                      else Js.Exn.raiseError "Failed to get options" )
-                  |> Js.Promise.then_ (fun options ->
-                      currentOptions.current <- Some options ;
-                      WebAuthn.startAuthentication
-                        {optionsJSON= options; useBrowserAutofill= true} )
-                  |> Js.Promise.then_ (fun credential ->
-                      setPasskeyLoading (fun _ -> true) ;
-                      let challenge =
-                        match currentOptions.current with
-                        | Some opts ->
-                            Js.Dict.unsafeGet (Obj.magic opts) "challenge"
-                        | None ->
-                            Js.Json.string ""
-                      in
-                      let body =
-                        Js.Json.object_
-                          (Js.Dict.fromArray
-                             [| ( "response"
-                                , Js.Json.string (Js.Json.stringify credential)
-                                )
-                              ; ("challenge", challenge) |] )
-                      in
-                      Fetch.fetchWithInit
-                        ( "/account/passkeys/login/verify?redirect_url="
-                        ^ Js.Global.encodeURIComponent redirect_url )
-                        (Fetch.RequestInit.make ~method_:Post
-                           ~body:(Fetch.BodyInit.make (Js.Json.stringify body))
-                           ~headers:
-                             (Fetch.HeadersInit.makeWithArray
-                                [|("Content-Type", "application/json")|] )
-                           () ) )
-                  |> Js.Promise.then_ (fun response ->
-                      setPasskeyLoading (fun _ -> false) ;
-                      if Fetch.Response.ok response then
-                        Fetch.Response.json response
-                        |> Js.Promise.then_ (fun json ->
-                            let redirect =
-                              Js.Dict.unsafeGet (Obj.magic json) "redirect"
-                              |> Js.Json.decodeString
-                              |> Option.value ~default:"/account"
-                            in
-                            Webapi.Dom.(Window.setLocation window redirect) ;
-                            Js.Promise.resolve () )
-                      else begin
-                        setPasskeyError (fun _ ->
-                            Some "Passkey authentication failed" ) ;
-                        Js.Promise.resolve ()
-                      end )
-                  |> Js.Promise.catch (fun _ ->
-                      (* user cancelled or error *)
-                      Js.Promise.resolve () )
-                end
-                else Js.Promise.resolve () )
-          in
+          let _ = triggerPasskeyAutofill () in
           None
         else None )
   in
@@ -203,6 +201,14 @@ let[@react.component] make
                 null )
             <Button type_="submit" formMethod="post" className="mt-2">
               (string (if passkeyLoading then "signing in..." else "sign in"))
+            </Button>
+            <Button
+              kind=`Tertiary
+              className="text-sm"
+              onClick=(fun _ ->
+                        let _ = triggerPasskeyAutofill () in
+                        () )>
+              (string "sign in with passkey")
             </Button>
           </form>
           <span className="text-sm text-mist-100">
