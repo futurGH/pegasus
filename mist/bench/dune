@@ -1,0 +1,7 @@
+(executable
+ (name bench_mst)
+ (public_name bench_mst)
+ (package mist)
+ (libraries ipld mist lwt lwt_ppx unix)
+ (preprocess
+  (pps lwt_ppx)))

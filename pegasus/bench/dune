@@ -1,0 +1,7 @@
+(executable
+ (name bench_repository)
+ (public_name bench_repository)
+ (package pegasus)
+ (libraries ipld mist pegasus lwt lwt_ppx unix)
+ (preprocess
+  (pps lwt_ppx)))
