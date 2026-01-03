@@ -1,4 +1,5 @@
-open Lexicons.App_bsky_actor_getPreferences.Main
+open Lexicons.App.Bsky.Actor.Defs
+open Lexicons.App.Bsky.Actor.GetPreferences.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {db; auth; _} ->
@@ -10,7 +11,6 @@ let handler =
         | None ->
             Errors.internal_error ()
       in
-      preferences |> Lexicons.App_bsky_actor_defs.preferences_of_yojson
-      |> Result.get_ok
+      preferences |> preferences_of_yojson |> Result.get_ok
       |> (fun p -> {preferences= p})
       |> output_to_yojson |> Yojson.Safe.to_string |> Dream.json )

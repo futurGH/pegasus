@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_createInviteCode.Main
+open Lexicons.Com.Atproto.Server.CreateInviteCode.Main
 
 let generate_code did =
   String.sub

@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_confirmEmail.Main
+open Lexicons.Com.Atproto.Server.ConfirmEmail.Main
 
 type confirm_error = InvalidToken | ExpiredToken | EmailMismatch
 

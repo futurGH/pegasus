@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_identity_updateHandle.Main
+open Lexicons.Com.Atproto.Identity.UpdateHandle.Main
 
 type update_handle_error =
   | InvalidFormat of string

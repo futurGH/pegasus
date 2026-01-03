@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_resetPassword.Main
+open Lexicons.Com.Atproto.Server.ResetPassword.Main
 
 type reset_password_error = InvalidToken | ExpiredToken
 

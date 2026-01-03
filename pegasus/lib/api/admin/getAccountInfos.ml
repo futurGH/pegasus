@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_admin_getAccountInfos.Main
+open Lexicons.Com.Atproto.Admin.GetAccountInfos.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->

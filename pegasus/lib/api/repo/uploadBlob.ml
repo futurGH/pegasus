@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_repo_uploadBlob.Main
+open Lexicons.Com.Atproto.Repo.UploadBlob.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->

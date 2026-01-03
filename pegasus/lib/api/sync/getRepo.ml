@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_sync_getRepo.Main
+open Lexicons.Com.Atproto.Sync.GetRepo.Main
 
 let handler =
   Xrpc.handler (fun ctx ->

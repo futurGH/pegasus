@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_repo_createRecord.Main
+open Lexicons.Com.Atproto.Repo.CreateRecord.Main
 
 let calc_key_did ctx = Some (Auth.get_authed_did_exn ctx.Xrpc.auth)
 

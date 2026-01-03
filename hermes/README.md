@@ -39,7 +39,7 @@ let () = Lwt_main.run begin
   let client = Hermes.make_client ~service:"https://public.api.bsky.app" () in
 
   (* Make a query using the generated module *)
-  let* profile = App_bsky_actor_getProfile.call ~actor:"bsky.app" client in
+  let* profile = App.Bsky.Actor.Profile.call ~actor:"bsky.app" client in
   print_endline profile.display_name;
   Lwt.return_unit
 end

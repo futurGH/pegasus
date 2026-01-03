@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_admin_deleteAccount.Main
+open Lexicons.Com.Atproto.Admin.DeleteAccount.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->

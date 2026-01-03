@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_updateEmail.Main
+open Lexicons.Com.Atproto.Server.UpdateEmail.Main
 
 type update_email_error =
   | TokenRequired

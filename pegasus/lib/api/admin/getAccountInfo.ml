@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_admin_getAccountInfo.Main
+open Lexicons.Com.Atproto.Admin.GetAccountInfo.Main
 
 let actor_to_account_view (actor : Data_store.Types.actor) : output =
   { did= actor.did

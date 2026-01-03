@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_admin_sendEmail.Main
+open Lexicons.Com.Atproto.Admin.SendEmail.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->

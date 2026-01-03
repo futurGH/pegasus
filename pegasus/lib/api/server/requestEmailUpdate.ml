@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_requestEmailUpdate.Main
+open Lexicons.Com.Atproto.Server.RequestEmailUpdate.Main
 
 let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
   let token_required =

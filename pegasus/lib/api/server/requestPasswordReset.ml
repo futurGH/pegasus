@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_requestPasswordReset.Main
+open Lexicons.Com.Atproto.Server.RequestPasswordReset.Main
 
 let request_password_reset (actor : Data_store.Types.actor) db =
   let did = actor.did in

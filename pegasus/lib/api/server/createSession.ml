@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_createSession.Main
+open Lexicons.Com.Atproto.Server.CreateSession.Main
 
 let consume_points = 1
 

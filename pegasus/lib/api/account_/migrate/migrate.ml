@@ -74,7 +74,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
     match%lwt Remote.fetch_preferences old_client with
     | Ok prefs ->
         Data_store.put_preferences ~did
-          ~prefs:(App_bsky_actor_defs.preferences_to_yojson prefs)
+          ~prefs:(App.Bsky.Actor.Defs.preferences_to_yojson prefs)
           ctx.db
     | _ ->
         Lwt.return_unit

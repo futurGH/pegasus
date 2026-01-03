@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_repo_listRecords
+open Lexicons.Com.Atproto.Repo.ListRecords
 open Main
 
 let handler =

@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_refreshSession.Main
+open Lexicons.Com.Atproto.Server.RefreshSession.Main
 
 let handler =
   Xrpc.handler ~auth:Refresh (fun {db; auth; _} ->

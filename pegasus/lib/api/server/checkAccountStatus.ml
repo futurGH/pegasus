@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_checkAccountStatus.Main
+open Lexicons.Com.Atproto.Server.CheckAccountStatus.Main
 
 let get_account_status did =
   let%lwt {db= us; commit; actor; _} = Repository.load did in

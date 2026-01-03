@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_admin_updateAccountEmail.Main
+open Lexicons.Com.Atproto.Admin.UpdateAccountEmail.Main
 
 let handler =
   Xrpc.handler ~auth:Admin (fun {req; db; _} ->

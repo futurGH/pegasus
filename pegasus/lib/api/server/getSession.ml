@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_getSession.Main
+open Lexicons.Com.Atproto.Server.GetSession.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {db; auth; _} ->

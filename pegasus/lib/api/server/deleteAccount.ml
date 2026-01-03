@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_deleteAccount.Main
+open Lexicons.Com.Atproto.Server.DeleteAccount.Main
 
 let rec rm_rf path =
   if Sys.is_directory path then (

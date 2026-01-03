@@ -77,6 +77,33 @@ let find_json_files path =
   in
   aux [] path
 
+let generate_index lexicons =
+  let nsids = List.map (fun lexicon -> lexicon.Lexicon_types.id) lexicons in
+  let trie = Naming.group_nsids_by_prefix nsids in
+  let rec build_index (trie : Naming.trie) index indent =
+    match trie with
+    | Node children ->
+        List.fold_left
+          (fun acc (key, child) ->
+            match (child : Naming.trie) with
+            | Module nsid ->
+                let module_name = Naming.flat_module_name_of_nsid nsid in
+                acc ^ indent
+                ^ Printf.sprintf "module %s = %s\n"
+                    (String.capitalize_ascii key)
+                    module_name
+            | Node _ ->
+                acc ^ indent
+                ^ Printf.sprintf "module %s = struct\n"
+                    (String.capitalize_ascii key)
+                ^ build_index child index (indent ^ "  ")
+                ^ indent ^ "end\n" )
+          index children
+    | _ ->
+        failwith "build_index called with invalid trie"
+  in
+  build_index (Node trie) "" ""
+
 (* generate module structure from lexicons *)
 let generate ~inputs ~output_dir ~module_name =
   (* create output directory *)
@@ -163,11 +190,7 @@ let generate ~inputs ~output_dir ~module_name =
   let oc = open_out index_path in
   Printf.fprintf oc "(* %s - generated from atproto lexicons *)\n\n" module_name ;
   (* export each lexicon as a module alias *)
-  List.iter
-    (fun doc ->
-      let flat_module = Naming.flat_module_name_of_nsid doc.Lexicon_types.id in
-      Printf.fprintf oc "module %s = %s\n" flat_module flat_module )
-    lexicons ;
+  Out_channel.output_string oc (generate_index lexicons) ;
   close_out oc ;
   Printf.printf "Generated index: %s\n" index_path ;
   (* generate dune file *)

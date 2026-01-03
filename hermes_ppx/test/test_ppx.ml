@@ -18,15 +18,6 @@ let test_nsid_to_module_path_single () =
   let result = Hermes_ppx.nsid_to_module_path "test" in
   check (list string) "single segment" ["Test"] result
 
-let test_build_module_path_single () =
-  let result = Hermes_ppx.build_module_path ~loc ["App"] in
-  check string "single module" "App" (Ppxlib.Longident.name result.txt)
-
-let test_build_module_path_nested () =
-  let result = Hermes_ppx.build_module_path ~loc ["App"; "Bsky"; "Graph"] in
-  check string "nested module" "App.Bsky.Graph"
-    (Ppxlib.Longident.name result.txt)
-
 let test_build_call_expr () =
   let result = Hermes_ppx.build_call_expr ~loc "app.bsky.graph.getProfile" in
   let expected_str = "App.Bsky.Graph.GetProfile.call" in
@@ -72,8 +63,6 @@ let unit_tests =
     , `Quick
     , test_nsid_to_module_path_camel_case )
   ; ("nsid_to_module_path single", `Quick, test_nsid_to_module_path_single)
-  ; ("build_module_path single", `Quick, test_build_module_path_single)
-  ; ("build_module_path nested", `Quick, test_build_module_path_nested)
   ; ("build_call_expr", `Quick, test_build_call_expr) ]
 
 let expansion_tests =

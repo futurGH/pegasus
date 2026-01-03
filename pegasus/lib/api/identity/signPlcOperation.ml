@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_identity_signPlcOperation.Main
+open Lexicons.Com.Atproto.Identity.SignPlcOperation.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun {req; auth; db; _} ->

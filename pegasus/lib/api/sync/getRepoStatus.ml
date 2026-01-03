@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_sync_getRepoStatus.Main
+open Lexicons.Com.Atproto.Sync.GetRepoStatus.Main
 
 let handler =
   Xrpc.handler (fun ctx ->

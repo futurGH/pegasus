@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_createAccount.Main
+open Lexicons.Com.Atproto.Server.CreateAccount.Main
 
 type create_account_error =
   | InviteCodeRequired

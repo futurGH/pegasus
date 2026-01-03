@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_deactivateAccount.Main
+open Lexicons.Com.Atproto.Server.DeactivateAccount.Main
 
 let deactivate_account ~did db =
   let%lwt () = Data_store.deactivate_actor did db in

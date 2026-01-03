@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_sync_listRepos
+open Lexicons.Com.Atproto.Sync.ListRepos
 open Main
 
 let handler =

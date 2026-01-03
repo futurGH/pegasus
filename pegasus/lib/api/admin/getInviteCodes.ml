@@ -1,6 +1,6 @@
-open Lexicons.Com_atproto_admin_getInviteCodes.Main
+open Lexicons.Com.Atproto.Admin.GetInviteCodes.Main
 
-type invite_code = Lexicons.Com_atproto_server_defs.invite_code
+type invite_code = Lexicons.Com.Atproto.Server.Defs.invite_code
 [@@deriving yojson {strict= false}]
 
 let handler =

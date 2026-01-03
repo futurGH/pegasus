@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_reserveSigningKey.Main
+open Lexicons.Com.Atproto.Server.ReserveSigningKey.Main
 
 let handler =
   Xrpc.handler (fun {req; db; _} ->

@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_repo_listMissingBlobs
+open Lexicons.Com.Atproto.Repo.ListMissingBlobs
 open Main
 
 let handler =

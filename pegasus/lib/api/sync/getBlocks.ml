@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_sync_getBlocks.Main
+open Lexicons.Com.Atproto.Sync.GetBlocks.Main
 
 let handler =
   Xrpc.handler (fun ctx ->

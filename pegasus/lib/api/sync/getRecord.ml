@@ -1,5 +1,5 @@
 module Mst = Mist.Mst.Make (User_store)
-open Lexicons.Com_atproto_sync_getRecord.Main
+open Lexicons.Com.Atproto.Sync.GetRecord.Main
 
 let handler =
   Xrpc.handler (fun ctx ->

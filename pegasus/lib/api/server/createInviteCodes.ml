@@ -1,4 +1,4 @@
-open Lexicons.Com_atproto_server_createInviteCodes
+open Lexicons.Com.Atproto.Server.CreateInviteCodes
 open Main
 
 let handler =

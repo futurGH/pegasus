@@ -245,3 +245,42 @@ let shared_type_name nsid def_name =
         "unknown"
   in
   type_name (context ^ "_" ^ def_name)
+
+(** group NSIDs by shared prefixes
+    e.g. ["app.bsky.actor.defs"; "app.bsky.actor.getProfile"; "app.bsky.graph.defs"; "com.atproto.sync.getRepo"]
+    -> [("app", Node [("bsky", Node [("actor", Node [("defs", Module "app.bsky.actor.defs"); ("getProfile", Module "app.bsky.actor.getProfile")]);
+                          ("graph", Node [("defs", Module "app.bsky.graph.defs")])])]);
+        ("com", [("atproto", [("sync", [("getRepo", Module "com.atproto.sync.getRepo")])])])] *)
+type trie = Node of (string * trie) list | Module of string
+
+let group_nsids_by_prefix nsids =
+  let rec insert_segments trie nsid segments =
+    match segments with
+    | [] ->
+        Module nsid
+    | seg :: rest ->
+        let children =
+          match trie with Node node_children -> node_children | Module _ -> []
+        in
+        let existing =
+          match List.assoc_opt seg children with
+          | Some child ->
+              child
+          | None ->
+              Node []
+        in
+        let updated = insert_segments existing nsid rest in
+        let trie_without_seg = List.remove_assoc seg children in
+        Node ((seg, updated) :: trie_without_seg)
+  in
+  match
+    List.fold_left
+      (fun trie nsid ->
+        let segments = String.split_on_char '.' nsid in
+        insert_segments trie nsid segments )
+      (Node []) nsids
+  with
+  | Node result ->
+      result
+  | _ ->
+      failwith "unexpected trie type"
