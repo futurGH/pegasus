@@ -98,6 +98,18 @@ let rate_limit_response (status : Rate_limiter.status) =
 
 let extract_nsid req = (Dream.path [@warning "-3"]) req |> List.rev |> List.hd
 
+let add_dpop_nonce_if_needed res =
+  let nonce = Oauth.Dpop.next_nonce () in
+  Dream.set_header res "DPoP-Nonce" nonce ;
+  let expose_header = Dream.header res "Access-Control-Expose-Headers" in
+  Dream.add_header res "Access-Control-Expose-Headers"
+    ( match expose_header with
+    | Some headers when not @@ Util.str_contains ~affix:"DPoP-Nonce" headers ->
+        headers ^ ", DPoP-Nonce"
+    | _ ->
+        "DPoP-Nonce" ) ;
+  res
+
 let handler ?(auth : Auth.Verifiers.t = Any)
     ?(rate_limits : rate_limit_rule list = []) (hdlr : handler) (init : init) =
   let open Errors in
@@ -117,12 +129,21 @@ let handler ?(auth : Auth.Verifiers.t = Any)
           with Rate_limiter.Rate_limit_exceeded status ->
             rate_limit_response status )
       | Error e ->
-          exn_to_response e
+          let%lwt res = exn_to_response e in
+          Lwt.return
+            ( match e with
+            | UseDpopNonceError ->
+                add_dpop_nonce_if_needed res
+            | _ ->
+                res )
     with
     | Redirect r ->
         Dream.redirect init.req r
     | Rate_limiter.Rate_limit_exceeded status ->
         rate_limit_response status
+    | UseDpopNonceError as e ->
+        let%lwt res = exn_to_response e in
+        Lwt.return (add_dpop_nonce_if_needed res)
     | e ->
         if not (is_xrpc_error e) then log_exn e ;
         exn_to_response e
