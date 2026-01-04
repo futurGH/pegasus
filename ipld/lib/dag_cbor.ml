@@ -1,13 +1,18 @@
 module String_map = Map.Make (String)
 
+(* sort map keys by length first, then lexicographically *)
+let dag_cbor_key_compare a b =
+  let la = String.length a in
+  let lb = String.length b in
+  if la = lb then String.compare a b else compare la lb
+
 let ordered_map_keys (m : 'a String_map.t) : string list =
   let keys = String_map.bindings m |> List.map fst in
-  List.sort
-    (fun a b ->
-      let la = String.length a in
-      let lb = String.length b in
-      if la = lb then String.compare a b else compare la lb )
-    keys
+  List.sort dag_cbor_key_compare keys
+
+(* returns bindings sorted in dag-cbor canonical order *)
+let ordered_map_bindings (m : 'a String_map.t) : (string * 'a) list =
+  String_map.bindings m |> List.sort (fun (a, _) (b, _) -> dag_cbor_key_compare a b)
 
 let type_info_length len =
   if len < 24 then 1
@@ -195,10 +200,10 @@ module Encoder = struct
     | `Map m ->
         let len = String_map.cardinal m in
         write_type_and_argument t 5 (Int64.of_int len) ;
-        ordered_map_keys m
-        |> List.iter (fun k ->
+        ordered_map_bindings m
+        |> List.iter (fun (k, v) ->
             write_string t k ;
-            write_value t (String_map.find k m) )
+            write_value t v )
     | `Link cid ->
         write_cid t cid
 

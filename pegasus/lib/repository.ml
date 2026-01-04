@@ -221,7 +221,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
     ref (Cached_mst.create cached_store prev_commit.data)
   in
   (* ops to emit, built in loop because prev_data (previous cid) is otherwise inaccessible *)
-  let commit_ops : commit_evt_op list ref = ref [] in
+  let commit_ops_rev : commit_evt_op list ref = ref [] in
   let added_leaves = ref Block_map.empty in
   let%lwt results =
     Lwt_list.map_s
@@ -250,8 +250,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               User_store.put_record t.db (`LexMap record_with_type) path
             in
             added_leaves := Block_map.set cid block !added_leaves ;
-            commit_ops :=
-              !commit_ops @ [{action= `Create; path; cid= Some cid; prev= None}] ;
+            commit_ops_rev :=
+              {action= `Create; path; cid= Some cid; prev= None}
+              :: !commit_ops_rev ;
             let%lwt new_mst = Cached_mst.add !mst path cid in
             mst := new_mst ;
             let refs =
@@ -272,7 +273,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
         | Update {collection; rkey; value; swap_record; _} ->
             let path = Format.sprintf "%s/%s" collection rkey in
             let uri = Format.sprintf "at://%s/%s" t.did path in
-            let%lwt old_cid = User_store.get_record_cid t.db path in
+            let%lwt existing_record = User_store.get_record t.db path in
+            let old_cid = Option.map (fun (r : record) -> r.cid) existing_record in
             ( if
                 (swap_record <> None && swap_record <> old_cid)
                 || (swap_record = None && old_cid = None)
@@ -288,23 +290,18 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   (Format.sprintf "attempted to update record %s with cid %s"
                      path cid_str ) ) ;
             let%lwt () =
-              match old_cid with
-              | Some _ -> (
-                match%lwt User_store.get_record t.db path with
-                | Some record ->
-                    let refs =
-                      Util.find_blob_refs record.value
-                      |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
+              match existing_record with
+              | Some record ->
+                  let refs =
+                    Util.find_blob_refs record.value
+                    |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
+                  in
+                  if not (List.is_empty refs) then
+                    let%lwt _ =
+                      User_store.delete_orphaned_blobs_by_record_path t.db path
                     in
-                    if not (List.is_empty refs) then
-                      let%lwt _ =
-                        User_store.delete_orphaned_blobs_by_record_path t.db
-                          path
-                      in
-                      Lwt.return_unit
-                    else Lwt.return_unit
-                | None ->
-                    Lwt.return_unit )
+                    Lwt.return_unit
+                  else Lwt.return_unit
               | None ->
                   Lwt.return_unit
             in
@@ -316,9 +313,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               User_store.put_record t.db (`LexMap record_with_type) path
             in
             added_leaves := Block_map.set new_cid new_block !added_leaves ;
-            commit_ops :=
-              !commit_ops
-              @ [{action= `Update; path; cid= Some new_cid; prev= old_cid}] ;
+            commit_ops_rev :=
+              {action= `Update; path; cid= Some new_cid; prev= old_cid}
+              :: !commit_ops_rev ;
             let%lwt new_mst = Cached_mst.add !mst path new_cid in
             mst := new_mst ;
             let refs =
@@ -339,7 +336,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                  ; cid= new_cid } )
         | Delete {collection; rkey; swap_record; _} ->
             let path = Format.sprintf "%s/%s" collection rkey in
-            let%lwt cid = User_store.get_record_cid t.db path in
+            let%lwt existing_record = User_store.get_record t.db path in
+            let cid = Option.map (fun (r : record) -> r.cid) existing_record in
             ( if cid = None || (swap_record <> None && swap_record <> cid) then
                 let cid_str =
                   match cid with
@@ -352,7 +350,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   (Format.sprintf "attempted to delete record %s with cid %s"
                      path cid_str ) ) ;
             let%lwt () =
-              match%lwt User_store.get_record t.db path with
+              match existing_record with
               | Some record ->
                   let refs =
                     Util.find_blob_refs record.value
@@ -368,14 +366,15 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                   Lwt.return_unit
             in
             let%lwt () = User_store.delete_record t.db path in
-            commit_ops :=
-              !commit_ops @ [{action= `Delete; path; cid= None; prev= cid}] ;
+            commit_ops_rev :=
+              {action= `Delete; path; cid= None; prev= cid} :: !commit_ops_rev ;
             let%lwt new_mst = Cached_mst.delete !mst path in
             mst := new_mst ;
             Lwt.return
               (Delete {type'= "com.atproto.repo.applyWrites#deleteResult"}) )
       writes
   in
+  let commit_ops = List.rev !commit_ops_rev in
   let new_mst = !mst in
   (* flush all writes, ensuring all blocks are written or none are *)
   let%lwt () =
@@ -390,15 +389,8 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let commit_block =
     new_commit_signed |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
   in
-  let%lwt proof_blocks =
-    Lwt_list.fold_left_s
-      (fun acc ({path; _} : commit_evt_op) ->
-        let%lwt key_proof =
-          Cached_mst.proof_for_key new_mst new_mst.root path
-        in
-        Lwt.return (Block_map.merge acc key_proof) )
-      Block_map.empty !commit_ops
-  in
+  let proof_keys = List.map (fun ({path; _} : commit_evt_op) -> path) commit_ops in
+  let%lwt proof_blocks = Cached_mst.proof_for_keys new_mst new_mst.root proof_keys in
   let proof_blocks = Block_map.merge proof_blocks !added_leaves in
   let block_stream =
     proof_blocks |> Block_map.entries |> Lwt_seq.of_list
@@ -410,7 +402,7 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let%lwt ds = Data_store.connect () in
   let%lwt _ =
     Sequencer.sequence_commit ds ~did:t.did ~commit:new_commit_cid
-      ~rev:new_commit_signed.rev ~blocks ~ops:!commit_ops ~since:prev_commit.rev
+      ~rev:new_commit_signed.rev ~blocks ~ops:commit_ops ~since:prev_commit.rev
       ~prev_data:prev_commit.data ()
   in
   Lwt.return {commit= new_commit; results}

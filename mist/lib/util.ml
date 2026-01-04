@@ -48,14 +48,3 @@ let ensure_valid_key (key : string) : unit =
 
 let rec last (lst : 'a list) : 'a option =
   match lst with [] -> None | [x] -> Some x | _ :: xs -> last xs
-
-let at_index i (lst : 'a list) : 'a option =
-  let rec aux j = function
-    | [] ->
-        None
-    | [x] ->
-        Some x
-    | x :: xs ->
-        if j = 0 then Some x else aux (j - 1) xs
-  in
-  aux i lst

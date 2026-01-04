@@ -406,7 +406,7 @@ let bench_mixed_ops () =
 let bench_db_io_patterns () =
   print_header "database i/o" ;
   let%lwt db, path = setup_test_db () in
-  let size = 100000 in
+  let size = 20000 in
   let blocks = generate_blocks size in
   let%lwt () =
     Util.use_pool db.db (fun conn -> User_store.Bulk.put_blocks blocks conn) >|= fun _ -> ()

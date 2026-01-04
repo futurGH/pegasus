@@ -314,6 +314,149 @@ module Queries = struct
       ~path ~cids
 end
 
+module Bulk = struct
+  open struct
+    let escape_sql_string s = Str.global_replace (Str.regexp "'") "''" s
+
+    let bytes_to_hex data =
+      let buf = Buffer.create (Bytes.length data * 2) in
+      Bytes.iter
+        (fun c -> Buffer.add_string buf (Printf.sprintf "%02x" (Char.code c)))
+        data ;
+      Buffer.contents buf
+
+    let chunk_list n lst =
+      if n <= 0 then invalid_arg "negative n passed to chunk_list" ;
+      let rec take_n acc remaining xs =
+        match (remaining, xs) with
+        | _, [] ->
+            (List.rev acc, [])
+        | 0, rest ->
+            (List.rev acc, rest)
+        | _, x :: xs' ->
+            take_n (x :: acc) (remaining - 1) xs'
+      in
+      let rec go xs =
+        match xs with
+        | [] ->
+            []
+        | _ ->
+            let chunk, rest = take_n [] n xs in
+            chunk :: go rest
+      in
+      go lst
+  end
+
+  let put_blocks (blocks : (Cid.t * bytes) list) conn =
+    if List.is_empty blocks then Lwt.return_ok ()
+    else
+      let module C = (val conn : Caqti_lwt.CONNECTION) in
+      let chunks = chunk_list 200 blocks in
+      let rec process_chunks = function
+        | [] ->
+            Lwt.return_ok ()
+        | chunk :: rest -> (
+            let values =
+              List.map
+                (fun (cid, data) ->
+                  let cid_str = escape_sql_string (Cid.to_string cid) in
+                  let hex_data = bytes_to_hex data in
+                  Printf.sprintf "('%s', CAST(X'%s' AS TEXT))" cid_str hex_data )
+                chunk
+              |> String.concat ", "
+            in
+            let sql =
+              Printf.sprintf
+                "INSERT INTO mst (cid, data) VALUES %s ON CONFLICT DO NOTHING"
+                values
+            in
+            let query =
+              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+            in
+            let%lwt result = C.exec query () in
+            match result with
+            | Ok () ->
+                process_chunks rest
+            | Error e ->
+                Lwt.return_error e )
+      in
+      process_chunks chunks
+
+  let put_records (records : (string * Cid.t * bytes * string) list) conn =
+    if List.is_empty records then Lwt.return_ok ()
+    else
+      let module C = (val conn : Caqti_lwt.CONNECTION) in
+      let chunks = chunk_list 100 records in
+      let rec process_chunks = function
+        | [] ->
+            Lwt.return_ok ()
+        | chunk :: rest -> (
+            let values =
+              List.map
+                (fun (path, cid, data, since) ->
+                  let hex_data = bytes_to_hex data in
+                  Printf.sprintf "('%s', '%s', CAST(X'%s' AS TEXT), '%s')"
+                    (escape_sql_string path)
+                    (escape_sql_string (Cid.to_string cid))
+                    hex_data (escape_sql_string since) )
+                chunk
+              |> String.concat ", "
+            in
+            let sql =
+              Printf.sprintf
+                "INSERT INTO records (path, cid, data, since) VALUES %s ON \
+                 CONFLICT (path) DO UPDATE SET cid = excluded.cid, data = \
+                 excluded.data, since = excluded.since"
+                values
+            in
+            let query =
+              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+            in
+            let%lwt result = C.exec query () in
+            match result with
+            | Ok () ->
+                process_chunks rest
+            | Error e ->
+                Lwt.return_error e )
+      in
+      process_chunks chunks
+
+  let put_blob_refs (refs : (string * Cid.t) list) conn =
+    if List.is_empty refs then Lwt.return_ok ()
+    else
+      let module C = (val conn : Caqti_lwt.CONNECTION) in
+      let chunks = chunk_list 200 refs in
+      let rec process_chunks = function
+        | [] ->
+            Lwt.return_ok ()
+        | chunk :: rest -> (
+            let values =
+              List.map
+                (fun (path, cid) ->
+                  Printf.sprintf "('%s', '%s')" (escape_sql_string path)
+                    (escape_sql_string (Cid.to_string cid)) )
+                chunk
+              |> String.concat ", "
+            in
+            let sql =
+              Printf.sprintf
+                "INSERT INTO blobs_records (record_path, blob_cid) VALUES %s \
+                 ON CONFLICT DO NOTHING"
+                values
+            in
+            let query =
+              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+            in
+            let%lwt result = C.exec query () in
+            match result with
+            | Ok () ->
+                process_chunks rest
+            | Error e ->
+                Lwt.return_error e )
+      in
+      process_chunks chunks
+end
+
 type t = {did: string; db: Util.caqti_pool}
 
 let pool_cache : (string, t) Hashtbl.t = Hashtbl.create 64
@@ -351,11 +494,16 @@ let get_blocks t cids : Block_map.with_missing Lwt.t =
     Lwt.return ({blocks= Block_map.empty; missing= []} : Block_map.with_missing)
   else
     let%lwt blocks = Util.use_pool t.db @@ Queries.get_blocks cids in
+    let found_map =
+      List.fold_left
+        (fun acc ({cid; data} : block) -> Block_map.set cid data acc)
+        Block_map.empty blocks
+    in
     Lwt.return
       (List.fold_left
          (fun (acc : Block_map.with_missing) cid ->
-           match List.find_opt (fun (b : block) -> b.cid = cid) blocks with
-           | Some {data; _} ->
+           match Block_map.get cid found_map with
+           | Some data ->
                {acc with blocks= Block_map.set cid data acc.blocks}
            | None ->
                {acc with missing= cid :: acc.missing} )
@@ -376,10 +524,12 @@ let put_block t cid block : (bool, exn) Lwt_result.t =
       Lwt.return false
 
 let put_many t bm : (int, exn) Lwt_result.t =
-  Util.multi_query t.db
-    (List.map
-       (fun (cid, block) -> Queries.put_block cid block)
-       (Block_map.entries bm) )
+  let entries = Block_map.entries bm in
+  if List.is_empty entries then Lwt.return_ok 0
+  else
+    Lwt_result.catch (fun () ->
+        let%lwt () = Util.use_pool t.db (fun conn -> Bulk.put_blocks entries conn) in
+        Lwt.return (List.length entries) )
 
 let delete_block t cid : (bool, exn) Lwt_result.t =
   Lwt_result.catch
@@ -569,146 +719,3 @@ let list_blobs_by_storage t ~storage ~limit ~cursor :
   let storage_str = Blob_store.storage_to_string storage in
   Util.use_pool t.db
   @@ Queries.list_blobs_by_storage ~storage:storage_str ~limit ~cursor
-
-module Bulk = struct
-  open struct
-    let escape_sql_string s = Str.global_replace (Str.regexp "'") "''" s
-
-    let bytes_to_hex data =
-      let buf = Buffer.create (Bytes.length data * 2) in
-      Bytes.iter
-        (fun c -> Buffer.add_string buf (Printf.sprintf "%02x" (Char.code c)))
-        data ;
-      Buffer.contents buf
-
-    let chunk_list n lst =
-      if n <= 0 then invalid_arg "negative n passed to chunk_list" ;
-      let rec take_n acc remaining xs =
-        match (remaining, xs) with
-        | _, [] ->
-            (List.rev acc, [])
-        | 0, rest ->
-            (List.rev acc, rest)
-        | _, x :: xs' ->
-            take_n (x :: acc) (remaining - 1) xs'
-      in
-      let rec go xs =
-        match xs with
-        | [] ->
-            []
-        | _ ->
-            let chunk, rest = take_n [] n xs in
-            chunk :: go rest
-      in
-      go lst
-  end
-
-  let put_blocks (blocks : (Cid.t * bytes) list) conn =
-    if List.is_empty blocks then Lwt.return_ok ()
-    else
-      let module C = (val conn : Caqti_lwt.CONNECTION) in
-      let chunks = chunk_list 200 blocks in
-      let rec process_chunks = function
-        | [] ->
-            Lwt.return_ok ()
-        | chunk :: rest -> (
-            let values =
-              List.map
-                (fun (cid, data) ->
-                  let cid_str = escape_sql_string (Cid.to_string cid) in
-                  let hex_data = bytes_to_hex data in
-                  Printf.sprintf "('%s', CAST(X'%s' AS TEXT))" cid_str hex_data )
-                chunk
-              |> String.concat ", "
-            in
-            let sql =
-              Printf.sprintf
-                "INSERT INTO mst (cid, data) VALUES %s ON CONFLICT DO NOTHING"
-                values
-            in
-            let query =
-              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
-            in
-            let%lwt result = C.exec query () in
-            match result with
-            | Ok () ->
-                process_chunks rest
-            | Error e ->
-                Lwt.return_error e )
-      in
-      process_chunks chunks
-
-  let put_records (records : (string * Cid.t * bytes * string) list) conn =
-    if List.is_empty records then Lwt.return_ok ()
-    else
-      let module C = (val conn : Caqti_lwt.CONNECTION) in
-      let chunks = chunk_list 100 records in
-      let rec process_chunks = function
-        | [] ->
-            Lwt.return_ok ()
-        | chunk :: rest -> (
-            let values =
-              List.map
-                (fun (path, cid, data, since) ->
-                  let hex_data = bytes_to_hex data in
-                  Printf.sprintf "('%s', '%s', CAST(X'%s' AS TEXT), '%s')"
-                    (escape_sql_string path)
-                    (escape_sql_string (Cid.to_string cid))
-                    hex_data (escape_sql_string since) )
-                chunk
-              |> String.concat ", "
-            in
-            let sql =
-              Printf.sprintf
-                "INSERT INTO records (path, cid, data, since) VALUES %s ON \
-                 CONFLICT (path) DO UPDATE SET cid = excluded.cid, data = \
-                 excluded.data, since = excluded.since"
-                values
-            in
-            let query =
-              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
-            in
-            let%lwt result = C.exec query () in
-            match result with
-            | Ok () ->
-                process_chunks rest
-            | Error e ->
-                Lwt.return_error e )
-      in
-      process_chunks chunks
-
-  let put_blob_refs (refs : (string * Cid.t) list) conn =
-    if List.is_empty refs then Lwt.return_ok ()
-    else
-      let module C = (val conn : Caqti_lwt.CONNECTION) in
-      let chunks = chunk_list 200 refs in
-      let rec process_chunks = function
-        | [] ->
-            Lwt.return_ok ()
-        | chunk :: rest -> (
-            let values =
-              List.map
-                (fun (path, cid) ->
-                  Printf.sprintf "('%s', '%s')" (escape_sql_string path)
-                    (escape_sql_string (Cid.to_string cid)) )
-                chunk
-              |> String.concat ", "
-            in
-            let sql =
-              Printf.sprintf
-                "INSERT INTO blobs_records (record_path, blob_cid) VALUES %s \
-                 ON CONFLICT DO NOTHING"
-                values
-            in
-            let query =
-              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
-            in
-            let%lwt result = C.exec query () in
-            match result with
-            | Ok () ->
-                process_chunks rest
-            | Error e ->
-                Lwt.return_error e )
-      in
-      process_chunks chunks
-end
