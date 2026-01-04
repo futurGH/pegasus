@@ -19,8 +19,8 @@ let test_nsid_to_module_path_single () =
   check (list string) "single segment" ["Test"] result
 
 let test_build_call_expr () =
-  let result = Hermes_ppx.build_call_expr ~loc "app.bsky.graph.getProfile" in
-  let expected_str = "App.Bsky.Graph.GetProfile.call" in
+  let result = Hermes_ppx.build_call_expr ~loc "app.bsky.actor.getProfile" in
+  let expected_str = "App.Bsky.Actor.GetProfile.Main.call" in
   check string "call expr" expected_str
     (Ppxlib.Pprintast.string_of_expression result)
 
@@ -38,7 +38,7 @@ let expand_xrpc code =
 
 let test_expand_get_nsid () =
   let actual = expand_xrpc {|[%xrpc get "app.bsky.graph.getRelationships"]|} in
-  let expected_str = "App.Bsky.Graph.GetRelationships.call" in
+  let expected_str = "App.Bsky.Graph.GetRelationships.Main.call" in
   check string "get expansion" expected_str
     (Ppxlib.Pprintast.string_of_expression actual)
 
@@ -46,14 +46,14 @@ let test_expand_post_nsid () =
   let actual =
     expand_xrpc {|[%xrpc post "com.atproto.server.createSession"]|}
   in
-  let expected_str = "Com.Atproto.Server.CreateSession.call" in
+  let expected_str = "Com.Atproto.Server.CreateSession.Main.call" in
   check string "post expansion" expected_str
     (Ppxlib.Pprintast.string_of_expression actual)
 
 let test_expand_nsid_only () =
   (* [%xrpc "nsid"] defaults to get *)
   let actual = expand_xrpc {|[%xrpc "app.bsky.actor.getProfile"]|} in
-  let expected_str = "App.Bsky.Actor.GetProfile.call" in
+  let expected_str = "App.Bsky.Actor.GetProfile.Main.call" in
   check string "nsid only expansion" expected_str
     (Ppxlib.Pprintast.string_of_expression actual)
 

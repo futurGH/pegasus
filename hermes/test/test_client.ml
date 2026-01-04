@@ -7,6 +7,11 @@ let run_lwt f = Lwt_main.run (f ())
 (* helpers *)
 let test_string = testable Fmt.string String.equal
 
+let test_bytes =
+  testable
+    (Fmt.of_to_string (fun b -> String.sub (Bytes.to_string b) 0 10))
+    Bytes.equal
+
 (** query tests *)
 
 let test_query_success () =
@@ -105,7 +110,7 @@ let test_query_bytes () =
         C.query_bytes client "com.atproto.sync.getBlob"
           (`Assoc [("did", `String "did:plc:123"); ("cid", `String "bafyabc")]) )
   in
-  check test_string "data" "fake-image-data" data ;
+  check test_bytes "data" (Bytes.of_string "fake-image-data") data ;
   check test_string "content_type" "image/jpeg" content_type ;
   let req = List.hd requests in
   Test_utils.assert_request_has_header "accept" "*/*" req ;
@@ -163,9 +168,10 @@ let test_procedure_bytes () =
   let* result, requests =
     Test_utils.with_mock_responses [response] (fun (module C) client ->
         C.procedure_bytes client "com.atproto.repo.importRepo" (`Assoc [])
-          (Some "fake-car-data") ~content_type:"application/vnd.ipld.car" )
+          (Some (Bytes.of_string "fake-car-data"))
+          ~content_type:"application/vnd.ipld.car" )
   in
-  check (option (pair test_string test_string)) "result" None result ;
+  check (option (pair test_bytes test_string)) "result" None result ;
   let req = List.hd requests in
   Test_utils.assert_request_has_header "content-type" "application/vnd.ipld.car"
     req ;

@@ -281,7 +281,7 @@ end
 Endpoints with non-JSON encoding are automatically detected and handled:
 
 - **Queries with bytes output** (e.g., `com.atproto.sync.getBlob` with `encoding: "*/*"`):
-    - Output type is `string * string` (data, content_type)
+    - Output type is `bytes * string` (data, content_type)
     - Generated code uses `Hermes.query_bytes`
 
 - **Procedures with bytes input**:

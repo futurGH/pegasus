@@ -417,10 +417,8 @@ and handle_resumable_migration ctx ~old_client ~csrf_token ~invite_required
     match%lwt Remote.fetch_repo old_client ~did with
     | Error err ->
         render_err ~did ~handle ~old_pds ("Failed to fetch repository: " ^ err)
-    | Ok car_data -> (
-      match%lwt
-        Ops.import_repo ~did ~car_data:(Bytes.of_string (fst car_data))
-      with
+    | Ok (car_data, _) -> (
+      match%lwt Ops.import_repo ~did ~car_data with
       | Error err ->
           render_err ~did ~handle ~old_pds err
       | Ok () ->
@@ -432,10 +430,8 @@ and perform_data_import ctx ~old_client ~csrf_token ~invite_required ~hostname
   match%lwt Remote.fetch_repo old_client ~did with
   | Error e ->
       render_err ("Failed to fetch repository: " ^ e)
-  | Ok car_data -> (
-    match%lwt
-      Ops.import_repo ~did ~car_data:(Bytes.of_string (fst car_data))
-    with
+  | Ok (car_data, _) -> (
+    match%lwt Ops.import_repo ~did ~car_data with
     | Error e ->
         render_err e
     | Ok () -> (
@@ -784,11 +780,8 @@ and handle_submit_2fa (ctx : Xrpc.context) ~(render_err : render_err)
                       match%lwt Remote.fetch_repo client ~did with
                       | Error e ->
                           render_err ("Failed to fetch repository: " ^ e)
-                      | Ok car_data -> (
-                        match%lwt
-                          Ops.import_repo ~did
-                            ~car_data:(Bytes.of_string @@ fst car_data)
-                        with
+                      | Ok (car_data, _) -> (
+                        match%lwt Ops.import_repo ~did ~car_data with
                         | Error e ->
                             render_err e
                         | Ok () ->
@@ -885,11 +878,8 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
               | Error e ->
                   render_err ~did ~handle ~old_pds
                     ("Failed to fetch repository: " ^ e)
-              | Ok car_data -> (
-                match%lwt
-                  Ops.import_repo ~did
-                    ~car_data:(Bytes.of_string @@ fst car_data)
-                with
+              | Ok (car_data, _) -> (
+                match%lwt Ops.import_repo ~did ~car_data with
                 | Error e ->
                     render_err ~did ~handle ~old_pds e
                 | Ok () -> (

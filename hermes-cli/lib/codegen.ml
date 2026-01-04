@@ -423,7 +423,7 @@ let gen_query nsid out name (spec : query_spec) =
   (* generate output type *)
   ( if output_is_bytes then begin
       emitln out "  (** raw bytes output with content type *)" ;
-      emitln out "  type output = string * string" ;
+      emitln out "  type output = bytes * string" ;
       emit_newline out
     end
     else
@@ -564,7 +564,7 @@ let gen_procedure nsid out name (spec : procedure_spec) =
   (* generate output type *)
   ( if output_is_bytes then begin
       emitln out "  (** raw bytes output with content type *)" ;
-      emitln out "  type output = (string * string) option" ;
+      emitln out "  type output = (bytes * string) option" ;
       emit_newline out
     end
     else

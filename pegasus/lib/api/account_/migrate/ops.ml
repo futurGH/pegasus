@@ -125,9 +125,7 @@ let import_blobs_batch ~did ~cids client =
           | Error _ ->
               Lwt.return_error cid_str
           | Ok cid ->
-              let%lwt _ =
-                User_store.put_blob user_db cid mimetype (Bytes.of_string data)
-              in
+              let%lwt _ = User_store.put_blob user_db cid mimetype data in
               Lwt.return_ok cid_str ) )
       cids
   in

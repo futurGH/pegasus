@@ -110,7 +110,7 @@ let test_gen_union_type () =
       [make_def "result" (Lexicon_types.Union union_spec)]
   in
   let code = Codegen.gen_lexicon_module doc in
-  check bool "contains type result" true (contains code "type result =") ;
+  check bool "contains type result" true (contains code "type result_ =") ;
   check bool "contains TypeA variant" true (contains code "| TypeA of") ;
   check bool "contains TypeB variant" true (contains code "| TypeB of") ;
   check bool "contains Unknown (open)" true
@@ -452,8 +452,8 @@ let test_gen_query_bytes_output () =
   in
   let code = Codegen.gen_lexicon_module doc in
   check bool "contains module Main" true (contains code "module Main = struct") ;
-  check bool "output is string * string tuple" true
-    (contains code "type output = string * string") ;
+  check bool "output is bytes * string tuple" true
+    (contains code "type output = bytes * string") ;
   check bool "calls Hermes.query_bytes" true
     (contains code "Hermes.query_bytes")
 

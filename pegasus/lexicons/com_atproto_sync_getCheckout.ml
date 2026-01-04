@@ -11,7 +11,7 @@ module Main = struct
 [@@deriving yojson {strict= false}]
 
   (** raw bytes output with content type *)
-  type output = string * string
+  type output = bytes * string
 
   let call
       ~did

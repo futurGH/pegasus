@@ -36,15 +36,15 @@ module type S = sig
     -> (Yojson.Safe.t -> ('a, string) result)
     -> 'a Lwt.t
 
-  val query_bytes : t -> string -> Yojson.Safe.t -> (string * string) Lwt.t
+  val query_bytes : t -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
 
   val procedure_bytes :
        t
     -> string
     -> Yojson.Safe.t
-    -> string option
+    -> bytes option
     -> content_type:string
-    -> (string * string) option Lwt.t
+    -> (bytes * string) option Lwt.t
 
   val procedure_blob :
        t
@@ -229,7 +229,7 @@ module Make (Http : Http_backend.S) : S = struct
       Types.raise_xrpc_error ~status payload
 
   let query_bytes (t : t) (nsid : string) (params : Yojson.Safe.t) :
-      (string * string) Lwt.t =
+      (bytes * string) Lwt.t =
     (* call interceptor if present for token refresh *)
     let* () =
       match t.on_request with Some f -> f t | None -> Lwt.return_unit
@@ -249,6 +249,7 @@ module Make (Http : Http_backend.S) : S = struct
     in
     let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
     let* body_str = Cohttp_lwt.Body.to_string body in
+    let body = Bytes.of_string body_str in
     if status >= 200 && status < 300 then
       let content_type =
         Cohttp.Response.headers resp
@@ -256,7 +257,7 @@ module Make (Http : Http_backend.S) : S = struct
         Cohttp.Header.get h "content-type"
         |> Option.value ~default:"application/octet-stream"
       in
-      Lwt.return (body_str, content_type)
+      Lwt.return (body, content_type)
     else
       let payload =
         try
@@ -272,8 +273,8 @@ module Make (Http : Http_backend.S) : S = struct
 
   (* execute procedure with raw bytes input, returns raw bytes or none if no output *)
   let procedure_bytes (t : t) (nsid : string) (params : Yojson.Safe.t)
-      (input : string option) ~(content_type : string) :
-      (string * string) option Lwt.t =
+      (input : bytes option) ~(content_type : string) :
+      (bytes * string) option Lwt.t =
     (* call interceptor if present for token refresh *)
     let* () =
       match t.on_request with Some f -> f t | None -> Lwt.return_unit
@@ -286,7 +287,7 @@ module Make (Http : Http_backend.S) : S = struct
     let body =
       match input with
       | Some data ->
-          Cohttp_lwt.Body.of_string data
+          Cohttp_lwt.Body.of_string (Bytes.to_string data)
       | None ->
           Cohttp_lwt.Body.empty
     in
@@ -303,8 +304,9 @@ module Make (Http : Http_backend.S) : S = struct
     in
     let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
     let* body_str = Cohttp_lwt.Body.to_string resp_body in
+    let body = Bytes.of_string body_str in
     if status >= 200 && status < 300 then
-      if String.length body_str = 0 then Lwt.return None
+      if Bytes.length body = 0 then Lwt.return None
       else
         let resp_content_type =
           Cohttp.Response.headers resp
@@ -312,7 +314,7 @@ module Make (Http : Http_backend.S) : S = struct
           Cohttp.Header.get h "content-type"
           |> Option.value ~default:"application/octet-stream"
         in
-        Lwt.return (Some (body_str, resp_content_type))
+        Lwt.return (Some (body, resp_content_type))
     else
       let payload =
         try

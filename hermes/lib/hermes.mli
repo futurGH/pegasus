@@ -77,15 +77,15 @@ val procedure_blob :
   -> (Yojson.Safe.t -> ('a, string) result)
   -> 'a Lwt.t
 
-val query_bytes : client -> string -> Yojson.Safe.t -> (string * string) Lwt.t
+val query_bytes : client -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
 
 val procedure_bytes :
      client
   -> string
   -> Yojson.Safe.t
-  -> string option
+  -> bytes option
   -> content_type:string
-  -> (string * string) option Lwt.t
+  -> (bytes * string) option Lwt.t
 
 val session_to_yojson : session -> Yojson.Safe.t
 
@@ -158,15 +158,15 @@ module Client : sig
       -> (Yojson.Safe.t -> ('a, string) result)
       -> 'a Lwt.t
 
-    val query_bytes : t -> string -> Yojson.Safe.t -> (string * string) Lwt.t
+    val query_bytes : t -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
 
     val procedure_bytes :
          t
       -> string
       -> Yojson.Safe.t
-      -> string option
+      -> bytes option
       -> content_type:string
-      -> (string * string) option Lwt.t
+      -> (bytes * string) option Lwt.t
 
     val procedure_blob :
          t
