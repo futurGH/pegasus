@@ -1,18 +1,17 @@
 # hermes
 
-is a type-safe XRPC client for atproto.
+is a set of libraries that work together to provide a type-safe XRPC client for atproto.
 
 Hermes provides three components:
 
 - **hermes** - Core library for making XRPC calls
 - **hermes-cli** - Code generator for atproto lexicons
-- **hermes_ppx** - PPX extension for ergonomic API calls
+- **hermes_ppx** (optional) - PPX extension for ergonomic API calls
 
 ### table of contents
 
 - [Quick Start](#quick-start)
 - [Complete Example](#complete-example)
-- [Installation](#installation)
 - [hermes](#hermes-lib)
     - [Session Management](#session-management)
     - [Making XRPC Calls](#making-xrpc-calls)
@@ -30,8 +29,18 @@ Hermes provides three components:
 
 ## quick start
 
+You'll need your lexicon `.json` files in a directory somewhere. Start by running `hermes-cli` to generate modules from your lexicons.
+
+```bash
+hermes-cli generate ./lexicons/ --output=./hermes_lexicons
+```
+
+You can find the full set of options for `hermes-cli` [here](#options).
+
+A `hermes_lexicons` directory will be created with generated modules for each lexicon found in `./lexicons`. You can now use these modules in your code.
+
 ```ocaml
-open Hermes_lexicons (* generate lexicons using hermes-cli! *)
+open Hermes_lexicons (* generated using hermes-cli *)
 open Lwt.Syntax
 
 let () = Lwt_main.run begin
@@ -47,13 +56,15 @@ end
 
 ## complete example
 
+You can add the `hermes_ppx` extension ([here's how!](#setup)) for more ergonomic API calls.
+
 ```ocaml
-open Hermes_lexicons (* generate lexicons using hermes-cli! *)
+open Hermes_lexicons (* generated using hermes-cli *)
 open Lwt.Syntax
 
 let main () =
   (* Set up credential manager with persistence *)
-  let manager = Hermes.make_credential_manager ~service:"https://pegasus.example" () in
+  let manager = Hermes.make_credential_manager ~service:"https://pds.example" () in
 
   Hermes.on_session_update manager (fun session ->
     let json = Hermes.session_to_yojson session in
@@ -100,16 +111,6 @@ let main () =
   Lwt.return_unit
 
 let () = Lwt_main.run (main ())
-```
-
-## installation
-
-Add to your `dune-project`:
-
-```lisp
-(depends
-  hermes
-  hermes_ppx)
 ```
 
 <h2 id="hermes-lib">hermes</h2>
@@ -232,16 +233,13 @@ For a lexicon like `app.bsky.actor.getProfile`, the generator creates:
 lib/generated/
 ├── dune
 ├── lexicons.ml           # Re-exports all modules
-└── app/
-    └── bsky/
-        └── actor/
-            └── getProfile.ml
+└── app_bsky_actor_getProfile.ml
 ```
 
 Each endpoint module contains:
 
 ```ocaml
-module GetProfile = struct
+module Main = struct
   type params = {
     actor: string;
   } [@@deriving yojson]
@@ -278,15 +276,10 @@ end
 
 ### bytes encoding
 
-Endpoints with non-JSON encoding are automatically detected and handled:
+Endpoints with non-JSON encoding are automatically detected and handled by `hermes-cli`:
 
-- **Queries with bytes output** (e.g., `com.atproto.sync.getBlob` with `encoding: "*/*"`):
-    - Output type is `bytes * string` (data, content_type)
-    - Generated code uses `Hermes.query_bytes`
-
-- **Procedures with bytes input**:
-    - Input is `?input:string` (optional raw bytes)
-    - Generated code uses `Hermes.procedure_bytes`
+- Queries with bytes output (e.g., `com.atproto.sync.getBlob`): output is `bytes * string` (data, content_type)
+- Procedures with bytes input: input is `?input:bytes`
 
 ### union types
 
@@ -301,7 +294,7 @@ type relationship_union =
 
 <h2 id="hermes-ppx">hermes_ppx (PPX extension)</h2>
 
-Transforms `[%xrpc ...]` into generated module calls.
+transforms `[%xrpc ...]` into generated module calls.
 
 ### setup
 
