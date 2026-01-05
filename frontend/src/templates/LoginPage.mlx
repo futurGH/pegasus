@@ -231,7 +231,7 @@ let[@react.component] make
               <li>
                 <a
                   className="text-mana-100 underline hover:text-mana-200"
-                  href="/account/password-reset">
+                  href="/account/reset">
                   (string "reset your password")
                 </a>
               </li>
