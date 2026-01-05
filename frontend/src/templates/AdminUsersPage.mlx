@@ -183,7 +183,9 @@ let[@react.component] make
           </div>
       | None ->
           null )
-      <div className=(if List.length actors > 0 then "overflow-x-auto" else "overflow-x-hidden")>
+      <div
+        className=( if List.length actors > 0 then "overflow-x-auto"
+                    else "overflow-x-hidden" )>
         <table
           className="w-full min-w-xl grid border-collapse text-sm"
           style=(ReactDOM.Style.make

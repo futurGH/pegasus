@@ -95,7 +95,7 @@ module AlertMessage = struct
           , "text-mana-100"
           , <CheckmarkIcon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" /> )
     in
-    <div className=("mb-4 p-3 border rounded-lg " ^ bg_class)>
+    <div className=("flex mb-4 p-3 border rounded-lg " ^ bg_class)>
       <span className=("inline-flex items-start text-sm " ^ text_class)>
         icon <span>(string message)</span>
       </span>
@@ -476,7 +476,7 @@ module CompleteView = struct
           match old_account_deactivation_error with
           | Some err ->
               <div
-                className="mb-4 p-3 bg-phoenix-100/10 border \
+                className="flex mb-4 p-3 bg-phoenix-100/10 border \
                            border-phoenix-100/30 rounded-lg">
                 <div className="flex items-start gap-2">
                   <CircleAlertIcon
@@ -505,8 +505,8 @@ module CompleteView = struct
               </p> )
       ( if blobs_failed > 0 then
           <div
-            className="mb-4 p-3 bg-phoenix-100/10 border border-phoenix-100/30 \
-                       rounded-lg">
+            className="flex mb-4 p-3 bg-phoenix-100/10 border \
+                       border-phoenix-100/30 rounded-lg">
             <p className="text-sm text-phoenix-100">
               (string
                  (Printf.sprintf

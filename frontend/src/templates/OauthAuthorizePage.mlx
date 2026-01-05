@@ -238,7 +238,9 @@ module ScopesTable = struct
               <div className="text-sm text-mist-100">
                 (string
                    ( if level = `Full then
-                       "Manage your full identity including your @handle, with the ability to move your account to another PDS or permanently lock you out of your account."
+                       "Manage your full identity including your @handle, with \
+                        the ability to move your account to another PDS or \
+                        permanently lock you out of your account."
                      else "Change your @handle" ) )
               </div>
             </div>
