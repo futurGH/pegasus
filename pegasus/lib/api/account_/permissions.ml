@@ -95,6 +95,7 @@ let post_handler =
                       Oauth.Queries.delete_oauth_tokens_by_client ctx.db ~did
                         ~client_id
                     in
+                    Oauth.Dpop.revoke_tokens_for_did did ;
                     Dream.redirect ctx.req "/account/permissions"
                 | None ->
                     Dream.redirect ctx.req "/account/permissions" )
@@ -113,6 +114,7 @@ let post_handler =
                   Oauth.Queries.delete_oauth_tokens_by_device ctx.db ~did
                     ~last_ip ~last_user_agent
                 in
+                Oauth.Dpop.revoke_tokens_for_did did ;
                 Dream.redirect ctx.req "/account/permissions"
             | _ ->
                 Dream.redirect ctx.req "/account/permissions" )

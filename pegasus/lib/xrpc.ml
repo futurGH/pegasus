@@ -108,7 +108,7 @@ let add_dpop_nonce_if_needed res =
   in
   let () =
     let to_expose =
-      (* see comments on UseDpopNonce____Error in errors.ml *)
+      (* see comments on Dpop____Error in errors.ml *)
       if Dream.status res = `Unauthorized then "DPoP-Nonce, WWW-Authenticate"
       else if Dream.status res = `Bad_Request then "DPoP-Nonce"
       else ""
@@ -146,7 +146,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
           let%lwt res = exn_to_response e in
           Lwt.return
             ( match e with
-            | UseDpopNonceAuthError | UseDpopNonceResourceError ->
+            | DpopAuthError _ | DpopResourceError _ ->
                 add_dpop_nonce_if_needed res
             | _ ->
                 res )
@@ -155,7 +155,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
         Dream.redirect init.req r
     | Rate_limiter.Rate_limit_exceeded status ->
         rate_limit_response status
-    | (UseDpopNonceAuthError | UseDpopNonceResourceError) as e ->
+    | (DpopAuthError _ | DpopResourceError _) as e ->
         let%lwt res = exn_to_response e in
         Lwt.return (add_dpop_nonce_if_needed res)
     | e ->

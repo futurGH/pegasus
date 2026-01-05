@@ -258,7 +258,7 @@ module Verifiers = struct
         ~url:(Dream.target req) ~dpop_header ()
     with
     | Error "use_dpop_nonce" ->
-        Lwt.return_error @@ Errors.use_dpop_nonce_auth ()
+        Lwt.return_error @@ Errors.dpop_auth "use_dpop_nonce"
     | Error e ->
         Log.debug (fun log -> log "dpop error: %s" e) ;
         Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
@@ -279,7 +279,7 @@ module Verifiers = struct
           ~access_token:token ()
       with
       | Error "use_dpop_nonce" ->
-          Lwt.return_error @@ Errors.use_dpop_nonce_resource ()
+          Lwt.return_error @@ Errors.dpop_resource "use_dpop_nonce"
       | Error e ->
           Log.debug (fun log -> log "dpop error: %s" e) ;
           Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
@@ -292,6 +292,7 @@ module Verifiers = struct
             let open Yojson.Safe.Util in
             try
               let did = claims |> member "sub" |> to_string in
+              let iat = claims |> member "iat" |> to_int in
               let exp = claims |> member "exp" |> to_int in
               let jkt_claim =
                 claims |> member "cnf" |> member "jkt" |> to_string
@@ -307,6 +308,8 @@ module Verifiers = struct
               else if exp < now then
                 Lwt.return_error
                 @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
+              else if Oauth.Dpop.is_token_revoked ~did ~iat then
+                Lwt.return_error @@ Errors.dpop_resource "invalid_token"
               else if not (Oauth.Scopes.has_atproto scopes) then
                 Lwt.return_error
                 @@ Errors.invalid_request ~name:"InvalidToken"

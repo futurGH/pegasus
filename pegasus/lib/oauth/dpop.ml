@@ -20,6 +20,28 @@ let cleanup_jti_cache () =
     (fun _ expires_at -> if expires_at > now then Some expires_at else None)
     jti_cache
 
+let revocation_cache : (string, int) Hashtbl.t = Hashtbl.create 1000
+
+let cleanup_revocation_cache () =
+  let now_s = int_of_float (Unix.gettimeofday ()) in
+  let max_token_age_s = Constants.access_token_expiry_ms / 1000 in
+  Hashtbl.filter_map_inplace
+    (fun _ revoked_at ->
+      if now_s - revoked_at < max_token_age_s then Some revoked_at else None )
+    revocation_cache
+
+let revoke_tokens_for_did did =
+  let now_s = int_of_float (Unix.gettimeofday ()) in
+  Hashtbl.replace revocation_cache did now_s ;
+  if Hashtbl.length revocation_cache mod 50 = 0 then cleanup_revocation_cache ()
+
+let is_token_revoked ~did ~iat =
+  match Hashtbl.find_opt revocation_cache did with
+  | Some revoked_at ->
+      iat < revoked_at
+  | None ->
+      false
+
 let compute_nonce secret counter =
   let data = Bytes.create 8 in
   Bytes.set_int64_be data 0 (Int64.of_int counter) ;

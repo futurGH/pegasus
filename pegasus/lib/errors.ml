@@ -8,11 +8,11 @@ exception NotFoundError of (string * string)
 
 exception Redirect of string
 
-(* HTTP 400, { error: "use_dpop_nonce" } — https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
-exception UseDpopNonceAuthError
+(* HTTP 400, { error: "..." } — https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
+exception DpopAuthError of string
 
-(* HTTP 401, WWW-Authenticate — https://datatracker.ietf.org/doc/html/rfc9449#section-9 *)
-exception UseDpopNonceResourceError
+(* HTTP 401, WWW-Authenticate=DPoP error="..." — https://datatracker.ietf.org/doc/html/rfc9449#section-9 *)
+exception DpopResourceError of string
 
 let is_xrpc_error = function
   | InvalidRequestError _
@@ -34,9 +34,9 @@ let auth_required ?(name = "AuthRequired") msg = raise (AuthError (name, msg))
 
 let not_found ?(name = "NotFound") msg = raise (NotFoundError (name, msg))
 
-let use_dpop_nonce_auth () = raise UseDpopNonceAuthError
+let dpop_auth error = raise (DpopAuthError error)
 
-let use_dpop_nonce_resource () = raise UseDpopNonceResourceError
+let dpop_resource error = raise (DpopResourceError error)
 
 let printer = function
   | InvalidRequestError (error, message) ->
@@ -47,10 +47,10 @@ let printer = function
       Some (Printf.sprintf "Auth error (%s): %s" error message)
   | NotFoundError (error, message) ->
       Some (Printf.sprintf "Not found (%s): %s" error message)
-  | UseDpopNonceAuthError ->
-      Some "Use DPoP nonce"
-  | UseDpopNonceResourceError ->
-      Some "Use DPoP nonce"
+  | DpopAuthError error ->
+      Some (Printf.sprintf "DPoP auth error (%s)" error)
+  | DpopResourceError error ->
+      Some (Printf.sprintf "DPoP resource error (%s)" error)
   | _ ->
       None
 
@@ -72,18 +72,18 @@ let exn_to_response exn =
   | NotFoundError (error, message) ->
       Log.debug (fun log -> log "not found error: %s - %s" error message) ;
       format_response error message `Not_Found
-  | UseDpopNonceAuthError ->
-      Log.debug (fun log -> log "use_dpop_nonce auth error") ;
+  | DpopAuthError e ->
+      Log.debug (fun log -> log "dpop auth error") ;
       Dream.json ~status:`Bad_Request
         ~headers:[("Access-Control-Expose-Headers", "DPoP-Nonce")]
-        {|{ "error": "use_dpop_nonce" }|}
-  | UseDpopNonceResourceError ->
-      Log.debug (fun log -> log "use_dpop_nonce resource error") ;
+        (Format.sprintf {|{ "error": "%s" }|} e)
+  | DpopResourceError e ->
+      Log.debug (fun log -> log "dpop resource error") ;
       Dream.json ~status:`Unauthorized
         ~headers:
-          [ ("WWW-Authenticate", {|DPoP error="use_dpop_nonce"|})
+          [ ("WWW-Authenticate", Format.sprintf {|DPoP error="%s"|} e)
           ; ("Access-Control-Expose-Headers", "DPoP-Nonce, WWW-Authenticate") ]
-        {|{ "error": "use_dpop_nonce" }|}
+        (Format.sprintf {|{ "error": "%s" }|} e)
   | e ->
       Log.warn (fun log ->
           log "unexpected internal error: %s" (Printexc.to_string e) ) ;
