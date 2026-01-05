@@ -99,15 +99,23 @@ let rate_limit_response (status : Rate_limiter.status) =
 let extract_nsid req = (Dream.path [@warning "-3"]) req |> List.rev |> List.hd
 
 let add_dpop_nonce_if_needed res =
-  let nonce = Oauth.Dpop.next_nonce () in
-  Dream.set_header res "DPoP-Nonce" nonce ;
-  let expose_header = Dream.header res "Access-Control-Expose-Headers" in
-  Dream.add_header res "Access-Control-Expose-Headers"
-    ( match expose_header with
-    | Some headers when not @@ Util.str_contains ~affix:"DPoP-Nonce" headers ->
-        headers ^ ", DPoP-Nonce"
+  let () =
+    match Dream.header res "DPoP-Nonce" with
+    | Some _ ->
+        ()
+    | None ->
+        Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ())
+  in
+  let () =
+    match Dream.header res "Access-Control-Expose-Headers" with
+    | Some header when Util.str_contains ~affix:"DPoP-Nonce" header ->
+        ()
+    | Some header ->
+        Dream.set_header res "Access-Control-Expose-Headers"
+          (header ^ ", DPoP-Nonce")
     | _ ->
-        "DPoP-Nonce" ) ;
+        Dream.set_header res "Access-Control-Expose-Headers" "DPoP-Nonce"
+  in
   res
 
 let handler ?(auth : Auth.Verifiers.t = Any)
@@ -337,12 +345,8 @@ let dpop_middleware inner_handler req =
     Option.is_some dpop
     || Option.is_some www_auth
        && Option.get www_auth |> Util.str_contains ~affix:"DPoP"
-  then begin
-    Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ()) ;
-    Dream.add_header res "Access-Control-Expose-Headers"
-      "DPoP-Nonce, WWW-Authenticate"
-  end ;
-  Lwt.return res
+  then Lwt.return @@ add_dpop_nonce_if_needed res
+  else Lwt.return res
 
 let cors_middleware inner_handler req =
   let%lwt res = inner_handler req in

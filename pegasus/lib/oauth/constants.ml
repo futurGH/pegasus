@@ -1,8 +1,8 @@
-let max_dpop_age_s = 60
+let max_dpop_age_s = 180
 
-let dpop_rotation_interval_ms = 60_000L
+let dpop_rotation_interval_ms = 60_000
 
-let jti_ttl_s = 3600
+let jti_ttl_s = 24 * 60 * 60
 
 let jti_cache_size = 10_000
 

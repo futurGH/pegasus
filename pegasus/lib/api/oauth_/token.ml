@@ -128,7 +128,6 @@ let post_handler =
                             Dream.json
                               ~headers:
                                 [ ("DPoP-Nonce", nonce)
-                                ; ("Access-Control-Expose-Headers", "DPoP-Nonce")
                                 ; ("Cache-Control", "no-store") ]
                             @@ Yojson.Safe.to_string
                             @@ `Assoc

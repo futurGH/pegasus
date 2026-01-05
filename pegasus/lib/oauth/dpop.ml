@@ -1,10 +1,9 @@
 type nonce_state =
   { secret: bytes
-  ; mutable counter: int64
+  ; mutable counter: int
   ; mutable prev: string
   ; mutable curr: string
-  ; mutable next: string
-  ; rotation_interval_ms: int64 }
+  ; mutable next: string }
 
 type ec_jwk = {crv: string; kty: string; x: string; y: string}
 [@@deriving yojson {strict= false}]
@@ -16,59 +15,47 @@ let jti_cache : (string, int) Hashtbl.t =
   Hashtbl.create Constants.jti_cache_size
 
 let cleanup_jti_cache () =
-  let now = int_of_float (Unix.gettimeofday ()) in
+  let now = Util.now_ms () in
   Hashtbl.filter_map_inplace
     (fun _ expires_at -> if expires_at > now then Some expires_at else None)
     jti_cache
 
 let compute_nonce secret counter =
   let data = Bytes.create 8 in
-  Bytes.set_int64_be data 0 counter ;
+  Bytes.set_int64_be data 0 (Int64.of_int counter) ;
   Digestif.SHA256.(
     hmac_bytes ~key:(Bytes.to_string secret) data
     |> to_raw_string |> Jwt.b64_encode )
 
 let create_nonce_state secret =
-  let counter =
-    Int64.div
-      (Int64.of_float (Unix.gettimeofday () *. 1000.))
-      Constants.dpop_rotation_interval_ms
-  in
+  let counter = Util.now_ms () / Constants.dpop_rotation_interval_ms in
   { secret
   ; counter
-  ; prev= compute_nonce secret (Int64.pred counter)
+  ; prev= compute_nonce secret (pred counter)
   ; curr= compute_nonce secret counter
-  ; next= compute_nonce secret (Int64.succ counter)
-  ; rotation_interval_ms= Constants.dpop_rotation_interval_ms }
+  ; next= compute_nonce secret (succ counter) }
 
 let nonce_state = ref (create_nonce_state Env.dpop_nonce_secret)
 
 let next_nonce () =
-  let now_counter =
-    Int64.div
-      (Int64.of_float (Unix.gettimeofday () *. 1000.))
-      !nonce_state.rotation_interval_ms
-  in
-  let diff = Int64.sub now_counter !nonce_state.counter in
+  let now_counter = Util.now_ms () / Constants.dpop_rotation_interval_ms in
+  let diff = now_counter - !nonce_state.counter in
   ( match diff with
-  | 0L ->
+  | 0 ->
       ()
-  | 1L ->
+  | 1 ->
       !nonce_state.prev <- !nonce_state.curr ;
       !nonce_state.curr <- !nonce_state.next ;
-      !nonce_state.next <-
-        compute_nonce !nonce_state.secret (Int64.succ now_counter)
-  | 2L ->
+      !nonce_state.next <- compute_nonce !nonce_state.secret (succ now_counter)
+  | 2 ->
       !nonce_state.prev <- !nonce_state.next ;
       !nonce_state.curr <- compute_nonce !nonce_state.secret now_counter ;
-      !nonce_state.next <-
-        compute_nonce !nonce_state.secret (Int64.succ now_counter)
+      !nonce_state.next <- compute_nonce !nonce_state.secret (succ now_counter)
   | _ ->
-      !nonce_state.prev <-
-        compute_nonce !nonce_state.secret (Int64.pred now_counter) ;
+      !nonce_state.prev <- compute_nonce !nonce_state.secret (pred now_counter) ;
       !nonce_state.curr <- compute_nonce !nonce_state.secret now_counter ;
-      !nonce_state.next <-
-        compute_nonce !nonce_state.secret (Int64.succ now_counter) ) ;
+      !nonce_state.next <- compute_nonce !nonce_state.secret (succ now_counter)
+  ) ;
   !nonce_state.counter <- now_counter ;
   !nonce_state.next
 
@@ -189,6 +176,12 @@ let verify_dpop_proof ~mthd ~url ~dpop_header ?access_token () =
                     | None ->
                         Error "use_dpop_nonce"
                     | Some n when not (verify_nonce n) ->
+                        Log.debug (fun log ->
+                            let state = !nonce_state in
+                            log
+                              "given nonce %s, failed to match any of: %s, %s, \
+                               %s"
+                              n state.prev state.curr state.next ) ;
                         Error "use_dpop_nonce"
                     | Some _ -> (
                         if htm <> mthd then Error "htm mismatch"
