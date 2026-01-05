@@ -274,7 +274,9 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
             let path = Format.sprintf "%s/%s" collection rkey in
             let uri = Format.sprintf "at://%s/%s" t.did path in
             let%lwt existing_record = User_store.get_record t.db path in
-            let old_cid = Option.map (fun (r : record) -> r.cid) existing_record in
+            let old_cid =
+              Option.map (fun (r : record) -> r.cid) existing_record
+            in
             ( if
                 (swap_record <> None && swap_record <> old_cid)
                 || (swap_record = None && old_cid = None)
@@ -389,8 +391,12 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   let commit_block =
     new_commit_signed |> signed_commit_to_yojson |> Dag_cbor.encode_yojson
   in
-  let proof_keys = List.map (fun ({path; _} : commit_evt_op) -> path) commit_ops in
-  let%lwt proof_blocks = Cached_mst.proof_for_keys new_mst new_mst.root proof_keys in
+  let proof_keys =
+    List.map (fun ({path; _} : commit_evt_op) -> path) commit_ops
+  in
+  let%lwt proof_blocks =
+    Cached_mst.proof_for_keys new_mst new_mst.root proof_keys
+  in
   let proof_blocks = Block_map.merge proof_blocks !added_leaves in
   let block_stream =
     proof_blocks |> Block_map.entries |> Lwt_seq.of_list
@@ -567,7 +573,7 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
     in
     let record_data = List.rev record_data in
     let%lwt _ =
-      Util.use_pool t.db.db (fun conn ->
+      Util.use_pool ~timeout:600. t.db.db (fun conn ->
           Util.transact conn (fun () ->
               let$! _ = User_store.Queries.put_commit root commit_bytes conn in
               let$! () = User_store.Queries.clear_mst conn in
