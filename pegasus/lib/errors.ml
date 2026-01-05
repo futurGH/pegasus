@@ -8,7 +8,11 @@ exception NotFoundError of (string * string)
 
 exception Redirect of string
 
-exception UseDpopNonceError
+(* HTTP 400, { error: "use_dpop_nonce" } — https://datatracker.ietf.org/doc/html/rfc9449#section-8 *)
+exception UseDpopNonceAuthError
+
+(* HTTP 401, WWW-Authenticate — https://datatracker.ietf.org/doc/html/rfc9449#section-9 *)
+exception UseDpopNonceResourceError
 
 let is_xrpc_error = function
   | InvalidRequestError _
@@ -30,7 +34,9 @@ let auth_required ?(name = "AuthRequired") msg = raise (AuthError (name, msg))
 
 let not_found ?(name = "NotFound") msg = raise (NotFoundError (name, msg))
 
-let use_dpop_nonce () = raise UseDpopNonceError
+let use_dpop_nonce_auth () = raise UseDpopNonceAuthError
+
+let use_dpop_nonce_resource () = raise UseDpopNonceResourceError
 
 let printer = function
   | InvalidRequestError (error, message) ->
@@ -41,7 +47,9 @@ let printer = function
       Some (Printf.sprintf "Auth error (%s): %s" error message)
   | NotFoundError (error, message) ->
       Some (Printf.sprintf "Not found (%s): %s" error message)
-  | UseDpopNonceError ->
+  | UseDpopNonceAuthError ->
+      Some "Use DPoP nonce"
+  | UseDpopNonceResourceError ->
       Some "Use DPoP nonce"
   | _ ->
       None
@@ -64,9 +72,14 @@ let exn_to_response exn =
   | NotFoundError (error, message) ->
       Log.debug (fun log -> log "not found error: %s - %s" error message) ;
       format_response error message `Not_Found
-  | UseDpopNonceError ->
-      Log.debug (fun log -> log "use_dpop_nonce error") ;
+  | UseDpopNonceAuthError ->
+      Log.debug (fun log -> log "use_dpop_nonce auth error") ;
       Dream.json ~status:`Bad_Request
+        ~headers:[("Access-Control-Expose-Headers", "DPoP-Nonce")]
+        {|{ "error": "use_dpop_nonce" }|}
+  | UseDpopNonceResourceError ->
+      Log.debug (fun log -> log "use_dpop_nonce resource error") ;
+      Dream.json ~status:`Unauthorized
         ~headers:
           [ ("WWW-Authenticate", {|DPoP error="use_dpop_nonce"|})
           ; ("Access-Control-Expose-Headers", "DPoP-Nonce, WWW-Authenticate") ]

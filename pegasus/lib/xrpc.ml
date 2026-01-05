@@ -107,14 +107,20 @@ let add_dpop_nonce_if_needed res =
         Dream.set_header res "DPoP-Nonce" (Oauth.Dpop.next_nonce ())
   in
   let () =
+    let to_expose =
+      (* see comments on UseDpopNonce____Error in errors.ml *)
+      if Dream.status res = `Unauthorized then "DPoP-Nonce, WWW-Authenticate"
+      else if Dream.status res = `Bad_Request then "DPoP-Nonce"
+      else ""
+    in
     match Dream.header res "Access-Control-Expose-Headers" with
     | Some header when Util.str_contains ~affix:"DPoP-Nonce" header ->
         ()
     | Some header ->
         Dream.set_header res "Access-Control-Expose-Headers"
-          (header ^ ", DPoP-Nonce")
+          (header ^ ", " ^ to_expose)
     | _ ->
-        Dream.set_header res "Access-Control-Expose-Headers" "DPoP-Nonce"
+        Dream.set_header res "Access-Control-Expose-Headers" to_expose
   in
   res
 
@@ -140,7 +146,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
           let%lwt res = exn_to_response e in
           Lwt.return
             ( match e with
-            | UseDpopNonceError ->
+            | UseDpopNonceAuthError | UseDpopNonceResourceError ->
                 add_dpop_nonce_if_needed res
             | _ ->
                 res )
@@ -149,7 +155,7 @@ let handler ?(auth : Auth.Verifiers.t = Any)
         Dream.redirect init.req r
     | Rate_limiter.Rate_limit_exceeded status ->
         rate_limit_response status
-    | UseDpopNonceError as e ->
+    | (UseDpopNonceAuthError | UseDpopNonceResourceError) as e ->
         let%lwt res = exn_to_response e in
         Lwt.return (add_dpop_nonce_if_needed res)
     | e ->

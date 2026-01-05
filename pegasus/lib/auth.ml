@@ -258,7 +258,7 @@ module Verifiers = struct
         ~url:(Dream.target req) ~dpop_header ()
     with
     | Error "use_dpop_nonce" ->
-        Lwt.return_error @@ Errors.use_dpop_nonce ()
+        Lwt.return_error @@ Errors.use_dpop_nonce_auth ()
     | Error e ->
         Log.debug (fun log -> log "dpop error: %s" e) ;
         Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
@@ -279,7 +279,7 @@ module Verifiers = struct
           ~access_token:token ()
       with
       | Error "use_dpop_nonce" ->
-          Lwt.return_error @@ Errors.use_dpop_nonce ()
+          Lwt.return_error @@ Errors.use_dpop_nonce_resource ()
       | Error e ->
           Log.debug (fun log -> log "dpop error: %s" e) ;
           Lwt.return_error @@ Errors.invalid_request ("dpop error: " ^ e)
