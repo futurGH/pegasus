@@ -26,13 +26,30 @@ jobs:
               run: echo "git_rev=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
             - name: Build and push
-              uses: docker/build-push-action@v6
+              uses: Wandalen/wretry.action@v3
               with:
-                  push: true
-                  tags: ghcr.io/futurgh/pegasus:${{ github.sha }}-amd64
-                  build-args: GIT_REV=${{ steps.rev_parse.outputs.git_rev }}
-                  cache-from: type=gha,scope=amd64
-                  cache-to: type=gha,scope=amd64,mode=max
+                  attempt_limit: 3
+                  retry_condition: steps._this.outputs.retryable != 'false'
+                  command: |
+                      set +e
+                      output=$(docker buildx build \
+                          --push \
+                          --tag ghcr.io/futurgh/pegasus:${{ github.sha }}-amd64 \
+                          --build-arg GIT_REV=${{ steps.rev_parse.outputs.git_rev }} \
+                          --cache-from type=gha,scope=amd64 \
+                          --cache-to type=gha,scope=amd64,mode=max \
+                          . 2>&1)
+                      exit_code=$?
+                      echo "$output"
+                      if [ $exit_code -eq 0 ]; then
+                          exit 0
+                      elif echo "$output" | grep -qE "download failed|50[0-9]|Connection (refused|reset|timed out)"; then
+                          echo "retrying network error"
+                          exit 1
+                      else
+                          echo "retryable=false" >> $GITHUB_OUTPUT
+                          exit 1
+                      fi
 
     build-arm64:
         runs-on: ubuntu-24.04-arm
@@ -54,13 +71,30 @@ jobs:
               run: echo "git_rev=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
             - name: Build and push
-              uses: docker/build-push-action@v6
+              uses: Wandalen/wretry.action@v3
               with:
-                  push: true
-                  tags: ghcr.io/futurgh/pegasus:${{ github.sha }}-arm64
-                  build-args: GIT_REV=${{ steps.rev_parse.outputs.git_rev }}
-                  cache-from: type=gha,scope=arm64
-                  cache-to: type=gha,scope=arm64,mode=max
+                  attempt_limit: 3
+                  retry_condition: steps._this.outputs.retryable != 'false'
+                  command: |
+                      set +e
+                      output=$(docker buildx build \
+                          --push \
+                          --tag ghcr.io/futurgh/pegasus:${{ github.sha }}-arm64 \
+                          --build-arg GIT_REV=${{ steps.rev_parse.outputs.git_rev }} \
+                          --cache-from type=gha,scope=arm64 \
+                          --cache-to type=gha,scope=arm64,mode=max \
+                          . 2>&1)
+                      exit_code=$?
+                      echo "$output"
+                      if [ $exit_code -eq 0 ]; then
+                          exit 0
+                      elif echo "$output" | grep -qE "download failed|50[0-9]|Connection (refused|reset|timed out)"; then
+                          echo "retrying network error"
+                          exit 1
+                      else
+                          echo "retryable=false" >> $GITHUB_OUTPUT
+                          exit 1
+                      fi
 
     merge:
         runs-on: ubuntu-latest
