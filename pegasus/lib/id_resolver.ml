@@ -114,7 +114,7 @@ module Did = struct
           Error "invalid field value"
 
     type t =
-      { context: string list [@key "@context"]
+      { context: string list option [@key "@context"] [@default None]
       ; id: string
       ; controller: string_or_strings option [@default None]
       ; also_known_as: string list option [@key "alsoKnownAs"] [@default None]
