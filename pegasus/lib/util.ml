@@ -407,7 +407,7 @@ let request_ip req =
   |> String.split_on_char ',' |> List.hd |> String.split_on_char ':' |> List.hd
   |> String.trim
 
-let rec http_get ?(max_redirects = 5) ?headers uri =
+let rec http_get ?(max_redirects = 5) ?(no_drain = false) ?headers uri =
   let ua = "pegasus (" ^ Env.host_endpoint ^ ")" in
   let headers =
     match headers with
@@ -417,13 +417,14 @@ let rec http_get ?(max_redirects = 5) ?headers uri =
         Http.Header.of_list [("User-Agent", ua)]
   in
   let%lwt ans = Cohttp_lwt_unix.Client.get ~headers uri in
-  follow_redirect ~max_redirects uri ans
+  follow_redirect ~max_redirects ~no_drain uri ans
 
-and follow_redirect ~max_redirects request_uri (response, body) =
+and follow_redirect ~max_redirects ~no_drain request_uri (response, body) =
   let status = Http.Response.status response in
   (* the unconsumed body would otherwise leak memory *)
   let%lwt () =
-    if status <> `OK then Cohttp_lwt.Body.drain_body body else Lwt.return_unit
+    if status <> `OK && not no_drain then Cohttp_lwt.Body.drain_body body
+    else Lwt.return_unit
   in
   match status with
   | `Permanent_redirect | `Moved_permanently ->

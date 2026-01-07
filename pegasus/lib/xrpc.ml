@@ -251,7 +251,7 @@ let service_proxy ?lxm ?aud (ctx : context) =
   let rpc_aud = aud ^ fragment in
   Auth.assert_rpc_scope ctx.auth ~aud:rpc_aud ~lxm ;
   match%lwt Id_resolver.Did.resolve service_did with
-  | Ok did_doc -> (
+  | Ok did_doc ->
       let scheme, host =
         match Id_resolver.Did.Document.get_service did_doc fragment with
         | Some service -> (
@@ -286,51 +286,30 @@ let service_proxy ?lxm ?aud (ctx : context) =
             , Dream.header ctx.req "atproto-accept-labelers" )
           ; ("authorization", Some ("Bearer " ^ jwt)) ]
       in
-      match Dream.method_ ctx.req with
-      | `GET -> (
-          let%lwt res, body =
-            try%lwt
-              Lwt_unix.with_timeout 15.0 (fun () -> Util.http_get uri ~headers)
-            with Lwt_unix.Timeout ->
-              Errors.internal_error ~msg:"proxy request timed out" ()
-          in
-          let res_headers =
-            Cohttp.Response.headers res |> Cohttp.Header.to_list
-          in
-          match res.status with
-          | `OK ->
-              Dream.stream ~status:`OK ~headers:res_headers (fun stream ->
-                  Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
-          | e ->
-              let%lwt () = Body.drain_body body in
-              Log.err (fun log ->
-                  log "error when proxying to %s: %s" (Uri.to_string uri)
-                    (Http.Status.to_string e) ) ;
-              Errors.internal_error ~msg:"failed to proxy request" () )
-      | `POST -> (
-          let%lwt req_body = Dream.body ctx.req in
-          let%lwt res, body =
-            try%lwt
-              Lwt_unix.with_timeout 15.0 (fun () ->
-                  Client.post uri ~headers ~body:(Body.of_string req_body) )
-            with Lwt_unix.Timeout ->
-              Errors.internal_error ~msg:"proxy request timed out" ()
-          in
-          let res_headers =
-            Cohttp.Response.headers res |> Cohttp.Header.to_list
-          in
-          match res.status with
-          | `OK ->
-              Dream.stream ~status:`OK ~headers:res_headers (fun stream ->
-                  Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
-          | e ->
-              let%lwt () = Body.drain_body body in
-              Log.err (fun log ->
-                  log "error when proxying to %s: %s" (Uri.to_string uri)
-                    (Http.Status.to_string e) ) ;
-              Errors.internal_error ~msg:"failed to proxy request" () )
-      | _ ->
-          Errors.invalid_request "unsupported method" )
+      let%lwt res, body =
+        try%lwt
+          Lwt_unix.with_timeout 30.0 (fun () ->
+              match Dream.method_ ctx.req with
+              | `GET ->
+                  Util.http_get uri ~headers ~no_drain:true
+              | `POST ->
+                  let%lwt req_body = Dream.body ctx.req in
+                  Client.post uri ~headers ~body:(Body.of_string req_body)
+              | _ ->
+                  Errors.invalid_request "unsupported method" )
+        with Lwt_unix.Timeout ->
+          Errors.internal_error ~msg:"proxy request timed out" ()
+      in
+      let res_headers = Cohttp.Response.headers res |> Cohttp.Header.to_list in
+      if res.status <> `OK then
+        Log.err (fun log ->
+            log "error when proxying to %s: %s" (Uri.to_string uri)
+              (Http.Status.to_string res.status) ) ;
+      Dream.stream
+        ~status:(Dream.int_to_status (Http.Status.to_int res.status))
+        ~headers:res_headers
+        (fun stream ->
+          Body.to_stream body |> Lwt_stream.iter_s (Dream.write stream) )
   | Error e ->
       Log.err (fun log -> log "error when resolving destination service: %s" e) ;
       Errors.internal_error ~msg:"failed to resolve destination service" ()
