@@ -235,6 +235,10 @@ module type Intf = sig
 
   val leaves_of_root : t -> (string * Cid.t) list Lwt.t
 
+  val get_min_key : t -> Cid.t -> string option Lwt.t
+
+  val get_max_key : t -> Cid.t -> string option Lwt.t
+
   val equal : t -> t -> bool Lwt.t
 end
 
@@ -424,11 +428,7 @@ struct
                             (r, full_key) :: acc
                         | None ->
                             acc )
-                      ( match raw.l with
-                      | Some l ->
-                          [(l, prefix)]
-                      | None ->
-                          [] )
+                      (match raw.l with Some l -> [(l, prefix)] | None -> [])
                       raw.e
                   in
                   (Cid.Set.add cid visited, List.rev_append next_pairs queue) )
@@ -496,8 +496,7 @@ struct
             (List.rev acc, seen)
         | `Node cid :: rest ->
             if
-              Cid.Set.mem cid missing
-              || Block_map.has cid cache
+              Cid.Set.mem cid missing || Block_map.has cid cache
               || Cid.Set.mem cid seen
             then collect acc seen remaining rest
             else
@@ -512,12 +511,11 @@ struct
         let cache' =
           List.fold_left
             (fun acc (cid, bytes) -> Block_map.set cid bytes acc)
-            cache (Block_map.entries bm.blocks)
+            cache
+            (Block_map.entries bm.blocks)
         in
         let missing' =
-          List.fold_left
-            (fun acc cid -> Cid.Set.add cid acc)
-            missing bm.missing
+          List.fold_left (fun acc cid -> Cid.Set.add cid acc) missing bm.missing
         in
         Lwt.return (cache', missing')
     in
@@ -527,10 +525,10 @@ struct
           Lwt.return_none
       | `Leaf cid :: rest ->
           Lwt.return_some ((Leaf cid : ordered_item), (rest, cache, missing))
-      | `Node cid :: rest ->
+      | `Node cid :: rest -> (
           if Cid.Set.mem cid missing then step (rest, cache, missing)
           else
-            ( match Block_map.get cid cache with
+            match Block_map.get cid cache with
             | None ->
                 let%lwt cache', missing' = prefetch queue cache missing in
                 if cache' == cache && Cid.Set.mem cid missing' then
@@ -554,8 +552,8 @@ struct
                 let new_queue = left_queue @ entries_queue @ rest in
                 let cache' = Block_map.remove cid cache in
                 Lwt.return_some
-                  ((Node (cid, bytes) : ordered_item), (new_queue, cache', missing))
-            )
+                  ( (Node (cid, bytes) : ordered_item)
+                  , (new_queue, cache', missing) ) )
     in
     Lwt_seq.unfold_lwt step ([`Node t.root], Block_map.empty, Cid.Set.empty)
 
@@ -565,7 +563,8 @@ struct
       let entries =
         if entries_are_sorted node.entries then node.entries
         else
-          List.sort (fun (a : entry) b -> String.compare a.key b.key)
+          List.sort
+            (fun (a : entry) b -> String.compare a.key b.key)
             node.entries
       in
       let%lwt left =
@@ -612,8 +611,7 @@ struct
       | Error e ->
           raise e
     in
-    try%lwt Lwt.map Result.ok (aux node)
-    with e -> Lwt.return_error e
+    try%lwt Lwt.map Result.ok (aux node) with e -> Lwt.return_error e
 
   (* raw-node helpers for covering proofs: operate on stored bytes, not re-serialization *)
   type interleaved_entry =
@@ -769,8 +767,7 @@ struct
       let missing = ref Cid.Set.empty in
       let acc = ref Block_map.empty in
       let add_block cid bytes =
-        if not (Block_map.has cid !acc) then
-          acc := Block_map.set cid bytes !acc
+        if not (Block_map.has cid !acc) then acc := Block_map.set cid bytes !acc
       in
       let get_bytes_cached cid =
         match Block_map.get cid !cache with
@@ -792,24 +789,23 @@ struct
         | None ->
             Lwt.return_unit
         | Some leaf_cid -> (
-            match%lwt get_bytes_cached leaf_cid with
-            | Some bytes ->
-                add_block leaf_cid bytes ;
-                Lwt.return_unit
-            | None ->
-                Lwt.return_unit )
+          match%lwt get_bytes_cached leaf_cid with
+          | Some bytes ->
+              add_block leaf_cid bytes ; Lwt.return_unit
+          | None ->
+              Lwt.return_unit )
       in
       let rec proof_for_key_cached cid key =
         match%lwt get_bytes_cached cid with
         | None ->
             Lwt.return_unit
-        | Some bytes ->
+        | Some bytes -> (
             add_block cid bytes ;
             let raw = decode_block_raw bytes in
             let keys = node_entry_keys raw in
             let seq = interleave_raw raw keys in
             let index = find_gte_leaf_index key seq in
-            ( match List.nth_opt seq index with
+            match List.nth_opt seq index with
             | Some (Leaf (k, _, _)) when k = key ->
                 Lwt.return_unit
             | Some (Leaf (_k, v_right, _)) -> (
@@ -896,7 +892,8 @@ struct
                   , (cid, bytes) :: nodes
                   , leaves'
                   , List.rev_append next_cids queue ) )
-              (visited, nodes, leaves, rest) batch
+              (visited, nodes, leaves, rest)
+              batch
           in
           loop next_queue visited' nodes' leaves'
     in
@@ -1212,6 +1209,43 @@ struct
     | None ->
         Lwt.return []
 
+  (* returns the minimum key in a subtree by following the leftmost path *)
+  let rec get_min_key (t : t) (cid : Cid.t) : string option Lwt.t =
+    match%lwt retrieve_node_raw t cid with
+    | None ->
+        Lwt.return_none
+    | Some raw -> (
+      match raw.l with
+      | Some left_cid ->
+          get_min_key t left_cid
+      | None -> (
+        match raw.e with
+        | [] ->
+            Lwt.return_none
+        | first :: _ ->
+            Lwt.return_some (Bytes.to_string first.k) ) )
+
+  (* returns the maximum key in a subtree by following the rightmost path *)
+  let rec get_max_key (t : t) (cid : Cid.t) : string option Lwt.t =
+    match%lwt retrieve_node_raw t cid with
+    | None ->
+        Lwt.return_none
+    | Some raw -> (
+        let keys = decompress_keys raw in
+        match List.rev (List.combine keys raw.e) with
+        | [] -> (
+          match raw.l with
+          | Some left_cid ->
+              get_max_key t left_cid
+          | None ->
+              Lwt.return_none )
+        | (last_key, last_entry) :: _ -> (
+          match last_entry.t with
+          | Some right_cid ->
+              get_max_key t right_cid
+          | None ->
+              Lwt.return_some last_key ) )
+
   (* rebuild a subtree from leaves
      returns (root_cid option, actual_layer) *)
   let rebuild_subtree (blockstore : bs) (leaves : (string * Cid.t) list) :
@@ -1265,11 +1299,11 @@ struct
     let%lwt wrapped_old =
       wrap_to_layer t.blockstore old_root_cid old_root_layer (key_layer - 1)
     in
-    (* get all keys from old tree to determine position *)
-    let%lwt old_leaves = collect_subtree_leaves t old_root_cid in
-    let old_keys = List.map fst old_leaves in
-    let all_less = List.for_all (fun k -> k < key) old_keys in
-    let all_greater = List.for_all (fun k -> k > key) old_keys in
+    (* check boundary keys to determine position *)
+    let%lwt min_key = get_min_key t old_root_cid in
+    let%lwt max_key = get_max_key t old_root_cid in
+    let all_less = match max_key with Some mx -> mx < key | None -> true in
+    let all_greater = match min_key with Some mn -> mn > key | None -> true in
     if all_less then
       (* all old keys < new key: old tree is left, new entry has no right *)
       let entries = compress_entries [(key, value, None)] in
@@ -1279,7 +1313,8 @@ struct
       let entries = compress_entries [(key, value, Some wrapped_old)] in
       persist_node_raw t.blockstore {l= None; e= entries}
     else
-      (* key is in the middle: need to split *)
+      (* key is in the middle: need to split; collect all leaves *)
+      let%lwt old_leaves = collect_subtree_leaves t old_root_cid in
       let left_leaves = List.filter (fun (k, _) -> k < key) old_leaves in
       let right_leaves = List.filter (fun (k, _) -> k > key) old_leaves in
       let%lwt left_cid, left_layer = rebuild_subtree t.blockstore left_leaves in

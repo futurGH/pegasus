@@ -860,6 +860,42 @@ let test_incremental_edge_cases () =
       Alcotest.fail "key should exist after update" ) ;
   Lwt.return_ok ()
 
+let test_get_min_max_keys () =
+  let store = Storage.Memory_blockstore.create () in
+  let cid1 =
+    cid_of_string_exn
+      "bafyreie5cvv4h45feadgeuwhbcutmh6t2ceseocckahdoe6uat64zmz454"
+  in
+  let* mst = Mem_mst.create_empty store in
+  (* empty tree *)
+  let%lwt min_empty = Mem_mst.get_min_key mst mst.root in
+  let%lwt max_empty = Mem_mst.get_max_key mst mst.root in
+  Alcotest.(check (option string)) "empty min" None min_empty ;
+  Alcotest.(check (option string)) "empty max" None max_empty ;
+  (* single entry *)
+  let%lwt mst = Mem_mst.add mst "com.example/mmm" cid1 in
+  let%lwt min_single = Mem_mst.get_min_key mst mst.root in
+  let%lwt max_single = Mem_mst.get_max_key mst mst.root in
+  Alcotest.(check (option string)) "single min" (Some "com.example/mmm") min_single ;
+  Alcotest.(check (option string)) "single max" (Some "com.example/mmm") max_single ;
+  (* multiple entries at different layers *)
+  let%lwt mst = Mem_mst.add mst "com.example/aaa" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example/zzz" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example/bbb" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example/yyy" cid1 in
+  let%lwt min_key = Mem_mst.get_min_key mst mst.root in
+  let%lwt max_key = Mem_mst.get_max_key mst mst.root in
+  Alcotest.(check (option string)) "multi min" (Some "com.example/aaa") min_key ;
+  Alcotest.(check (option string)) "multi max" (Some "com.example/zzz") max_key ;
+  (* add keys with high layer values to exercise deeper tree structure *)
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fs2j" cid1 in
+  let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fn2j" cid1 in
+  let%lwt min_deep = Mem_mst.get_min_key mst mst.root in
+  let%lwt max_deep = Mem_mst.get_max_key mst mst.root in
+  Alcotest.(check (option string)) "deep min" (Some "com.example.record/3jqfcqzm3fn2j") min_deep ;
+  Alcotest.(check (option string)) "deep max" (Some "com.example/zzz") max_deep ;
+  Lwt.return_ok ()
+
 let () =
   let open Alcotest in
   let run_test test =
@@ -909,4 +945,7 @@ let () =
         ; test_case "mixed incremental ops" `Quick (fun () ->
               run_test test_incremental_mixed_ops_canonicity )
         ; test_case "incremental edge cases" `Quick (fun () ->
-              run_test test_incremental_edge_cases ) ] ) ]
+              run_test test_incremental_edge_cases ) ] )
+    ; ( "boundary functions"
+      , [ test_case "get_min_key and get_max_key" `Quick (fun () ->
+              run_test test_get_min_max_keys ) ] ) ]
