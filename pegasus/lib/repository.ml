@@ -413,13 +413,17 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
   in
   Lwt.return {commit= new_commit; results}
 
-let load ?create ?(ensure_active = false) did : t Lwt.t =
+let load ?create ?(ensure_active = false) ?user_db did : t Lwt.t =
   let%lwt ds_conn = Data_store.connect () in
   let%lwt user_db =
-    try%lwt User_store.connect ?create did
-    with _ ->
-      Errors.invalid_request ~name:"RepoNotFound"
-        "your princess is in another castle"
+    match user_db with
+    | Some db ->
+        Lwt.return db
+    | None -> (
+      try%lwt User_store.connect ?create did
+      with _ ->
+        Errors.invalid_request ~name:"RepoNotFound"
+          "your princess is in another castle" )
   in
   let%lwt actor =
     match%lwt Data_store.get_actor_by_identifier did ds_conn with

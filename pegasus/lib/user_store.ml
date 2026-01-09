@@ -483,6 +483,16 @@ let connect ?create did : t Lwt.t =
               Hashtbl.replace pool_cache did t ;
               Lwt.return t )
 
+let connect_readonly ?create did =
+  if create = Some true then
+    Util.mkfile_p (Util.Constants.user_db_filepath did) ~perm:0o644 ;
+  let%lwt db =
+    Util.connect_sqlite ?create ~write:false
+      (Util.Constants.user_db_location did)
+  in
+  let%lwt () = Migrations.run_migrations User_store db in
+  Lwt.return {did; db}
+
 (* mst blocks; implements Writable_blockstore *)
 
 let get_bytes t cid : Blob.t option Lwt.t =
@@ -528,7 +538,9 @@ let put_many t bm : (int, exn) Lwt_result.t =
   if List.is_empty entries then Lwt.return_ok 0
   else
     Lwt_result.catch (fun () ->
-        let%lwt () = Util.use_pool t.db (fun conn -> Bulk.put_blocks entries conn) in
+        let%lwt () =
+          Util.use_pool t.db (fun conn -> Bulk.put_blocks entries conn)
+        in
         Lwt.return (List.length entries) )
 
 let delete_block t cid : (bool, exn) Lwt_result.t =
