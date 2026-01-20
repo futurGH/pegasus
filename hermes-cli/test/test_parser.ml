@@ -280,6 +280,54 @@ let test_parse_procedure_type () =
   | Error e ->
       fail ("parse failed: " ^ e)
 
+(* parsing permission-set type *)
+let test_parse_permission_set () =
+  let json =
+    {|{
+    "lexicon": 1,
+    "id": "com.example.auth",
+    "defs": {
+      "main": {
+        "type": "permission-set",
+        "title": "Example Auth",
+        "title:de": "Beispiel Auth",
+        "detail": "Access to authentication features",
+        "permissions": [
+          {
+            "resource": "rpc",
+            "lxm": ["com.example.auth.login", "com.example.auth.logout"],
+            "inheritAud": true
+          },
+          {
+            "resource": "repo",
+            "collection": ["com.example.auth.session"],
+            "action": ["create", "delete"]
+          }
+        ]
+      }
+    }
+  }|}
+  in
+  match Parser.parse_string json with
+  | Ok doc -> (
+      check test_string "id matches" "com.example.auth" doc.id ;
+      check int "one definition" 1 (List.length doc.defs) ;
+      let def = List.hd doc.defs in
+      match def.type_def with
+      | Lexicon_types.PermissionSet spec ->
+          check (option test_string) "title" (Some "Example Auth") spec.title ;
+          check (option test_string) "detail"
+            (Some "Access to authentication features") spec.detail ;
+          check int "two permissions" 2 (List.length spec.permissions) ;
+          let perm1 = List.hd spec.permissions in
+          check test_string "first resource" "rpc" perm1.resource ;
+          (* check extra fields are captured *)
+          check bool "has lxm in extra" true (List.mem_assoc "lxm" perm1.extra)
+      | _ ->
+          fail "expected permission-set type" )
+  | Error e ->
+      fail ("parse failed: " ^ e)
+
 (* parsing invalid JSON *)
 let test_parse_invalid_json () =
   let json = {|{ invalid json }|} in
@@ -318,8 +366,12 @@ let error_tests =
   [ ("invalid json", `Quick, test_parse_invalid_json)
   ; ("missing field", `Quick, test_parse_missing_field) ]
 
+let permission_set_tests =
+  [("parse permission-set", `Quick, test_parse_permission_set)]
+
 let () =
   run "Parser"
     [ ("objects", object_tests)
     ; ("complex_types", complex_type_tests)
-    ; ("errors", error_tests) ]
+    ; ("errors", error_tests)
+    ; ("permission-set", permission_set_tests) ]

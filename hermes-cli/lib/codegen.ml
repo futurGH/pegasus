@@ -62,6 +62,8 @@ let rec gen_type_ref nsid out (type_def : type_def) : string =
       "Yojson.Safe.t"
   | Query _ | Procedure _ | Subscription _ | Record _ ->
       "unit (* primary type *)"
+  | PermissionSet _ ->
+      "unit (* permission-set type *)"
 
 (* generate reference to another type *)
 and gen_ref_type nsid out ref_str : string =
@@ -698,6 +700,30 @@ let gen_token nsid out name (spec : token_spec) =
   emitln out (Printf.sprintf "let %s = \"%s\"" (Naming.type_name name) full_uri) ;
   emit_newline out
 
+(* generate permission set module *)
+let gen_permission_set_module nsid out name (_spec : permission_set_spec) =
+  let type_name = Naming.type_name name in
+  (* generate permission type *)
+  emitln out (Printf.sprintf "(** %s *)" nsid) ;
+  emitln out "type permission =" ;
+  emitln out "  { resource: string" ;
+  emitln out "  ; lxm: string list option [@default None]" ;
+  emitln out "  ; aud: string option [@default None]" ;
+  emitln out
+    "  ; inherit_aud: bool option [@key \"inheritAud\"] [@default None]" ;
+  emitln out "  ; collection: string list option [@default None]" ;
+  emitln out "  ; action: string list option [@default None]" ;
+  emitln out "  ; accept: string list option [@default None] }" ;
+  emitln out "[@@deriving yojson {strict= false}]" ;
+  emit_newline out ;
+  (* generate main type *)
+  emitln out (Printf.sprintf "type %s =" type_name) ;
+  emitln out "  { title: string option [@default None]" ;
+  emitln out "  ; detail: string option [@default None]" ;
+  emitln out "  ; permissions: permission list }" ;
+  emitln out "[@@deriving yojson {strict= false}]" ;
+  emit_newline out
+
 (* generate string type alias (for strings with knownValues) *)
 let gen_string_type out name (spec : string_spec) =
   let type_name = Naming.type_name name in
@@ -743,6 +769,8 @@ let gen_single_def ?(first = true) ?(last = true) nsid out def =
       gen_procedure nsid out def.name spec
   | Record spec ->
       gen_object_type ~first ~last nsid out def.name spec.record
+  | PermissionSet spec ->
+      gen_permission_set_module nsid out def.name spec
   | String spec when spec.known_values <> None ->
       gen_string_type out def.name spec
   | String _
@@ -1099,6 +1127,8 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
         "Yojson.Safe.t"
     | Query _ | Procedure _ | Subscription _ | Record _ ->
         "unit (* primary type *)"
+    | PermissionSet _ ->
+        "unit (* permission-set type *)"
   and gen_merged_ref_type current_nsid ref_str =
     if String.length ref_str > 0 && ref_str.[0] = '#' then begin
       (* local ref within same nsid *)
@@ -2274,6 +2304,8 @@ let gen_shared_module (docs : lexicon_doc list) : string =
         "Yojson.Safe.t"
     | Query _ | Procedure _ | Subscription _ | Record _ ->
         "unit (* primary type *)"
+    | PermissionSet _ ->
+        "unit (* permission-set type *)"
   and gen_shared_ref_type current_nsid ref_str =
     if String.length ref_str > 0 && ref_str.[0] = '#' then begin
       (* local ref within same nsid *)

@@ -79,7 +79,42 @@ let get_handler =
                       | None ->
                           login_redirect
                       | Some _ ->
-                          let scopes = String.split_on_char ' ' req.scope in
+                          (* parse and resolve permission sets for display *)
+                          let raw_scopes = String.split_on_char ' ' req.scope in
+                          let parsed_scopes =
+                            Oauth.Scopes.parse_scopes req.scope
+                          in
+                          let%lwt permission_sets =
+                            Lwt_list.filter_map_p
+                              (fun scope ->
+                                match scope with
+                                | Oauth.Scopes.Include inc -> (
+                                  match%lwt
+                                    Lexicon_resolver.resolve inc.nsid
+                                  with
+                                  | Error _ ->
+                                      Lwt.return_none
+                                  | Ok ps ->
+                                      let expanded =
+                                        Oauth.Scopes.expand_include_scope inc ps
+                                      in
+                                      Lwt.return_some
+                                        { Frontend.OauthAuthorizePage.nsid=
+                                            inc.nsid
+                                        ; title= ps.title
+                                        ; detail= ps.detail
+                                        ; expanded_scopes= expanded } )
+                                | _ ->
+                                    Lwt.return_none )
+                              parsed_scopes
+                          in
+                          (* separate include scopes from regular scopes for display *)
+                          let scopes =
+                            List.filter
+                              (fun s ->
+                                not (String.starts_with ~prefix:"include:" s) )
+                              raw_scopes
+                          in
                           let csrf_token = Dream.csrf_token ctx.req in
                           let client_id_uri =
                             Option.map Uri.of_string metadata.client_id
@@ -110,6 +145,7 @@ let get_handler =
                               ; logged_in_users
                               ; current_user
                               ; scopes
+                              ; permission_sets
                               ; code
                               ; request_uri
                               ; csrf_token } ) ) ) )

@@ -88,6 +88,18 @@ and record_spec =
   ; record: object_spec
   ; description: string option }
 
+and lex_permission =
+  { resource: string
+  ; extra: (string * Yojson.Safe.t) list }
+
+and permission_set_spec =
+  { title: string option
+  ; title_lang: (string * string) list option
+  ; detail: string option
+  ; detail_lang: (string * string) list option
+  ; permissions: lex_permission list
+  ; description: string option }
+
 and type_def =
   | String of string_spec
   | Integer of integer_spec
@@ -105,6 +117,7 @@ and type_def =
   | Procedure of procedure_spec
   | Subscription of subscription_spec
   | Record of record_spec
+  | PermissionSet of permission_set_spec
 
 type def_entry = {name: string; type_def: type_def}
 

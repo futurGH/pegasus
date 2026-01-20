@@ -1,4 +1,4 @@
-type account_attr = Email | Repo | Status
+type account_attr = Email | Repo
 
 type account_action = Read | Manage
 
@@ -36,6 +36,8 @@ type accept_pattern =
 
 type blob_permission = {accept: accept_pattern list}
 
+type include_scope = {nsid: string; aud: string option}
+
 type static_scope =
   | Atproto
   | TransitionEmail
@@ -49,6 +51,7 @@ type scope =
   | Repo of repo_permission
   | Rpc of rpc_permission
   | Blob of blob_permission
+  | Include of include_scope
 
 let is_valid_nsid s =
   let segments = String.split_on_char '.' s in
@@ -63,6 +66,13 @@ let is_valid_nsid s =
          seg
   in
   List.length segments >= 3 && List.for_all valid_segment segments
+
+(* check if permission_nsid is under include_nsid's authority *)
+let is_parent_authority_of ~include_nsid ~permission_nsid =
+  let include_authority = Util.nsid_authority include_nsid in
+  let permission_authority = Util.nsid_authority permission_nsid in
+  String.equal include_authority permission_authority
+  || String.starts_with ~prefix:(include_authority ^ ".") permission_authority
 
 let parse_params s =
   if s = "" then []
@@ -124,8 +134,6 @@ let parse_account_attr = function
       Some Email
   | "repo" ->
       Some Repo
-  | "status" ->
-      Some Status
   | _ ->
       None
 
@@ -182,24 +190,28 @@ let parse_repo_collection s =
   else None
 
 let parse_repo_permission positional params =
-  let collection_strs =
-    match positional with
-    | Some p ->
-        [p]
-    | None ->
-        get_all_params "collection" params
-  in
-  if collection_strs = [] then None
+  (* duplicate positional and query parameters not allowed *)
+  let has_collection_param = get_all_params "collection" params <> [] in
+  if positional <> None && has_collection_param then None
   else
-    let collections = List.filter_map parse_repo_collection collection_strs in
-    if collections = [] then None
+    let collection_strs =
+      match positional with
+      | Some p ->
+          [p]
+      | None ->
+          get_all_params "collection" params
+    in
+    if collection_strs = [] then None
     else
-      let action_strs = get_all_params "action" params in
-      let actions =
-        if action_strs = [] then all_repo_actions
-        else List.filter_map parse_repo_action action_strs
-      in
-      if actions = [] then None else Some {collections; actions}
+      let collections = List.filter_map parse_repo_collection collection_strs in
+      if collections = [] then None
+      else
+        let action_strs = get_all_params "action" params in
+        let actions =
+          if action_strs = [] then all_repo_actions
+          else List.filter_map parse_repo_action action_strs
+        in
+        if actions = [] then None else Some {collections; actions}
 
 let parse_rpc_lxm s =
   if s = "*" then Some AnyLxm
@@ -224,25 +236,33 @@ let parse_rpc_aud s =
   else None
 
 let parse_rpc_permission positional params =
-  let lxm_strs =
-    match positional with Some p -> [p] | None -> get_all_params "lxm" params
-  in
-  if lxm_strs = [] then None
+  (* duplicate positional and query parameters not allowed *)
+  let has_lxm_param = get_all_params "lxm" params <> [] in
+  if positional <> None && has_lxm_param then None
   else
-    let lxms = List.filter_map parse_rpc_lxm lxm_strs in
-    if lxms = [] then None
-    else
-      match get_single_param "aud" params with
+    let lxm_strs =
+      match positional with
+      | Some p ->
+          [p]
       | None ->
-          None (* aud is required *)
-      | Some aud_str -> (
-        match parse_rpc_aud aud_str with
+          get_all_params "lxm" params
+    in
+    if lxm_strs = [] then None
+    else
+      let lxms = List.filter_map parse_rpc_lxm lxm_strs in
+      if lxms = [] then None
+      else
+        match get_single_param "aud" params with
         | None ->
-            None
-        | Some aud ->
-            (* rpc:*?aud=* is forbidden *)
-            if aud = AnyAud && List.mem AnyLxm lxms then None
-            else Some {lxm= lxms; aud} )
+            None (* aud is required *)
+        | Some aud_str -> (
+          match parse_rpc_aud aud_str with
+          | None ->
+              None
+          | Some aud ->
+              (* rpc:*?aud=* is forbidden *)
+              if aud = AnyAud && List.mem AnyLxm lxms then None
+              else Some {lxm= lxms; aud} )
 
 let parse_accept_pattern s =
   if s = "*/*" then Some AnyMime
@@ -260,17 +280,36 @@ let parse_accept_pattern s =
         None
 
 let parse_blob_permission positional params =
-  let accept_strs =
-    match positional with
-    | Some p ->
-        [p]
-    | None ->
-        get_all_params "accept" params
-  in
-  if accept_strs = [] then None
+  (* duplicate positional and query parameters not allowed *)
+  let has_accept_param = get_all_params "accept" params <> [] in
+  if positional <> None && has_accept_param then None
   else
-    let accepts = List.filter_map parse_accept_pattern accept_strs in
-    if accepts = [] then None else Some {accept= accepts}
+    let accept_strs =
+      match positional with
+      | Some p ->
+          [p]
+      | None ->
+          get_all_params "accept" params
+    in
+    if accept_strs = [] then None
+    else
+      let accepts = List.filter_map parse_accept_pattern accept_strs in
+      if accepts = [] then None else Some {accept= accepts}
+
+let parse_include_scope positional params =
+  match positional with
+  | None ->
+      None
+  | Some nsid -> (
+      if not (is_valid_nsid nsid) then None
+      else
+        let aud = get_single_param "aud" params in
+        (* validate aud if present *)
+        match aud with
+        | Some a when not (is_valid_atproto_audience a) ->
+            None
+        | _ ->
+            Some {nsid; aud} )
 
 let parse_static_scope = function
   | "atproto" ->
@@ -305,6 +344,10 @@ let parse_scope s =
           Option.map (fun p -> Rpc p) (parse_rpc_permission positional params)
       | "blob" ->
           Option.map (fun p -> Blob p) (parse_blob_permission positional params)
+      | "include" ->
+          Option.map
+            (fun p -> Include p)
+            (parse_include_scope positional params)
       | _ ->
           None )
 
@@ -457,3 +500,167 @@ module Transition = struct
     then true
     else allows_rpc scopes opts
 end
+
+(* convert a permission from permission set to scope string *)
+let permission_to_scope ~include_aud (perm : Lexicon_resolver.permission) =
+  match perm.resource with
+  | "rpc" -> (
+    match perm.lxm with
+    | None | Some [] ->
+        None
+    | Some lxms -> (
+        let aud =
+          match perm.aud with
+          | Some a ->
+              Some a
+          | None ->
+              if Option.value perm.inherit_aud ~default:false then include_aud
+              else None
+        in
+        match aud with
+        | None ->
+            None (* rpc requires aud *)
+        | Some a ->
+            Some
+              (List.map
+                 (fun lxm ->
+                   Printf.sprintf "rpc:%s?aud=%s" lxm (Uri.pct_encode a) )
+                 lxms ) ) )
+  | "repo" -> (
+    match perm.collection with
+    | None | Some [] ->
+        None
+    | Some collections ->
+        let actions =
+          Option.value perm.action ~default:["create"; "update"; "delete"]
+        in
+        let action_str =
+          let action_set = List.sort String.compare actions in
+          let default_set = ["create"; "delete"; "update"] in
+          if action_set = default_set then ""
+          else "?action=" ^ String.concat "," actions
+        in
+        Some
+          (List.map
+             (fun coll -> Printf.sprintf "repo:%s%s" coll action_str)
+             collections ) )
+  | "blob" -> (
+    match perm.accept with
+    | None | Some [] ->
+        None
+    | Some accepts ->
+        Some (List.map (fun accept -> Printf.sprintf "blob:%s" accept) accepts)
+    )
+  | "account" | "identity" ->
+      (* account and identity permissions can't be granted via permission sets *)
+      None
+  | _ ->
+      None
+
+(* expand include scope to list of granular scopes,
+   validating authority for each permission nsid & applying inheritAud *)
+let expand_include_scope (inc : include_scope)
+    (ps : Lexicon_resolver.permission_set) =
+  let allowed_resources = ["rpc"; "repo"] in
+  ps.permissions
+  |> List.filter (fun (p : Lexicon_resolver.permission) ->
+      List.mem p.resource allowed_resources )
+  |> List.filter_map (fun (p : Lexicon_resolver.permission) ->
+      let nsids_to_check =
+        match p.resource with
+        | "rpc" ->
+            Option.value p.lxm ~default:[]
+        | "repo" ->
+            (* filter out wildcards from collection validation *)
+            Option.value p.collection ~default:[]
+            |> List.filter (fun c -> c <> "*" && is_valid_nsid c)
+        | _ ->
+            []
+      in
+      let all_valid =
+        List.for_all
+          (fun nsid ->
+            is_parent_authority_of ~include_nsid:inc.nsid ~permission_nsid:nsid )
+          nsids_to_check
+      in
+      if all_valid then permission_to_scope ~include_aud:inc.aud p else None )
+  |> List.flatten
+
+(* expand all scopes, resolving includes, to expanded scope string *)
+let expand_scopes (scopes : scope list) : string list Lwt.t =
+  let%lwt expanded =
+    Lwt_list.map_p
+      (fun scope ->
+        match scope with
+        | Include inc -> (
+          match%lwt Lexicon_resolver.resolve inc.nsid with
+          | Error e ->
+              Logs.warn (fun l ->
+                  l "failed to resolve permission set %s: %s" inc.nsid e ) ;
+              Lwt.return []
+          | Ok ps ->
+              Lwt.return (expand_include_scope inc ps) )
+        | Static Atproto ->
+            Lwt.return ["atproto"]
+        | Static TransitionEmail ->
+            Lwt.return ["transition:email"]
+        | Static TransitionGeneric ->
+            Lwt.return ["transition:generic"]
+        | Static TransitionChatBsky ->
+            Lwt.return ["transition:chat.bsky"]
+        | Account perm ->
+            let attr_str =
+              match perm.attr with Email -> "email" | Repo -> "repo"
+            in
+            let actions_str =
+              if List.mem Manage perm.actions then "?action=manage" else ""
+            in
+            Lwt.return [Printf.sprintf "account:%s%s" attr_str actions_str]
+        | Identity perm ->
+            let attr_str =
+              match perm.attr with Handle -> "handle" | Any -> "*"
+            in
+            Lwt.return [Printf.sprintf "identity:%s" attr_str]
+        | Repo perm ->
+            let colls =
+              List.map
+                (function All -> "*" | Collection c -> c)
+                perm.collections
+            in
+            let actions = List.map show_repo_action perm.actions in
+            let action_str =
+              if actions = ["create"; "update"; "delete"] then ""
+              else "?action=" ^ String.concat "," actions
+            in
+            Lwt.return
+              (List.map
+                 (fun c -> Printf.sprintf "repo:%s%s" c action_str)
+                 colls )
+        | Rpc perm ->
+            let lxms =
+              List.map (function AnyLxm -> "*" | Lxm l -> l) perm.lxm
+            in
+            let aud_str = match perm.aud with AnyAud -> "*" | Aud a -> a in
+            Lwt.return
+              (List.map
+                 (fun l ->
+                   Printf.sprintf "rpc:%s?aud=%s" l (Uri.pct_encode aud_str) )
+                 lxms )
+        | Blob perm ->
+            let accepts =
+              List.map
+                (function
+                  | AnyMime ->
+                      "*/*"
+                  | TypeWildcard t ->
+                      t ^ "/*"
+                  | ExactMime (t, s) ->
+                      t ^ "/" ^ s )
+                perm.accept
+            in
+            Lwt.return (List.map (fun a -> Printf.sprintf "blob:%s" a) accepts) )
+      scopes
+  in
+  Lwt.return (List.flatten expanded |> List.sort_uniq String.compare)
+
+let scopes_to_string scopes = String.concat " " scopes

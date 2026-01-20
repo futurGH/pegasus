@@ -551,6 +551,13 @@ let make_at_uri ~repo ~collection ~rkey ~fragment =
   Printf.sprintf "at://%s/%s/%s%s" repo collection rkey
     (Option.value ~default:"" fragment)
 
+let nsid_authority nsid =
+  match String.rindex_opt nsid '.' with
+  | None ->
+      nsid
+  | Some idx ->
+      String.sub nsid 0 idx
+
 let send_email_or_log ~(recipients : Letters.recipient list) ~subject
     ~(body : Letters.body) =
   let log_email () =

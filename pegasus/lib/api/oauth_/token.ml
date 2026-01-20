@@ -86,13 +86,19 @@ let post_handler =
                             in
                             let exp_sec = now_sec + expires_in in
                             let expires_at = exp_sec * 1000 in
+                            (* expand scopes before creating token *)
+                            let%lwt expanded_scopes =
+                              let parsed = Scopes.parse_scopes orig_req.scope in
+                              let%lwt expanded = Scopes.expand_scopes parsed in
+                              Lwt.return (Scopes.scopes_to_string expanded)
+                            in
                             let claims =
                               `Assoc
                                 [ ("jti", `String token_id)
                                 ; ("sub", `String did)
                                 ; ("iat", `Int now_sec)
                                 ; ("exp", `Int exp_sec)
-                                ; ("scope", `String orig_req.scope)
+                                ; ("scope", `String expanded_scopes)
                                 ; ("aud", `String Env.host_endpoint)
                                 ; ("cnf", `Assoc [("jkt", `String proof.jkt)])
                                 ]
@@ -117,7 +123,7 @@ let post_handler =
                                 ; client_id= req.client_id
                                 ; did
                                 ; dpop_jkt= proof.jkt
-                                ; scope= orig_req.scope
+                                ; scope= expanded_scopes
                                 ; created_at= now_ms
                                 ; last_refreshed_at= now_ms
                                 ; expires_at
@@ -135,7 +141,7 @@ let post_handler =
                                  ; ("token_type", `String "DPoP")
                                  ; ("refresh_token", `String refresh_token)
                                  ; ("expires_in", `Int expires_in)
-                                 ; ("scope", `String orig_req.scope)
+                                 ; ("scope", `String expanded_scopes)
                                  ; ("sub", `String did) ] ) ) ) ) )
       | "refresh_token" -> (
         match req.refresh_token with

@@ -10,6 +10,13 @@ type actor = AccountSwitcher.actor =
   {did: string; handle: string; avatar_data_uri: string option [@default None]}
 [@@deriving json]
 
+type permission_set_display =
+  { nsid: string
+  ; title: string option [@default None]
+  ; detail: string option [@default None]
+  ; expanded_scopes: string list }
+[@@deriving json]
+
 type props =
   { client_url: string * string (* (host, path) *)
   ; client_name: string option [@default None]
@@ -17,6 +24,7 @@ type props =
   ; current_user: actor
   ; logged_in_users: actor list
   ; scopes: string list
+  ; permission_sets: permission_set_display list [@default []]
   ; code: string
   ; request_uri: string
   ; csrf_token: string }
@@ -38,6 +46,11 @@ module ScopesTable = struct
     | Bluesky (* transition:generic or app.bsky.* *)
     | Chat (* transition:chat.bsky or chat.bsky.* *)
     | Atproto
+    | PermissionSet of
+        { nsid: string
+        ; title: string option
+        ; detail: string option
+        ; expanded_scopes: string list (* raw scope strings for display *) }
     | Unknown of string
 
   let parse_scope scope =
@@ -45,43 +58,155 @@ module ScopesTable = struct
     else if scope = "transition:generic" then Bluesky
     else if scope = "transition:chat.bsky" then Chat
     else if scope = "transition:email" then Email `Read
-    else if String.starts_with ~prefix:"account:email" scope then
-      if String.exists (fun c -> c = '=') scope then Email `Manage
-      else Email `Read
-    else if String.starts_with ~prefix:"identity:" scope then
+    else if
+      String.starts_with ~prefix:"account:" scope
+      || String.starts_with ~prefix:"account?" scope
+    then
+      let has_positional = String.starts_with ~prefix:"account:" scope in
+      let rest =
+        String.sub scope 8 (String.length scope - 8)
+      in
+      let parts = String.split_on_char '?' rest in
+      let positional_attr =
+        if has_positional then
+          match parts with a :: _ when a <> "" -> Some a | _ -> None
+        else None
+      in
+      let query_str =
+        if has_positional then
+          if List.length parts > 1 then Some (List.nth parts 1) else None
+        else if rest <> "" then Some rest
+        else None
+      in
+      let parse_query_params qs =
+        String.split_on_char '&' qs
+        |> List.filter_map (fun pair ->
+            match String.split_on_char '=' pair with
+            | [k; v] ->
+                Some (k, v)
+            | _ ->
+                None )
+      in
+      let params =
+        Option.map parse_query_params query_str |> Option.value ~default:[]
+      in
+      let attr =
+        match positional_attr with
+        | Some a ->
+            a
+        | None ->
+            List.find_map
+              (fun (k, v) -> if k = "attr" then Some v else None)
+              params
+            |> Option.value ~default:""
+      in
+      let action =
+        List.find_map
+          (fun (k, v) -> if k = "action" then Some v else None)
+          params
+        |> Option.value ~default:"read"
+      in
+      if attr = "email" then
+        if action = "manage" then Email `Manage else Email `Read
+      else Unknown scope (* repo and other attrs not displayed specially *)
+    else if
+      String.starts_with ~prefix:"identity:" scope
+      || String.starts_with ~prefix:"identity?" scope
+    then
+      (* attrs are "handle" or "*" *)
+      let has_positional = String.starts_with ~prefix:"identity:" scope in
       let rest = String.sub scope 9 (String.length scope - 9) in
-      if rest = "*" || String.starts_with ~prefix:"*" rest then Identity `Full
-      else Identity `Handle
-    else if String.starts_with ~prefix:"repo:" scope then
+      let parts = String.split_on_char '?' rest in
+      let positional_attr =
+        if has_positional then
+          match parts with a :: _ when a <> "" -> Some a | _ -> None
+        else None
+      in
+      let attr =
+        match positional_attr with
+        | Some a ->
+            a
+        | None ->
+            let params =
+              if has_positional then
+                if List.length parts > 1 then List.nth parts 1 else ""
+              else rest
+            in
+            String.split_on_char '&' params
+            |> List.find_map (fun pair ->
+                match String.split_on_char '=' pair with
+                | [k; v] when k = "attr" ->
+                    Some v
+                | _ ->
+                    None )
+            |> Option.value ~default:"handle"
+      in
+      if attr = "*" then Identity `Full else Identity `Handle
+    else if
+      String.starts_with ~prefix:"repo:" scope
+      || String.starts_with ~prefix:"repo?" scope
+    then
+      let has_positional = String.starts_with ~prefix:"repo:" scope in
       let rest = String.sub scope 5 (String.length scope - 5) in
       let parts = String.split_on_char '?' rest in
+      let positional_coll =
+        if has_positional then
+          match parts with coll :: _ when coll <> "" -> Some coll | _ -> None
+        else None
+      in
+      let query_str =
+        if has_positional then
+          if List.length parts > 1 then Some (List.nth parts 1) else None
+        else if
+          (* for repo?... format, rest starts with the query string *)
+          rest <> ""
+        then Some rest
+        else None
+      in
+      let parse_query_params qs =
+        String.split_on_char '&' qs
+        |> List.filter_map (fun pair ->
+            match String.split_on_char '=' pair with
+            | [k; v] ->
+                Some (k, v)
+            | _ ->
+                None )
+      in
+      let params =
+        Option.map parse_query_params query_str |> Option.value ~default:[]
+      in
       let collection =
-        match parts with coll :: _ when coll <> "" -> [coll] | _ -> ["*"]
+        match positional_coll with
+        | Some c ->
+            [c]
+        | None -> (
+            List.filter_map
+              (fun (k, v) -> if k = "collection" then Some v else None)
+              params
+            |> function [] -> ["*"] | cols -> cols )
       in
       let actions =
-        if List.length parts > 1 then
-          let params = List.nth parts 1 in
-          if String.contains params '=' then
-            List.filter_map
-              (fun a ->
-                if
-                  String.ends_with ~suffix:a params
-                  || String.contains params ','
-                then
-                  match a with
-                  | "create" ->
-                      Some Create
-                  | "update" ->
-                      Some Update
-                  | "delete" ->
-                      Some Delete
-                  | _ ->
-                      None
-                else None )
-              ["create"; "update"; "delete"]
-            |> function [] -> [Create; Update; Delete] | l -> l
-          else [Create; Update; Delete]
-        else [Create; Update; Delete]
+        let action_strs =
+          List.filter_map
+            (fun (k, v) -> if k = "action" then Some v else None)
+            params
+          |> List.concat_map (String.split_on_char ',')
+        in
+        if action_strs = [] then [Create; Update; Delete]
+        else
+          List.filter_map
+            (fun a ->
+              match a with
+              | "create" ->
+                  Some Create
+              | "update" ->
+                  Some Update
+              | "delete" ->
+                  Some Delete
+              | _ ->
+                  None )
+            action_strs
+          |> function [] -> [Create; Update; Delete] | l -> l
       in
       if
         List.exists
@@ -97,25 +222,140 @@ module ScopesTable = struct
         then Chat
         else Bluesky
       else Repo {collections= collection; actions}
-    else if String.starts_with ~prefix:"rpc:" scope then
+    else if
+      String.starts_with ~prefix:"rpc:" scope
+      || String.starts_with ~prefix:"rpc?" scope
+    then
+      let has_positional = String.starts_with ~prefix:"rpc:" scope in
       let rest = String.sub scope 4 (String.length scope - 4) in
       let parts = String.split_on_char '?' rest in
-      let lxm = match parts with l :: _ -> l | [] -> "*" in
+      let positional_lxm =
+        if has_positional then
+          match parts with l :: _ when l <> "" -> Some l | _ -> None
+        else None
+      in
+      let query_str =
+        if has_positional then
+          if List.length parts > 1 then Some (List.nth parts 1) else None
+        else if rest <> "" then Some rest
+        else None
+      in
+      let parse_query_params qs =
+        String.split_on_char '&' qs
+        |> List.filter_map (fun pair ->
+            match String.split_on_char '=' pair with
+            | [k; v] ->
+                Some (k, v)
+            | _ ->
+                None )
+      in
+      let params =
+        Option.map parse_query_params query_str |> Option.value ~default:[]
+      in
+      let lxm =
+        match positional_lxm with
+        | Some l ->
+            l
+        | None ->
+            List.find_map
+              (fun (k, v) -> if k = "lxm" then Some v else None)
+              params
+            |> Option.value ~default:"*"
+      in
       let aud =
-        if List.length parts > 1 then
-          let params = List.nth parts 1 in
-          if String.starts_with ~prefix:"aud=" params then
-            String.sub params 4 (String.length params - 4)
-          else "*"
-        else "*"
+        List.find_map (fun (k, v) -> if k = "aud" then Some v else None) params
+        |> Option.value ~default:"*"
       in
       if String.starts_with ~prefix:"app.bsky." lxm then Bluesky
       else if String.starts_with ~prefix:"chat.bsky." lxm then Chat
       else Rpc {lxm; aud}
-    else if String.starts_with ~prefix:"blob:" scope then
+    else if
+      String.starts_with ~prefix:"blob:" scope
+      || String.starts_with ~prefix:"blob?" scope
+    then
+      let has_positional = String.starts_with ~prefix:"blob:" scope in
       let rest = String.sub scope 5 (String.length scope - 5) in
-      Blob [rest]
+      let mimetypes =
+        if has_positional then [rest]
+        else
+          String.split_on_char '&' rest
+          |> List.filter_map (fun pair ->
+              match String.split_on_char '=' pair with
+              | [k; v] when k = "accept" ->
+                  Some v
+              | _ ->
+                  None )
+      in
+      Blob (if mimetypes = [] then ["*/*"] else mimetypes)
     else Unknown scope
+
+  (* parse repo scope string without converting app.bsky/chat.bsky to Bluesky/Chat *)
+  let parse_repo_scope_raw scope =
+    if
+      String.starts_with ~prefix:"repo:" scope
+      || String.starts_with ~prefix:"repo?" scope
+    then
+      let has_positional = String.starts_with ~prefix:"repo:" scope in
+      let rest = String.sub scope 5 (String.length scope - 5) in
+      let parts = String.split_on_char '?' rest in
+      let positional_coll =
+        if has_positional then
+          match parts with coll :: _ when coll <> "" -> Some coll | _ -> None
+        else None
+      in
+      let query_str =
+        if has_positional then
+          if List.length parts > 1 then Some (List.nth parts 1) else None
+        else if rest <> "" then Some rest
+        else None
+      in
+      let parse_query_params qs =
+        String.split_on_char '&' qs
+        |> List.filter_map (fun pair ->
+            match String.split_on_char '=' pair with
+            | [k; v] ->
+                Some (k, v)
+            | _ ->
+                None )
+      in
+      let params =
+        Option.map parse_query_params query_str |> Option.value ~default:[]
+      in
+      let collection =
+        match positional_coll with
+        | Some c ->
+            [c]
+        | None -> (
+            List.filter_map
+              (fun (k, v) -> if k = "collection" then Some v else None)
+              params
+            |> function [] -> ["*"] | cols -> cols )
+      in
+      let actions =
+        let action_strs =
+          List.filter_map
+            (fun (k, v) -> if k = "action" then Some v else None)
+            params
+          |> List.concat_map (String.split_on_char ',')
+        in
+        if action_strs = [] then [Create; Update; Delete]
+        else
+          List.filter_map
+            (fun a ->
+              match a with
+              | "create" ->
+                  Some Create
+              | "update" ->
+                  Some Update
+              | "delete" ->
+                  Some Delete
+              | _ ->
+                  None )
+            action_strs
+          |> function [] -> [Create; Update; Delete] | l -> l
+      in
+      Some {collections= collection; actions}
+    else None
 
   type collection_actions = {create: bool; update: bool; delete: bool}
 
@@ -184,6 +424,8 @@ module ScopesTable = struct
             has_chat := true
         | Atproto ->
             ()
+        | PermissionSet _ ->
+            ()
         | Unknown s ->
             unknowns := s :: !unknowns )
       scopes ;
@@ -196,9 +438,19 @@ module ScopesTable = struct
     , !has_chat
     , !unknowns )
 
-  let[@react.component] make ~scopes () =
+  let[@react.component] make ~scopes ?(permission_sets = []) () =
     let email, identity, repos, rpcs, blobs, has_bluesky, has_chat, unknowns =
       merge_parsed_scopes scopes
+    in
+    let ps_displays =
+      List.map
+        (fun (ps : permission_set_display) ->
+          PermissionSet
+            { nsid= ps.nsid
+            ; title= ps.title
+            ; detail= ps.detail
+            ; expanded_scopes= ps.expanded_scopes } )
+        permission_sets
     in
     <div className="w-full mt-3 space-y-1">
       ( match email with
@@ -279,7 +531,7 @@ module ScopesTable = struct
             </div>
           </div>
         else null )
-      ( if List.length repos > 0 && not has_bluesky then
+      ( if List.length repos > 0 then
           let coll_actions_map = build_collection_actions_map repos in
           let coll_actions_list =
             StringMap.bindings coll_actions_map
@@ -482,7 +734,7 @@ module ScopesTable = struct
             </div>
           </div>
         else null )
-      ( if List.length blobs > 0 && not has_bluesky then
+      ( if List.length blobs > 0 then
           <div className="flex items-start gap-3 p-3 rounded-lg">
             <div
               className="flex-shrink-0 w-8 h-8 flex items-center \
@@ -523,6 +775,96 @@ module ScopesTable = struct
             </div>
           </div>
         else null )
+      (* permission sets *)
+      ( List.map
+          (fun ps ->
+            match ps with
+            | PermissionSet {nsid; title; detail; expanded_scopes} ->
+                let repos =
+                  List.filter_map parse_repo_scope_raw expanded_scopes
+                in
+                let coll_actions_map = build_collection_actions_map repos in
+                let coll_actions_list =
+                  StringMap.bindings coll_actions_map
+                  |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+                in
+                <div key=nsid className="flex items-start gap-3 p-3 rounded-lg">
+                  <div
+                    className="flex-shrink-0 w-8 h-8 flex items-center \
+                               justify-center rounded-full bg-mist-20/50 \
+                               text-mist-80">
+                    <BoxesIcon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-serif text-mana-100">
+                      (string (Option.value title ~default:nsid))
+                    </div>
+                    ( match detail with
+                    | Some d ->
+                        <div className="text-sm text-mist-100">(string d)</div>
+                    | None ->
+                        null )
+                    ( if List.length coll_actions_list > 0 then
+                        <table className="w-full mt-2 text-xs">
+                          <thead>
+                            <tr className="text-mist-80">
+                              <th className="text-left font-normal pb-1">
+                                (string "Collection")
+                              </th>
+                              <th className="text-center font-normal pb-1 w-16">
+                                (string "Create")
+                              </th>
+                              <th className="text-center font-normal pb-1 w-16">
+                                (string "Update")
+                              </th>
+                              <th className="text-center font-normal pb-1 w-16">
+                                (string "Delete")
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ( coll_actions_list
+                            |> List.map (fun (coll, actions) ->
+                                <tr key=coll className="text-mist-100">
+                                  <td className="py-0.5">
+                                    <span className="font-medium">
+                                      (string
+                                         ( if coll = "*" then "Any collection"
+                                           else coll ) )
+                                    </span>
+                                  </td>
+                                  <td className="text-center">
+                                    ( if actions.create then
+                                        <span className="text-mana-100">
+                                          (string {js|✓|js})
+                                        </span>
+                                      else null )
+                                  </td>
+                                  <td className="text-center">
+                                    ( if actions.update then
+                                        <span className="text-mana-100">
+                                          (string {js|✓|js})
+                                        </span>
+                                      else null )
+                                  </td>
+                                  <td className="text-center">
+                                    ( if actions.delete then
+                                        <span className="text-mana-100">
+                                          (string {js|✓|js})
+                                        </span>
+                                      else null )
+                                  </td>
+                                </tr> )
+                            |> Array.of_list |> array )
+                          </tbody>
+                        </table>
+                      else null )
+                  </div>
+                </div>
+            | _ ->
+                null )
+          ps_displays
+      |> Array.of_list |> React.array )
     </div>
 end
 
@@ -534,6 +876,7 @@ let[@react.component] make
        ; current_user
        ; logged_in_users
        ; scopes
+       ; permission_sets
        ; code
        ; request_uri
        ; csrf_token } :
@@ -565,7 +908,7 @@ let[@react.component] make
     useState (fun () ->
         Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico") )
   in
-  <form className="w-full h-auto max-w-lg px-4 sm:px-0 my-auto">
+  <form className="w-full h-auto max-w-lg px-4 sm:px-0 py-16 my-auto">
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string ("authorizing " ^ host))
     </h1>
@@ -583,7 +926,7 @@ let[@react.component] make
       />
       (string " and granting it the following permissions:")
     </span>
-    <ScopesTable scopes />
+    <ScopesTable scopes permission_sets />
     <div className="w-full flex flex-row items-center justify-between mt-6">
       <input type_="hidden" name="dream.csrf" value=csrf_token />
       <input type_="hidden" name="code" value=code />

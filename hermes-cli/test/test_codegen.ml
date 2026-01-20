@@ -427,6 +427,42 @@ let test_gen_string_known_values () =
     (contains code "type status = string") ;
   check bool "contains status_of_yojson" true (contains code "status_of_yojson")
 
+(* test generating permission-set module *)
+let test_gen_permission_set () =
+  let perm1 : Lexicon_types.lex_permission =
+    { resource= "rpc"
+    ; extra=
+        [("lxm", `List [`String "com.example.foo"]); ("inheritAud", `Bool true)]
+    }
+  in
+  let perm2 : Lexicon_types.lex_permission =
+    { resource= "repo"
+    ; extra= [("collection", `List [`String "com.example.data"])] }
+  in
+  let ps_spec : Lexicon_types.permission_set_spec =
+    { title= Some "Test Permissions"
+    ; title_lang= Some [("de", "Test Berechtigungen")]
+    ; detail= Some "Access to test features"
+    ; detail_lang= None
+    ; permissions= [perm1; perm2]
+    ; description= None }
+  in
+  let doc =
+    make_lexicon "com.example.perms"
+      [make_def "main" (Lexicon_types.PermissionSet ps_spec)]
+  in
+  let code = Codegen.gen_lexicon_module doc in
+  check bool "contains type permission" true (contains code "type permission =") ;
+  check bool "contains resource field" true (contains code "resource: string") ;
+  check bool "contains lxm field" true (contains code "lxm: string list option") ;
+  check bool "contains inherit_aud field" true
+    (contains code "inherit_aud: bool option") ;
+  check bool "contains type main" true (contains code "type main =") ;
+  check bool "contains title field" true (contains code "title: string option") ;
+  check bool "contains permissions field" true
+    (contains code "permissions: permission list") ;
+  check bool "contains deriving" true (contains code "[@@deriving yojson")
+
 (* test generating query with bytes output (like getBlob) *)
 let test_gen_query_bytes_output () =
   let params_spec =
@@ -514,6 +550,9 @@ let token_tests = [("token generation", `Quick, test_gen_token)]
 let string_tests =
   [("string with known values", `Quick, test_gen_string_known_values)]
 
+let permission_set_tests =
+  [("generate permission-set", `Quick, test_gen_permission_set)]
+
 let () =
   run "Codegen"
     [ ("objects", object_tests)
@@ -521,4 +560,5 @@ let () =
     ; ("xrpc", xrpc_tests)
     ; ("ordering", ordering_tests)
     ; ("tokens", token_tests)
-    ; ("strings", string_tests) ]
+    ; ("strings", string_tests)
+    ; ("permission-set", permission_set_tests) ]

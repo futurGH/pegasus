@@ -151,6 +151,8 @@ let rec parse_type_def json : type_def =
       Subscription (parse_subscription_spec json)
   | "record" ->
       Record (parse_record_spec json)
+  | "permission-set" ->
+      PermissionSet (parse_permission_set_spec json)
   | t ->
       failwith ("unknown type: " ^ t)
 
@@ -317,6 +319,58 @@ and parse_record_spec json : record_spec =
   in
   { key
   ; record= parse_object_spec record_json
+  ; description= get_string_opt "description" json }
+
+and parse_permission json : lex_permission =
+  let resource = get_string "resource" json in
+  let extra =
+    match json with
+    | `Assoc pairs ->
+        List.filter (fun (k, _) -> k <> "resource") pairs
+    | _ ->
+        []
+  in
+  {resource; extra}
+
+and parse_lang_map key json : (string * string) list option =
+  match json with
+  | `Assoc pairs ->
+      let prefix = key ^ ":" in
+      let lang_pairs =
+        List.filter_map
+          (fun (k, v) ->
+            if String.starts_with ~prefix k then
+              let lang =
+                String.sub k (String.length prefix)
+                  (String.length k - String.length prefix)
+              in
+              match v with `String s -> Some (lang, s) | _ -> None
+            else None )
+          pairs
+      in
+      if lang_pairs = [] then None else Some lang_pairs
+  | _ ->
+      None
+
+and parse_permission_set_spec json : permission_set_spec =
+  let permissions =
+    match get_list_opt "permissions" json with
+    | Some l ->
+        List.map
+          (function
+            | `Assoc _ as j ->
+                parse_permission j
+            | _ ->
+                failwith "invalid permission" )
+          l
+    | None ->
+        []
+  in
+  { title= get_string_opt "title" json
+  ; title_lang= parse_lang_map "title" json
+  ; detail= get_string_opt "detail" json
+  ; detail_lang= parse_lang_map "detail" json
+  ; permissions
   ; description= get_string_opt "description" json }
 
 (* parse complete lexicon document *)
