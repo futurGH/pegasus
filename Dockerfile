@@ -2,7 +2,7 @@ FROM ocaml/opam:debian-12-ocaml-5.2 AS build
 
 ARG NODE_VERSION=v24.11.1
 ARG OPAM_VERSION=2.5
-ARG DUNE_VERSION=3.20.2
+ARG DUNE_VERSION=3.21.0
 
 ARG GIT_REV
 ENV GIT_REV=$GIT_REV
@@ -27,12 +27,12 @@ RUN bash -c "source $NVM_DIR/nvm.sh && pnpm install --frozen-lockfile"
 
 ENV DUNE_CACHE="enabled"
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
-    --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
-    opam install dune.$DUNE_VERSION
+	--mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
+	opam install dune.$DUNE_VERSION
 RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
-    opam exec dune pkg lock
+	opam exec dune pkg lock
 RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
-    bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
+	bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
 
 FROM debian:12 AS run
 
