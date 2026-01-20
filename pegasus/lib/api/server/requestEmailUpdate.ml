@@ -8,7 +8,7 @@ let request_email_update ?pending_email (actor : Data_store.Types.actor) db =
     if token_required then
       let did = actor.did in
       let code = Util.make_code () in
-      let expires_at = Util.now_ms () + (10 * 60 * 1000) in
+      let expires_at = Util.Time.now_ms () + (10 * 60 * 1000) in
       let%lwt () =
         match pending_email with
         | Some pending_email ->
@@ -41,12 +41,12 @@ let handler =
   Xrpc.handler ~auth:Authorization
     ~rate_limits:
       [ Route
-          { duration_ms= Util.day
+          { duration_ms= Util.Time.day
           ; points= 15
           ; calc_key= Some calc_key_did
           ; calc_points= None }
       ; Route
-          { duration_ms= Util.hour
+          { duration_ms= Util.Time.hour
           ; points= 5
           ; calc_key= Some calc_key_did
           ; calc_points= None } ]

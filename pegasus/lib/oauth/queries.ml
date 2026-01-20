@@ -3,7 +3,7 @@
 open Types
 
 let insert_par_request conn req =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -14,7 +14,7 @@ let insert_par_request conn req =
        req
 
 let get_par_request conn request_id =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_opt
          {sql|
@@ -25,10 +25,10 @@ let get_par_request conn request_id =
         AND expires_at > %int{now}
       |sql}
          record_out]
-       ~request_id ~now:(Util.now_ms ())
+       ~request_id ~now:(Util.Time.now_ms ())
 
 let insert_auth_code conn code =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -39,7 +39,7 @@ let insert_auth_code conn code =
        code
 
 let get_auth_code conn code =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_opt
          {sql|
@@ -53,8 +53,8 @@ let get_auth_code conn code =
        ~code
 
 let activate_auth_code conn code did ~ip ~user_agent =
-  let authorized_at = Util.now_ms () in
-  Util.use_pool conn
+  let authorized_at = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -68,7 +68,7 @@ let activate_auth_code conn code did ~ip ~user_agent =
        ~did ~authorized_at ~ip ~user_agent ~code
 
 let consume_auth_code conn code =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_opt
          {sql|
@@ -83,7 +83,7 @@ let consume_auth_code conn code =
        ~code
 
 let insert_oauth_token conn token =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -94,7 +94,7 @@ let insert_oauth_token conn token =
        token
 
 let get_oauth_token_by_refresh conn refresh_token =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_opt
          {sql|
@@ -108,8 +108,8 @@ let get_oauth_token_by_refresh conn refresh_token =
        ~refresh_token
 
 let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
-  let now_ms = Util.now_ms () in
-  Util.use_pool conn
+  let now_ms = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -122,7 +122,7 @@ let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
        ~new_refresh_token ~expires_at ~now_ms ~old_refresh_token
 
 let delete_oauth_token_by_refresh conn refresh_token =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -131,7 +131,7 @@ let delete_oauth_token_by_refresh conn refresh_token =
        ~refresh_token
 
 let get_oauth_tokens_by_did conn did =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_many
          {sql|
@@ -146,7 +146,7 @@ let get_oauth_tokens_by_did conn did =
        ~did
 
 let get_distinct_clients_by_did conn did =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_many
          {sql|
@@ -159,7 +159,7 @@ let get_distinct_clients_by_did conn did =
        ~did
 
 let get_distinct_devices_by_did conn did =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        get_many
          {sql|
@@ -173,7 +173,7 @@ let get_distinct_devices_by_did conn did =
        ~did
 
 let delete_oauth_tokens_by_client conn ~did ~client_id =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|
@@ -183,7 +183,7 @@ let delete_oauth_tokens_by_client conn ~did ~client_id =
        ~did ~client_id
 
 let delete_oauth_tokens_by_device conn ~did ~last_ip ~last_user_agent =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ [%rapper
        execute
          {sql|

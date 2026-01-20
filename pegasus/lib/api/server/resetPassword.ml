@@ -9,7 +9,7 @@ let reset_password ~token ~password db =
   | Some actor -> (
     match (actor.auth_code, actor.auth_code_expires_at) with
     | Some auth_code, Some auth_expires_at
-      when token = auth_code && Util.now_ms () < auth_expires_at ->
+      when token = auth_code && Util.Time.now_ms () < auth_expires_at ->
         let%lwt () = Data_store.update_password ~did:actor.did ~password db in
         Lwt.return_ok actor.did
     | _ ->
@@ -19,7 +19,7 @@ let handler =
   Xrpc.handler
     ~rate_limits:
       [ Route
-          { duration_ms= 5 * Util.minute
+          { duration_ms= 5 * Util.Time.minute
           ; points= 50
           ; calc_key= None
           ; calc_points= None } ]

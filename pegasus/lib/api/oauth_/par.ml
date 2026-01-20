@@ -23,14 +23,14 @@ let post_handler =
           ^ Uuidm.to_string (Uuidm.v4_gen (Random.State.make_self_init ()) ())
         in
         let request_uri = Constants.request_uri_prefix ^ request_id in
-        let expires_at = Util.now_ms () + Constants.par_request_ttl_ms in
+        let expires_at = Util.Time.now_ms () + Constants.par_request_ttl_ms in
         let request : oauth_request =
           { request_id
           ; client_id= req.client_id
           ; request_data= Yojson.Safe.to_string (par_request_to_yojson req)
           ; dpop_jkt= Some proof.jkt
           ; expires_at
-          ; created_at= Util.now_ms () }
+          ; created_at= Util.Time.now_ms () }
         in
         let%lwt () = Queries.insert_par_request ctx.db request in
         Dream.json ~status:`Created

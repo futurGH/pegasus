@@ -8,7 +8,7 @@ module Handle = struct
       let uri =
         Uri.of_string ("https://" ^ handle ^ "/.well-known/atproto-did")
       in
-      let%lwt {status; _}, body = Util.http_get uri in
+      let%lwt {status; _}, body = Util.Http.get uri in
       match status with
       | `OK ->
           let%lwt did = Body.to_string body in
@@ -77,7 +77,7 @@ module Handle = struct
 end
 
 module Did = struct
-  open Util.Did_doc_types
+  open Util.Types
 
   module Document = struct
     type service =
@@ -175,7 +175,7 @@ module Did = struct
             ~path:(Uri.pct_encode did) ()
         in
         let%lwt {status; _}, body =
-          Util.http_get uri
+          Util.Http.get uri
             ~headers:(Cohttp.Header.of_list [("Accept", "application/json")])
         in
         match status with
@@ -197,7 +197,7 @@ module Did = struct
             ~path:"/.well-known/did.json" ()
         in
         let%lwt {status; _}, body =
-          Util.http_get uri
+          Util.Http.get uri
             ~headers:(Cohttp.Header.of_list [("Accept", "application/json")])
         in
         match status with

@@ -276,10 +276,10 @@ let service_proxy ?lxm ?aud (ctx : context) =
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
       let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
       let path, _ = Dream.split_target (Dream.target ctx.req) in
-      let query = Util.copy_query ctx.req in
+      let query = Util.Http.copy_query ctx.req in
       let uri = Uri.make ~scheme ~host ~path ~query () in
       let headers =
-        Util.make_headers
+        Util.Http.make_headers
           [ ("accept-language", Dream.header ctx.req "accept-language")
           ; ("content-type", Dream.header ctx.req "content-type")
           ; ( "atproto-accept-labelers"
@@ -291,7 +291,7 @@ let service_proxy ?lxm ?aud (ctx : context) =
           Lwt_unix.with_timeout 30.0 (fun () ->
               match Dream.method_ ctx.req with
               | `GET ->
-                  Util.http_get uri ~headers ~no_drain:true
+                  Util.Http.get uri ~headers ~no_drain:true
               | `POST ->
                   let%lwt req_body = Dream.body ctx.req in
                   Client.post uri ~headers ~body:(Body.of_string req_body)

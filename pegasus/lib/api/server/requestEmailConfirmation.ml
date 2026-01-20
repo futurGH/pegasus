@@ -6,7 +6,7 @@ let request_email_confirmation (actor : Data_store.Types.actor) db =
       Lwt.return_error AlreadyConfirmed
   | None ->
       let code = Util.make_code () in
-      let expires_at = Util.now_ms () + (10 * 60 * 1000) in
+      let expires_at = Util.Time.now_ms () + (10 * 60 * 1000) in
       let%lwt () =
         Data_store.set_auth_code ~did:actor.did ~code ~expires_at db
       in
@@ -23,12 +23,12 @@ let handler =
   Xrpc.handler ~auth:Authorization
     ~rate_limits:
       [ Route
-          { duration_ms= Util.day
+          { duration_ms= Util.Time.day
           ; points= 15
           ; calc_key= Some calc_key_did
           ; calc_points= None }
       ; Route
-          { duration_ms= Util.hour
+          { duration_ms= Util.Time.hour
           ; points= 5
           ; calc_key= Some calc_key_did
           ; calc_points= None } ]

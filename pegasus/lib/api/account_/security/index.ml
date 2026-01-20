@@ -53,7 +53,7 @@ let get_handler =
           let%lwt two_fa_status = Two_factor.get_status ~did ctx.db in
           let error = Dream.query ctx.req "error" in
           let success = Dream.query ctx.req "success" in
-          Util.render_html ~title:"Security"
+          Util.Html.render_page ~title:"Security"
             (module Frontend.AccountSecurityPage)
             ~props:
               { current_user

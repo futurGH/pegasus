@@ -114,7 +114,7 @@ let get_handler =
           let%lwt blobs, next_cursor = list_all_blobs ~limit ~cursor ctx.db in
           let blobs = List.map blob_to_view blobs in
           let csrf_token = Dream.csrf_token ctx.req in
-          Util.render_html ~title:"Admin / Blobs"
+          Util.Html.render_page ~title:"Admin / Blobs"
             (module Frontend.AdminBlobsPage)
             ~props:
               { blobs
@@ -172,7 +172,7 @@ let post_handler =
             let limit = 50 in
             let%lwt blobs, next_cursor = list_all_blobs ~limit ~cursor ctx.db in
             let blobs = List.map blob_to_view blobs in
-            Util.render_html ~title:"Admin / Blobs"
+            Util.Html.render_page ~title:"Admin / Blobs"
               (module Frontend.AdminBlobsPage)
               ~props:{blobs; csrf_token; cursor; next_cursor; error; success}
           in

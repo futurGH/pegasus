@@ -31,7 +31,7 @@ let get_handler =
                       Lwt.return_none
                 else Lwt.return_none
               in
-              Util.render_html ~title:"Identity"
+              Util.Html.render_page ~title:"Identity"
                 (module Frontend.AccountIdentityPage)
                 ~props:
                   { current_user

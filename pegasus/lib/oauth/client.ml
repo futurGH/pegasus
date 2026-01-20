@@ -1,7 +1,7 @@
 open Types
 
 let fetch_client_metadata client_id : client_metadata Lwt.t =
-  let%lwt {status; _}, res = Util.http_get (Uri.of_string client_id) in
+  let%lwt {status; _}, res = Util.Http.get (Uri.of_string client_id) in
   if status <> `OK then
     let%lwt () = Cohttp_lwt.Body.drain_body res in
     failwith

@@ -5,11 +5,11 @@ let test_string = testable Fmt.string String.equal
 
 let test_nsid_authority () =
   check test_string "three segments" "com.example"
-    (Pegasus.Util.nsid_authority "com.example.foo") ;
+    (Pegasus.Util.Syntax.nsid_authority "com.example.foo") ;
   check test_string "four segments" "com.example.app"
-    (Pegasus.Util.nsid_authority "com.example.app.auth") ;
+    (Pegasus.Util.Syntax.nsid_authority "com.example.app.auth") ;
   check test_string "two segments" "com"
-    (Pegasus.Util.nsid_authority "com.example")
+    (Pegasus.Util.Syntax.nsid_authority "com.example")
 
 let test_is_parent_authority () =
   check bool "same authority" true

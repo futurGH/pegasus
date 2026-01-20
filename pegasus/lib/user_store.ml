@@ -457,7 +457,7 @@ module Bulk = struct
       process_chunks chunks
 end
 
-type t = {did: string; db: Util.caqti_pool}
+type t = {did: string; db: Util.Sqlite.caqti_pool}
 
 let pool_cache : (string, t) Hashtbl.t = Hashtbl.create 64
 
@@ -475,7 +475,7 @@ let connect ?create did : t Lwt.t =
               Lwt.return cached
           | None ->
               let%lwt db =
-                Util.connect_sqlite ?create ~write:true
+                Util.Sqlite.connect ?create ~write:true
                   (Util.Constants.user_db_location did)
               in
               let%lwt () = Migrations.run_migrations User_store db in
@@ -487,7 +487,7 @@ let connect_readonly ?create did =
   if create = Some true then
     Util.mkfile_p (Util.Constants.user_db_filepath did) ~perm:0o644 ;
   let%lwt db =
-    Util.connect_sqlite ?create ~write:false
+    Util.Sqlite.connect ?create ~write:false
       (Util.Constants.user_db_location did)
   in
   let%lwt () = Migrations.run_migrations User_store db in
@@ -496,14 +496,14 @@ let connect_readonly ?create did =
 (* mst blocks; implements Writable_blockstore *)
 
 let get_bytes t cid : Blob.t option Lwt.t =
-  Util.use_pool t.db @@ Queries.get_block cid
+  Util.Sqlite.use_pool t.db @@ Queries.get_block cid
   >|= function Some {data; _} -> Some data | None -> None
 
 let get_blocks t cids : Block_map.with_missing Lwt.t =
   if List.is_empty cids then
     Lwt.return ({blocks= Block_map.empty; missing= []} : Block_map.with_missing)
   else
-    let%lwt blocks = Util.use_pool t.db @@ Queries.get_blocks cids in
+    let%lwt blocks = Util.Sqlite.use_pool t.db @@ Queries.get_blocks cids in
     let found_map =
       List.fold_left
         (fun acc ({cid; data} : block) -> Block_map.set cid data acc)
@@ -521,13 +521,13 @@ let get_blocks t cids : Block_map.with_missing Lwt.t =
          cids )
 
 let has t cid : bool Lwt.t =
-  Util.use_pool t.db @@ Queries.has_block cid
+  Util.Sqlite.use_pool t.db @@ Queries.has_block cid
   >|= function Some _ -> true | None -> false
 
 let put_block t cid block : (bool, exn) Lwt_result.t =
   Lwt_result.catch
   @@ fun () ->
-  match%lwt Util.use_pool t.db @@ Queries.put_block cid block with
+  match%lwt Util.Sqlite.use_pool t.db @@ Queries.put_block cid block with
   | Some _ ->
       Lwt.return true
   | None ->
@@ -539,30 +539,30 @@ let put_many t bm : (int, exn) Lwt_result.t =
   else
     Lwt_result.catch (fun () ->
         let%lwt () =
-          Util.use_pool t.db (fun conn -> Bulk.put_blocks entries conn)
+          Util.Sqlite.use_pool t.db (fun conn -> Bulk.put_blocks entries conn)
         in
         Lwt.return (List.length entries) )
 
 let delete_block t cid : (bool, exn) Lwt_result.t =
   Lwt_result.catch
-  @@ fun () -> Util.use_pool t.db @@ Queries.delete_block cid >|= fun _ -> true
+  @@ fun () -> Util.Sqlite.use_pool t.db @@ Queries.delete_block cid >|= fun _ -> true
 
 let delete_many t cids : (int, exn) Lwt_result.t =
   Lwt_result.catch
-  @@ fun () -> Util.use_pool t.db @@ Queries.delete_blocks cids >|= List.length
+  @@ fun () -> Util.Sqlite.use_pool t.db @@ Queries.delete_blocks cids >|= List.length
 
 let clear_mst t : unit Lwt.t =
-  let%lwt () = Util.use_pool t.db Queries.clear_mst in
+  let%lwt () = Util.Sqlite.use_pool t.db Queries.clear_mst in
   Lwt.return_unit
 
 (* mst misc *)
 
-let count_blocks t : int Lwt.t = Util.use_pool t.db @@ Queries.count_blocks ()
+let count_blocks t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_blocks ()
 
 (* repo commit *)
 
 let get_commit t : (Cid.t * signed_commit) option Lwt.t =
-  let%lwt commit = Util.use_pool t.db Queries.get_commit in
+  let%lwt commit = Util.Sqlite.use_pool t.db Queries.get_commit in
   Lwt.return
   @@ Option.map
        (fun (cid, data) ->
@@ -575,26 +575,26 @@ let put_commit t commit : (Cid.t, exn) Lwt_result.t =
   let data = commit |> signed_commit_to_yojson |> Dag_cbor.encode_yojson in
   let cid = Cid.create Dcbor data in
   ( Lwt_result.catch
-  @@ fun () -> Util.use_pool t.db @@ Queries.put_commit cid data )
+  @@ fun () -> Util.Sqlite.use_pool t.db @@ Queries.put_commit cid data )
   |> Lwt_result.map (fun () -> cid)
 
 (* records *)
 
 let get_record t path : record option Lwt.t =
-  Util.use_pool t.db @@ Queries.get_record ~path
+  Util.Sqlite.use_pool t.db @@ Queries.get_record ~path
   >|= Option.map (fun (cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
 
 let get_record_cid t path : Cid.t option Lwt.t =
-  Util.use_pool t.db @@ Queries.get_record_cid ~path
+  Util.Sqlite.use_pool t.db @@ Queries.get_record_cid ~path
 
 let get_all_record_cids t : (string * Cid.t) list Lwt.t =
-  Util.use_pool t.db Queries.get_all_record_cids
+  Util.Sqlite.use_pool t.db Queries.get_all_record_cids
 
 let get_records_by_cids t cids : (Cid.t * Blob.t) list Lwt.t =
   if List.is_empty cids then Lwt.return []
   else
-    Util.use_pool t.db @@ Queries.get_records_by_cids cids
+    Util.Sqlite.use_pool t.db @@ Queries.get_records_by_cids cids
     >|= List.map (fun ({cid; data} : block) -> (cid, data))
 
 let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
@@ -602,29 +602,29 @@ let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
   let fn =
     if reverse then Queries.list_records_reverse else Queries.list_records
   in
-  Util.use_pool t.db @@ fn ~collection ~limit ~cursor
+  Util.Sqlite.use_pool t.db @@ fn ~collection ~limit ~cursor
   >|= List.map (fun (path, cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
 
-let count_records t : int Lwt.t = Util.use_pool t.db @@ Queries.count_records ()
+let count_records t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_records ()
 
 let list_collections t : string list Lwt.t =
-  Util.use_pool t.db @@ Queries.list_collections
+  Util.Sqlite.use_pool t.db @@ Queries.list_collections
 
 let put_record t record path : (Cid.t * bytes) Lwt.t =
   let cid, data = Lex.to_cbor_block record in
   let since = Tid.now () in
   let%lwt () =
-    Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
+    Util.Sqlite.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
   in
   Lwt.return (cid, data)
 
 let put_record_raw t ~path ~cid ~data ~since : unit Lwt.t =
-  Util.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
+  Util.Sqlite.use_pool t.db @@ Queries.put_record ~path ~cid ~data ~since
 
 let delete_record t path : unit Lwt.t =
-  Util.use_pool t.db (fun conn ->
-      Util.transact conn (fun () ->
+  Util.Sqlite.use_pool t.db (fun conn ->
+      Util.Sqlite.transact conn (fun () ->
           let del = Queries.delete_record path conn in
           let$! () = del in
           let$! deleted_blobs =
@@ -642,7 +642,7 @@ let delete_record t path : unit Lwt.t =
 (* blobs *)
 
 let get_blob t cid : blob_with_contents option Lwt.t =
-  match%lwt Util.use_pool t.db @@ Queries.get_blob ~cid with
+  match%lwt Util.Sqlite.use_pool t.db @@ Queries.get_blob ~cid with
   | None ->
       Lwt.return_none
   | Some (cid, mimetype, storage_str) -> (
@@ -655,7 +655,7 @@ let get_blob t cid : blob_with_contents option Lwt.t =
           Lwt.return_none )
 
 let get_blob_metadata t cid : blob option Lwt.t =
-  match%lwt Util.use_pool t.db @@ Queries.get_blob ~cid with
+  match%lwt Util.Sqlite.use_pool t.db @@ Queries.get_blob ~cid with
   | None ->
       Lwt.return_none
   | Some (cid, mimetype, storage_str) ->
@@ -663,7 +663,7 @@ let get_blob_metadata t cid : blob option Lwt.t =
       Lwt.return_some {cid; mimetype; storage}
 
 let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
-  Util.use_pool t.db
+  Util.Sqlite.use_pool t.db
   @@
   match since with
   | Some since ->
@@ -673,17 +673,17 @@ let list_blobs ?since t ~limit ~cursor : Cid.t list Lwt.t =
 
 let list_missing_blobs ?(limit = 500) ?(cursor = "") t :
     (string * Cid.t) list Lwt.t =
-  Util.use_pool t.db @@ Queries.list_missing_blobs ~limit ~cursor
+  Util.Sqlite.use_pool t.db @@ Queries.list_missing_blobs ~limit ~cursor
 
-let count_blobs t : int Lwt.t = Util.use_pool t.db @@ Queries.count_blobs ()
+let count_blobs t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_blobs ()
 
 let count_referenced_blobs t : int Lwt.t =
-  Util.use_pool t.db @@ Queries.count_referenced_blobs ()
+  Util.Sqlite.use_pool t.db @@ Queries.count_referenced_blobs ()
 
 let put_blob t cid mimetype data : Cid.t Lwt.t =
   let%lwt storage = Blob_store.put ~did:t.did ~cid ~data in
   let storage_str = Blob_store.storage_to_string storage in
-  Util.use_pool t.db @@ Queries.put_blob cid mimetype storage_str
+  Util.Sqlite.use_pool t.db @@ Queries.put_blob cid mimetype storage_str
 
 let delete_blob t cid : unit Lwt.t =
   let%lwt blob_opt = get_blob_metadata t cid in
@@ -692,12 +692,12 @@ let delete_blob t cid : unit Lwt.t =
       delete_blob_file ~did:t.did ~cid ~storage
   | None ->
       () ) ;
-  Util.use_pool t.db @@ Queries.delete_blob cid
+  Util.Sqlite.use_pool t.db @@ Queries.delete_blob cid
 
 let delete_orphaned_blobs_by_record_path t path :
     (Cid.t * Blob_store.storage) list Lwt.t =
   let%lwt results =
-    Util.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
+    Util.Sqlite.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
   in
   Lwt.return
   @@ List.map
@@ -706,28 +706,28 @@ let delete_orphaned_blobs_by_record_path t path :
        results
 
 let list_blob_refs t path : Cid.t list Lwt.t =
-  Util.use_pool t.db @@ Queries.list_blob_refs path
+  Util.Sqlite.use_pool t.db @@ Queries.list_blob_refs path
 
 let put_blob_ref t path cid : unit Lwt.t =
-  Util.use_pool t.db @@ Queries.put_blob_ref path cid
+  Util.Sqlite.use_pool t.db @@ Queries.put_blob_ref path cid
 
 let put_blob_refs t path cids : (unit, exn) Lwt_result.t =
   if List.is_empty cids then Lwt.return_ok ()
   else
     Lwt_result.map (fun _ -> ())
-    @@ Util.multi_query t.db
+    @@ Util.Sqlite.multi_query t.db
          (List.map (fun cid -> Queries.put_blob_ref cid path) cids)
 
 let clear_blob_refs t path cids : unit Lwt.t =
   if List.is_empty cids then Lwt.return_unit
-  else Util.use_pool t.db @@ Queries.clear_blob_refs path cids
+  else Util.Sqlite.use_pool t.db @@ Queries.clear_blob_refs path cids
 
 let update_blob_storage t cid storage : unit Lwt.t =
   let storage_str = Blob_store.storage_to_string storage in
-  Util.use_pool t.db @@ Queries.update_blob_storage cid storage_str
+  Util.Sqlite.use_pool t.db @@ Queries.update_blob_storage cid storage_str
 
 let list_blobs_by_storage t ~storage ~limit ~cursor :
     (Cid.t * string) list Lwt.t =
   let storage_str = Blob_store.storage_to_string storage in
-  Util.use_pool t.db
+  Util.Sqlite.use_pool t.db
   @@ Queries.list_blobs_by_storage ~storage:storage_str ~limit ~cursor

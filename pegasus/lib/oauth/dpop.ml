@@ -15,7 +15,7 @@ let jti_cache : (string, int) Hashtbl.t =
   Hashtbl.create Constants.jti_cache_size
 
 let cleanup_jti_cache () =
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   Hashtbl.filter_map_inplace
     (fun _ expires_at -> if expires_at > now then Some expires_at else None)
     jti_cache
@@ -50,7 +50,7 @@ let compute_nonce secret counter =
     |> to_raw_string |> Jwt.b64_encode )
 
 let create_nonce_state secret =
-  let counter = Util.now_ms () / Constants.dpop_rotation_interval_ms in
+  let counter = Util.Time.now_ms () / Constants.dpop_rotation_interval_ms in
   { secret
   ; counter
   ; prev= compute_nonce secret (pred counter)
@@ -60,7 +60,7 @@ let create_nonce_state secret =
 let nonce_state = ref (create_nonce_state Env.dpop_nonce_secret)
 
 let next_nonce () =
-  let now_counter = Util.now_ms () / Constants.dpop_rotation_interval_ms in
+  let now_counter = Util.Time.now_ms () / Constants.dpop_rotation_interval_ms in
   let diff = now_counter - !nonce_state.counter in
   ( match diff with
   | 0 ->

@@ -2,9 +2,9 @@ open Pegasus
 open Dream
 
 let () =
-  Rate_limiter.Shared.register ~name:"repo-write-hour" ~duration_ms:Util.hour
+  Rate_limiter.Shared.register ~name:"repo-write-hour" ~duration_ms:Util.Time.hour
     ~points:5000 ;
-  Rate_limiter.Shared.register ~name:"repo-write-day" ~duration_ms:Util.day
+  Rate_limiter.Shared.register ~name:"repo-write-day" ~duration_ms:Util.Time.day
     ~points:35000
 
 let handlers =
@@ -35,34 +35,34 @@ let handlers =
   ; (post, "/account/security", Api.Account_.Security.Index.post_handler)
   ; ( get
     , "/account/security/backup-codes"
-    , Api.Account_.Security.Backup_codes.count_handler )
+    , Api.Account_.Security.Security_backup_codes.count_handler )
   ; ( post
     , "/account/security/backup-codes/regenerate"
-    , Api.Account_.Security.Backup_codes.regenerate_handler )
+    , Api.Account_.Security.Security_backup_codes.regenerate_handler )
   ; ( get
     , "/account/security/totp/setup"
-    , Api.Account_.Security.Totp.setup_handler )
+    , Api.Account_.Security.Security_totp.setup_handler )
   ; ( post
     , "/account/security/totp/verify"
-    , Api.Account_.Security.Totp.verify_handler )
+    , Api.Account_.Security.Security_totp.verify_handler )
   ; ( post
     , "/account/security/totp/disable"
-    , Api.Account_.Security.Totp.disable_handler )
+    , Api.Account_.Security.Security_totp.disable_handler )
   ; ( get
     , "/account/security/keys"
-    , Api.Account_.Security.Security_key.list_handler )
+    , Api.Account_.Security.Security_keys.list_handler )
   ; ( post
     , "/account/security/keys/setup"
-    , Api.Account_.Security.Security_key.setup_handler )
+    , Api.Account_.Security.Security_keys.setup_handler )
   ; ( post
     , "/account/security/keys/:id/verify"
-    , Api.Account_.Security.Security_key.verify_handler )
+    , Api.Account_.Security.Security_keys.verify_handler )
   ; ( post
     , "/account/security/keys/:id/resync"
-    , Api.Account_.Security.Security_key.resync_handler )
+    , Api.Account_.Security.Security_keys.resync_handler )
   ; ( delete
     , "/account/security/keys/:id"
-    , Api.Account_.Security.Security_key.delete_handler )
+    , Api.Account_.Security.Security_keys.delete_handler )
   ; (get, "/account/permissions", Api.Account_.Permissions.get_handler)
   ; (post, "/account/permissions", Api.Account_.Permissions.post_handler)
   ; (get, "/account/identity", Api.Account_.Identity.get_handler)

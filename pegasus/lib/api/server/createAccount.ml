@@ -33,7 +33,7 @@ let create_account ~email ~handle ~password ?invite_code ?did ?recovery_key db =
       Lwt.return_error e
   | Ok () -> (
     (* validate handle *)
-    match Util.validate_handle handle with
+    match Identity_util.validate_handle handle with
     | Error (InvalidFormat e) | Error (TooLong e) | Error (TooShort e) ->
         Lwt.return_error (InvalidHandle ("handle " ^ e))
     | Ok _ -> (

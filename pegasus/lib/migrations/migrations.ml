@@ -62,12 +62,12 @@ let parse_migration_filename filename =
   with _ -> None
 
 let run_migration db (id, name, sql) =
-  Util.use_pool db (fun conn ->
-      Util.transact conn (fun () ->
+  Util.Sqlite.use_pool db (fun conn ->
+      Util.Sqlite.transact conn (fun () ->
           let open Lwt_result.Infix in
           execute_raw conn sql
           >>= fun () ->
-          let applied_at = Util.now_ms () in
+          let applied_at = Util.Time.now_ms () in
           Queries.record_migration ~id ~name ~applied_at conn ) )
 
 type migration_type = Data_store | User_store
@@ -80,9 +80,9 @@ let run_migrations typ conn =
     | User_store ->
         User_store_migrations_sql.(read, file_list)
   in
-  let%lwt () = Util.use_pool conn Queries.create_migrations_table in
+  let%lwt () = Util.Sqlite.use_pool conn Queries.create_migrations_table in
   let%lwt applied =
-    Util.use_pool conn Queries.get_applied_migrations
+    Util.Sqlite.use_pool conn Queries.get_applied_migrations
     >|= List.map (fun m -> m.id)
   in
   let pending =

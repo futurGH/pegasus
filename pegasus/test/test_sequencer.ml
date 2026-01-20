@@ -24,7 +24,7 @@ let decode_frame frame =
 let with_db (f : Data_store.t -> unit Lwt.t) : unit Lwt.t =
   let tmp = Filename.temp_file "pegasus_sequencer_test" ".db" in
   let%lwt pool =
-    Util.connect_sqlite ~create:true ~write:true
+    Util.Sqlite.connect ~create:true ~write:true
       (Uri.of_string ("sqlite3://" ^ tmp))
   in
   let%lwt () = Migrations.run_migrations Data_store pool in
@@ -79,7 +79,7 @@ let test_backfill_then_live () =
   with_db (fun conn ->
       let did = "did:example:bob" in
       (* add 3 identity events to db without publishing to bus *)
-      let time0 = Util.now_ms () in
+      let time0 = Util.Time.now_ms () in
       let mk_raw did =
         let evt : Sequencer.Types.identity_evt = {did; handle= None} in
         Dag_cbor.encode_yojson @@ Sequencer.Encode.format_identity evt
@@ -136,7 +136,7 @@ let test_backfill_then_live () =
 let test_gap_healing () =
   with_db (fun conn ->
       let did = "did:example:carol" in
-      let time0 = Util.now_ms () in
+      let time0 = Util.Time.now_ms () in
       (* add 2 identity events to db without publishing *)
       let mk_raw did =
         let evt : Sequencer.Types.identity_evt = {did; handle= None} in

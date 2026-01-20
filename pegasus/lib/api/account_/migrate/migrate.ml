@@ -36,7 +36,7 @@ let make_props ~csrf_token ~invite_required ~hostname
 let render_error ~csrf_token ~invite_required ~hostname
     ?(step = "enter_credentials") ?did ?handle ?old_pds ?identifier ?invite_code
     error =
-  Util.render_html ~status:`Bad_Request ~title:"Migrate Account"
+  Util.Html.render_page ~status:`Bad_Request ~title:"Migrate Account"
     (module Frontend.MigratePage)
     ~props:
       (make_props ~csrf_token ~invite_required ~hostname ~step ?did ?handle
@@ -95,7 +95,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
                   log "migration %s: failed to deactivate old account: %s" did e ) ;
               (false, Some e)
         in
-        Util.render_html ~title:"Migrate Account"
+        Util.Html.render_page ~title:"Migrate Account"
           (module Frontend.MigratePage)
           ~props:
             (make_props ~csrf_token ~invite_required ~hostname ~step:"complete"
@@ -106,7 +106,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
                   identity is pointing to this PDS."
                () )
     | _ ->
-        Util.render_html ~title:"Migrate Account"
+        Util.Html.render_page ~title:"Migrate Account"
           (module Frontend.MigratePage)
           ~props:
             (make_props ~csrf_token ~invite_required ~hostname ~step:"error"
@@ -123,7 +123,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
   else
     match session with
     | None ->
-        Util.render_html ~status:`Internal_Server_Error ~title:"Migrate Account"
+        Util.Html.render_page ~status:`Internal_Server_Error ~title:"Migrate Account"
           (module Frontend.MigratePage)
           ~props:
             (make_props ~csrf_token ~invite_required ~hostname ~step:"error"
@@ -145,7 +145,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
               ; blobs_cursor= ""
               ; plc_requested= true }
           in
-          Util.render_html ~title:"Migrate Account"
+          Util.Html.render_page ~title:"Migrate Account"
             (module Frontend.MigratePage)
             ~props:
               (make_props ~csrf_token ~invite_required ~hostname
@@ -172,7 +172,7 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
               ; blobs_cursor= ""
               ; plc_requested= true }
           in
-          Util.render_html ~title:"Migrate Account"
+          Util.Html.render_page ~title:"Migrate Account"
             (module Frontend.MigratePage)
             ~props:
               (make_props ~csrf_token ~invite_required ~hostname
@@ -243,7 +243,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
   in
   match step with
   | "resume_available" ->
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname
@@ -262,7 +262,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
           ; blobs_cursor= ""
           ; plc_requested= false }
       in
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname
@@ -282,7 +282,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
           ; blobs_cursor= ""
           ; plc_requested= true }
       in
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname
@@ -294,7 +294,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
                 code."
              () )
   | "complete" ->
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname ~step:"complete"
@@ -302,7 +302,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
              ~blobs_failed:0 ~old_account_deactivated:true
              ~message:"Your account has been successfully migrated!" () )
   | "complete_deactivation_failed" ->
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname ~step:"complete"
@@ -312,7 +312,7 @@ and handle_debug_step (ctx : Xrpc.context) ~csrf_token ~invite_required
                "Failed to deactivate old account (401): Unauthorized"
              ~message:"Your account has been successfully migrated!" () )
   | "error" | _ ->
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname ~step:"error" ())
@@ -329,7 +329,7 @@ and perform_migration ctx ~csrf_token ~invite_required ~hostname
     | Remote.AuthError e ->
         render_err e
     | Remote.AuthNeeds2FA ->
-        Util.render_html ~title:"Migrate Account"
+        Util.Html.render_page ~title:"Migrate Account"
           (module Frontend.MigratePage)
           ~props:
             (make_props ~csrf_token ~invite_required ~hostname ~step:"enter_2fa"
@@ -380,7 +380,7 @@ and handle_resumable_migration ctx ~old_client ~csrf_token ~invite_required
       render_err ~did ~handle ~old_pds e
   | Ok State.AlreadyActive ->
       let%lwt () = Session.log_in_did ctx.req did in
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname ~step:"complete"
@@ -400,7 +400,7 @@ and handle_resumable_migration ctx ~old_client ~csrf_token ~invite_required
                 log "migration %s: failed to deactivate old account: %s" did err ) ;
             (false, Some err)
       in
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props:
           (make_props ~csrf_token ~invite_required ~hostname ~step:"complete"
@@ -484,7 +484,7 @@ and perform_data_import ctx ~old_client ~csrf_token ~invite_required ~hostname
                         ; blobs_cursor= cursor
                         ; plc_requested= false }
                     in
-                    Util.render_html ~title:"Migrate Account"
+                    Util.Html.render_page ~title:"Migrate Account"
                       (module Frontend.MigratePage)
                       ~props:
                         (make_props ~csrf_token ~invite_required ~hostname
@@ -543,7 +543,7 @@ and handle_continue_blobs (ctx : Xrpc.context) ~csrf_token ~invite_required
                     ; blobs_failed= new_failed
                     ; blobs_cursor= new_cursor }
                 in
-                Util.render_html ~title:"Migrate Account"
+                Util.Html.render_page ~title:"Migrate Account"
                   (module Frontend.MigratePage)
                   ~props:
                     (make_props ~csrf_token ~invite_required ~hostname
@@ -662,7 +662,7 @@ and handle_submit_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
                                   state.did e ) ;
                             (false, Some e)
                       in
-                      Util.render_html ~title:"Migrate Account"
+                      Util.Html.render_page ~title:"Migrate Account"
                         (module Frontend.MigratePage)
                         ~props:
                           (make_props ~csrf_token ~invite_required ~hostname
@@ -689,14 +689,14 @@ and handle_resend_plc_token (ctx : Xrpc.context) ~csrf_token ~invite_required
     | Ok old_client -> (
       match%lwt Remote.request_plc_signature old_client with
       | Error e ->
-          Util.render_html ~title:"Migrate Account"
+          Util.Html.render_page ~title:"Migrate Account"
             (module Frontend.MigratePage)
             ~props:
               (make_props ~csrf_token ~invite_required ~hostname
                  ~step:"enter_plc_token" ~did:state.did ~handle:state.handle
                  ~old_pds:state.old_pds ~error:("Failed to resend: " ^ e) () )
       | Ok () ->
-          Util.render_html ~title:"Migrate Account"
+          Util.Html.render_page ~title:"Migrate Account"
             (module Frontend.MigratePage)
             ~props:
               (make_props ~csrf_token ~invite_required ~hostname
@@ -811,7 +811,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
       | Remote.AuthError e ->
           render_err ~step:"resume_available" e
       | Remote.AuthNeeds2FA ->
-          Util.render_html ~title:"Migrate Account"
+          Util.Html.render_page ~title:"Migrate Account"
             (module Frontend.MigratePage)
             ~props:
               (make_props ~csrf_token ~invite_required ~hostname
@@ -834,7 +834,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
                 render_err ~step:"resume_available" ~did ~handle ~old_pds e
             | Ok State.AlreadyActive ->
                 let%lwt () = Session.log_in_did ctx.req did in
-                Util.render_html ~title:"Migrate Account"
+                Util.Html.render_page ~title:"Migrate Account"
                   (module Frontend.MigratePage)
                   ~props:
                     (make_props ~csrf_token ~invite_required ~hostname
@@ -860,7 +860,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
                             did e ) ;
                       (false, Some e)
                 in
-                Util.render_html ~title:"Migrate Account"
+                Util.Html.render_page ~title:"Migrate Account"
                   (module Frontend.MigratePage)
                   ~props:
                     (make_props ~csrf_token ~invite_required ~hostname
@@ -919,7 +919,7 @@ and handle_resume_migration (ctx : Xrpc.context) ~csrf_token ~invite_required
                               ; blobs_cursor= cursor
                               ; plc_requested= false }
                           in
-                          Util.render_html ~title:"Migrate Account"
+                          Util.Html.render_page ~title:"Migrate Account"
                             (module Frontend.MigratePage)
                             ~props:
                               (make_props ~csrf_token ~invite_required ~hostname
@@ -949,7 +949,7 @@ let get_handler =
                 ~old_pds:state.old_pds ~blobs_imported:state.blobs_imported
                 ~blobs_failed:state.blobs_failed ()
       in
-      Util.render_html ~title:"Migrate Account"
+      Util.Html.render_page ~title:"Migrate Account"
         (module Frontend.MigratePage)
         ~props )
 

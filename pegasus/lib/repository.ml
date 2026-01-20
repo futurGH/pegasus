@@ -577,8 +577,8 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
     in
     let record_data = List.rev record_data in
     let%lwt _ =
-      Util.use_pool ~timeout:600. t.db.db (fun conn ->
-          Util.transact conn (fun () ->
+      Util.Sqlite.use_pool ~timeout:600. t.db.db (fun conn ->
+          Util.Sqlite.transact conn (fun () ->
               let$! _ = User_store.Queries.put_commit root commit_bytes conn in
               let$! () = User_store.Queries.clear_mst conn in
               let$! () = User_store.Bulk.put_blocks mst_blocks conn in

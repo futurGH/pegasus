@@ -3,7 +3,7 @@ open Lexicons.Com.Atproto.Server.RequestPasswordReset.Main
 let request_password_reset (actor : Data_store.Types.actor) db =
   let did = actor.did in
   let code = Util.make_code () in
-  let expires_at = Util.now_ms () + (10 * 60 * 1000) in
+  let expires_at = Util.Time.now_ms () + (10 * 60 * 1000) in
   let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
   Util.send_email_or_log ~recipients:[To actor.email]
     ~subject:(Printf.sprintf "Password reset for %s" actor.handle)
@@ -13,9 +13,9 @@ let handler =
   Xrpc.handler
     ~rate_limits:
       [ Route
-          {duration_ms= Util.day; points= 50; calc_key= None; calc_points= None}
+          {duration_ms= Util.Time.day; points= 50; calc_key= None; calc_points= None}
       ; Route
-          {duration_ms= Util.hour; points= 15; calc_key= None; calc_points= None}
+          {duration_ms= Util.Time.hour; points= 15; calc_key= None; calc_points= None}
       ]
     (fun {req; auth; db; _} ->
       let%lwt actor_opt =

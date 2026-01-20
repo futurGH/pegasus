@@ -1,21 +1,21 @@
 let has_valid_delete_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at) with
   | Some code, Some expires_at ->
-      String.starts_with ~prefix:"del-" code && expires_at > Util.now_ms ()
+      String.starts_with ~prefix:"del-" code && expires_at > Util.Time.now_ms ()
   | _ ->
       false
 
 let has_valid_email_change_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at, actor.pending_email) with
   | Some _, Some expires_at, Some _ ->
-      expires_at > Util.now_ms ()
+      expires_at > Util.Time.now_ms ()
   | _ ->
       false
 
 let has_valid_email_confirmation_code (actor : Data_store.Types.actor) =
   match (actor.auth_code, actor.auth_code_expires_at, actor.pending_email) with
   | Some _, Some expires_at, None ->
-      expires_at > Util.now_ms ()
+      expires_at > Util.Time.now_ms ()
   | _ ->
       false
 
@@ -47,7 +47,7 @@ let get_handler =
               let email_change_pending = has_valid_email_change_code actor in
               let pending_email = actor.pending_email in
               let delete_pending = has_valid_delete_code actor in
-              Util.render_html ~title:"Account"
+              Util.Html.render_page ~title:"Account"
                 (module Frontend.AccountPage)
                 ~props:
                   { current_user
@@ -101,7 +101,7 @@ let post_handler =
                 let email_change_pending = has_valid_email_change_code actor in
                 let pending_email = actor.pending_email in
                 let delete_pending = has_valid_delete_code actor in
-                Util.render_html ~title:"Account"
+                Util.Html.render_page ~title:"Account"
                   (module Frontend.AccountPage)
                   ~props:
                     { current_user= {current_user with handle= actor.handle}
@@ -133,7 +133,7 @@ let post_handler =
                       (* update handle if changed *)
                       let%lwt handle_result =
                         if new_handle <> actor.handle then
-                          Identity.UpdateHandle.update_handle ~did
+                          Identity_util.update_handle ~did
                             ~handle:new_handle ctx.db
                         else Lwt.return_ok ()
                       in
@@ -177,7 +177,7 @@ let post_handler =
                       | Some code, Some expires_at
                         when String.starts_with ~prefix:"del-" code
                              && code = token
-                             && expires_at > Util.now_ms () ->
+                             && expires_at > Util.Time.now_ms () ->
                           let%lwt _ =
                             Server.DeleteAccount.delete_account ~did ctx.db
                           in
@@ -222,7 +222,7 @@ let post_handler =
                       match%lwt
                         match (actor.auth_code, actor.auth_code_expires_at) with
                         | Some code, Some expiry
-                          when Some code = token && expiry > Util.now_ms () ->
+                          when Some code = token && expiry > Util.Time.now_ms () ->
                             Server.UpdateEmail.update_email ~token actor ctx.db
                         | _ ->
                             Lwt.return_error Server.UpdateEmail.InvalidToken

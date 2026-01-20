@@ -50,7 +50,7 @@ let cleanup_temp_db path =
 
 let setup_test_db () : (User_store.t * string) Lwt.t =
   let path, uri = create_temp_db () in
-  let%lwt pool = Util.connect_sqlite ~create:true ~write:true uri in
+  let%lwt pool = Util.Sqlite.connect ~create:true ~write:true uri in
   let%lwt () = Migrations.run_migrations User_store pool in
   let db : User_store.t = {did= "did:plc:bench"; db= pool} in
   Lwt.return (db, path)
@@ -175,7 +175,7 @@ let bench_bulk_insert_ops () =
       let blocks = generate_blocks size in
       let%lwt r1 =
         time_it (Printf.sprintf "Bulk.put_blocks (%d blocks)" size) (fun () ->
-            Util.use_pool db.db (fun conn -> User_store.Bulk.put_blocks blocks conn)
+            Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_blocks blocks conn)
             >|= fun _ -> () )
       in
       print_result r1 ;
@@ -184,7 +184,7 @@ let bench_bulk_insert_ops () =
       let records = generate_record_data size in
       let%lwt r2 =
         time_it (Printf.sprintf "Bulk.put_records (%d records)" size) (fun () ->
-            Util.use_pool db2.db (fun conn -> User_store.Bulk.put_records records conn)
+            Util.Sqlite.use_pool db2.db (fun conn -> User_store.Bulk.put_records records conn)
             >|= fun _ -> () )
       in
       print_result r2 ;
@@ -200,7 +200,7 @@ let bench_db_mst_ops () =
       let records = generate_record_data size in
       let kv_pairs = List.map (fun (path, cid, _, _) -> (path, cid)) records in
       let%lwt () =
-        Util.use_pool db.db (fun conn -> User_store.Bulk.put_records records conn)
+        Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records records conn)
         >|= fun _ -> ()
       in
       let%lwt r1 =
@@ -231,14 +231,14 @@ let bench_db_mst_incremental () =
       let initial_records = generate_record_data initial_size in
       let initial_kv = List.map (fun (path, cid, _, _) -> (path, cid)) initial_records in
       let%lwt () =
-        Util.use_pool db.db (fun conn -> User_store.Bulk.put_records initial_records conn)
+        Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records initial_records conn)
         >|= fun _ -> ()
       in
       let%lwt mst = Mst.of_assoc db initial_kv in
       let add_records = generate_record_data add_count in
       let add_kv = List.map (fun (path, cid, _, _) -> (path, cid)) add_records in
       let%lwt () =
-        Util.use_pool db.db (fun conn -> User_store.Bulk.put_records add_records conn)
+        Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records add_records conn)
         >|= fun _ -> ()
       in
       let%lwt r1 =
@@ -332,7 +332,7 @@ let bench_rebuild_mst () =
       let%lwt db, path = setup_test_db () in
       let records = generate_record_data size in
       let%lwt () =
-        Util.use_pool db.db (fun conn -> User_store.Bulk.put_records records conn)
+        Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records records conn)
         >|= fun _ -> ()
       in
       let%lwt r1 =
@@ -352,14 +352,14 @@ let bench_mixed_ops () =
   let num_ops = 500 in
   let initial_records = generate_record_data initial_size in
   let%lwt () =
-    Util.use_pool db.db (fun conn -> User_store.Bulk.put_records initial_records conn)
+    Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records initial_records conn)
     >|= fun _ -> ()
   in
   let initial_kv = List.map (fun (path, cid, _, _) -> (path, cid)) initial_records in
   let%lwt mst = Mst.of_assoc db initial_kv in
   let extra_records = generate_record_data num_ops in
   let%lwt () =
-    Util.use_pool db.db (fun conn -> User_store.Bulk.put_records extra_records conn)
+    Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_records extra_records conn)
     >|= fun _ -> ()
   in
   let existing = ref (shuffle initial_records) in
@@ -409,7 +409,7 @@ let bench_db_io_patterns () =
   let size = 20000 in
   let blocks = generate_blocks size in
   let%lwt () =
-    Util.use_pool db.db (fun conn -> User_store.Bulk.put_blocks blocks conn) >|= fun _ -> ()
+    Util.Sqlite.use_pool db.db (fun conn -> User_store.Bulk.put_blocks blocks conn) >|= fun _ -> ()
   in
   let cids = List.map fst blocks in
   let shuffled_cids = shuffle cids in

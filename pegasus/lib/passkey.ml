@@ -126,7 +126,7 @@ let deserialize_pubkey (b : bytes) : Mirage_crypto_ec.P256.Dsa.pub option =
 
 let create_challenge ?did ~challenge_type db =
   let _challenge_obj, challenge_b64 = Webauthn.generate_challenge () in
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   let expires_at = now + challenge_expiry_ms in
   let challenge_type_str =
     match challenge_type with
@@ -136,14 +136,14 @@ let create_challenge ?did ~challenge_type db =
         "authenticate"
   in
   let%lwt () =
-    Util.use_pool db
+    Util.Sqlite.use_pool db
     @@ Queries.insert_challenge ~challenge:challenge_b64 ~did
          ~challenge_type:challenge_type_str ~expires_at ~created_at:now
   in
   Lwt.return challenge_b64
 
 let verify_challenge ~challenge ~challenge_type db =
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   let expected_type =
     match challenge_type with
     | `Register ->
@@ -151,39 +151,39 @@ let verify_challenge ~challenge ~challenge_type db =
     | `Authenticate ->
         "authenticate"
   in
-  match%lwt Util.use_pool db @@ Queries.get_challenge challenge now with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.get_challenge challenge now with
   | Some c when c.challenge_type = expected_type ->
       Lwt.return_some c
   | _ ->
       Lwt.return_none
 
 let delete_challenge ~challenge db =
-  Util.use_pool db @@ Queries.delete_challenge ~challenge
+  Util.Sqlite.use_pool db @@ Queries.delete_challenge ~challenge
 
 let store_credential ~did ~credential_id ~public_key ~name db =
-  let now = Util.now_ms () in
-  Util.use_pool db
+  let now = Util.Time.now_ms () in
+  Util.Sqlite.use_pool db
   @@ Queries.insert_passkey ~did ~credential_id ~public_key ~sign_count:0 ~name
        ~created_at:now
 
 let get_credentials_for_user ~did db =
-  Util.use_pool db @@ Queries.get_passkeys_by_did ~did
+  Util.Sqlite.use_pool db @@ Queries.get_passkeys_by_did ~did
 
 let get_credential_by_id ~credential_id db =
-  Util.use_pool db @@ Queries.get_passkey_by_credential_id ~credential_id
+  Util.Sqlite.use_pool db @@ Queries.get_passkey_by_credential_id ~credential_id
 
 let update_sign_count ~credential_id ~sign_count db =
-  let now = Util.now_ms () in
-  Util.use_pool db
+  let now = Util.Time.now_ms () in
+  Util.Sqlite.use_pool db
   @@ Queries.update_passkey_sign_count ~credential_id ~sign_count
        ~last_used_at:now
 
 let delete_credential ~id ~did db =
-  let%lwt () = Util.use_pool db @@ Queries.delete_passkey ~id ~did in
+  let%lwt () = Util.Sqlite.use_pool db @@ Queries.delete_passkey ~id ~did in
   Lwt.return_true
 
 let rename_credential ~id ~did ~name db =
-  let%lwt () = Util.use_pool db @@ Queries.rename_passkey ~id ~did ~name in
+  let%lwt () = Util.Sqlite.use_pool db @@ Queries.rename_passkey ~id ~did ~name in
   Lwt.return_true
 
 let generate_registration_options ~did ~email ~existing_credentials db =

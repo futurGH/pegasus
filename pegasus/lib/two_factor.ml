@@ -104,7 +104,7 @@ let generate_session_token () =
   Base64.(encode_string ~alphabet:uri_safe_alphabet ~pad:false token)
 
 let is_2fa_enabled ~did db =
-  match%lwt Util.use_pool db @@ Queries.is_2fa_enabled ~did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.is_2fa_enabled ~did with
   | Some 1 ->
       Lwt.return_true
   | _ ->
@@ -113,7 +113,7 @@ let is_2fa_enabled ~did db =
 let get_status ~did db =
   let%lwt totp_enabled = Totp.is_enabled ~did db in
   let%lwt email_2fa =
-    match%lwt Util.use_pool db @@ Queries.get_email_2fa_enabled ~did with
+    match%lwt Util.Sqlite.use_pool db @@ Queries.get_email_2fa_enabled ~did with
     | Some 1 ->
         Lwt.return_true
     | _ ->
@@ -132,7 +132,7 @@ let get_status ~did db =
 let get_available_methods ~did db =
   let%lwt totp_enabled = Totp.is_enabled ~did db in
   let%lwt email_2fa =
-    match%lwt Util.use_pool db @@ Queries.get_email_2fa_enabled ~did with
+    match%lwt Util.Sqlite.use_pool db @@ Queries.get_email_2fa_enabled ~did with
     | Some 1 ->
         Lwt.return_true
     | _ ->
@@ -149,32 +149,32 @@ let get_available_methods ~did db =
 (* create a pending 2FA session after password verification *)
 let create_pending_session ~did db =
   let session_token = generate_session_token () in
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   let expires_at = now + pending_session_expiry_ms in
   let%lwt () =
-    Util.use_pool db
+    Util.Sqlite.use_pool db
     @@ Queries.insert_pending_2fa ~session_token ~did ~password_verified_at:now
          ~expires_at ~created_at:now
   in
   Lwt.return session_token
 
 let get_pending_session ~session_token db =
-  let now = Util.now_ms () in
-  Util.use_pool db @@ Queries.get_pending_2fa session_token now
+  let now = Util.Time.now_ms () in
+  Util.Sqlite.use_pool db @@ Queries.get_pending_2fa session_token now
 
 let get_pending_session_for_did ~did db =
-  let now = Util.now_ms () in
-  Util.use_pool db @@ Queries.get_pending_2fa_for_did did now
+  let now = Util.Time.now_ms () in
+  Util.Sqlite.use_pool db @@ Queries.get_pending_2fa_for_did did now
 
 let delete_pending_session ~session_token db =
-  Util.use_pool db @@ Queries.delete_pending_2fa ~session_token
+  Util.Sqlite.use_pool db @@ Queries.delete_pending_2fa ~session_token
 
 let send_email_code ~session_token ~actor db =
   let code = Util.make_code () in
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   let expires_at = now + email_code_expiry_ms in
   let%lwt () =
-    Util.use_pool db
+    Util.Sqlite.use_pool db
     @@ Queries.update_email_code ~session_token ~email_code:code
          ~email_code_expires_at:expires_at
   in
@@ -189,7 +189,7 @@ let send_email_code ~session_token ~actor db =
 let _verify_email_code ~code ~session =
   match (session.email_code, session.email_code_expires_at) with
   | Some stored_code, Some expires_at ->
-      let now = Util.now_ms () in
+      let now = Util.Time.now_ms () in
       if now > expires_at then Lwt.return_error "Email code expired"
       else if stored_code = code then Lwt.return_ok session.did
       else Lwt.return_error "Invalid code"
@@ -231,13 +231,13 @@ let verify_backup_code ~session_token ~code db =
       else Lwt.return_error "Invalid backup code"
 
 let enable_email_2fa ~did db =
-  Util.use_pool db @@ Queries.set_email_2fa_enabled ~did ~enabled:1
+  Util.Sqlite.use_pool db @@ Queries.set_email_2fa_enabled ~did ~enabled:1
 
 let disable_email_2fa ~did db =
-  Util.use_pool db @@ Queries.set_email_2fa_enabled ~did ~enabled:0
+  Util.Sqlite.use_pool db @@ Queries.set_email_2fa_enabled ~did ~enabled:0
 
 let is_email_2fa_enabled ~did db =
-  match%lwt Util.use_pool db @@ Queries.get_email_2fa_enabled ~did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.get_email_2fa_enabled ~did with
   | Some 1 ->
       Lwt.return_true
   | _ ->

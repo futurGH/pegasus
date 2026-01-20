@@ -4,10 +4,10 @@ let request_account_delete (actor : Data_store.Types.actor) db =
     "del-"
     ^ String.sub
         Digestif.SHA256.(
-          digest_string (did ^ Int.to_string @@ Util.now_ms ()) |> to_hex )
+          digest_string (did ^ Int.to_string @@ Util.Time.now_ms ()) |> to_hex )
         0 8
   in
-  let expires_at = Util.now_ms () + (15 * 60 * 1000) in
+  let expires_at = Util.Time.now_ms () + (15 * 60 * 1000) in
   let%lwt () = Data_store.set_auth_code ~did ~code ~expires_at db in
   Util.send_email_or_log ~recipients:[To actor.email]
     ~subject:(Printf.sprintf "Account deletion request for %s" actor.handle)
@@ -19,12 +19,12 @@ let handler =
   Xrpc.handler ~auth:Authorization
     ~rate_limits:
       [ Route
-          { duration_ms= Util.day
+          { duration_ms= Util.Time.day
           ; points= 15
           ; calc_key= Some calc_key_did
           ; calc_points= None }
       ; Route
-          { duration_ms= Util.hour
+          { duration_ms= Util.Time.hour
           ; points= 5
           ; calc_key= Some calc_key_did
           ; calc_points= None } ]

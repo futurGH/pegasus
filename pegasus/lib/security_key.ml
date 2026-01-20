@@ -182,12 +182,12 @@ let resync ~secret ~stored_counter ~code1 ~code2 =
 
 let setup_security_key ~did ~name db =
   let secret = generate_secret () in
-  let now = Util.now_ms () in
+  let now = Util.Time.now_ms () in
   let%lwt () =
-    Util.use_pool db
+    Util.Sqlite.use_pool db
     @@ Queries.insert_security_key ~did ~name ~secret ~counter:0 ~created_at:now
   in
-  let%lwt id = Util.use_pool db @@ Queries.get_last_insert_id () in
+  let%lwt id = Util.Sqlite.use_pool db @@ Queries.get_last_insert_id () in
   let issuer = "Pegasus PDS (" ^ Env.hostname ^ ")" in
   let uri = make_provisioning_uri ~secret ~account:did ~issuer in
   let secret_b32 =
@@ -196,7 +196,7 @@ let setup_security_key ~did ~name db =
   Lwt.return (id, secret_b32, uri)
 
 let verify_setup ~id ~did ~code db =
-  match%lwt Util.use_pool db @@ Queries.get_security_key_by_id id did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did with
   | None ->
       Lwt.return_error "Security key not found"
   | Some sk -> (
@@ -209,9 +209,9 @@ let verify_setup ~id ~did ~code db =
         | Error msg ->
             Lwt.return_error msg
         | Ok new_counter ->
-            let now = Util.now_ms () in
+            let now = Util.Time.now_ms () in
             let%lwt () =
-              Util.use_pool db
+              Util.Sqlite.use_pool db
               @@ Queries.verify_security_key ~id ~did ~verified_at:now
                    ~counter:new_counter
             in
@@ -219,7 +219,7 @@ let verify_setup ~id ~did ~code db =
 
 let verify_login ~did ~code db =
   let%lwt keys =
-    Util.use_pool db @@ Queries.get_verified_security_keys_by_did ~did
+    Util.Sqlite.use_pool db @@ Queries.get_verified_security_keys_by_did ~did
   in
   let rec try_keys = function
     | [] ->
@@ -229,9 +229,9 @@ let verify_login ~did ~code db =
       | Error _ ->
           try_keys rest
       | Ok new_counter ->
-          let now = Util.now_ms () in
+          let now = Util.Time.now_ms () in
           let%lwt () =
-            Util.use_pool db
+            Util.Sqlite.use_pool db
             @@ Queries.update_counter_and_last_used ~id:sk.id
                  ~counter:new_counter ~last_used_at:now
           in
@@ -240,7 +240,7 @@ let verify_login ~did ~code db =
   try_keys keys
 
 let resync_key ~id ~did ~code1 ~code2 db =
-  match%lwt Util.use_pool db @@ Queries.get_security_key_by_id id did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did with
   | None ->
       Lwt.return_error "Security key not found"
   | Some sk -> (
@@ -254,27 +254,27 @@ let resync_key ~id ~did ~code1 ~code2 db =
             Lwt.return_error msg
         | Ok new_counter ->
             let%lwt () =
-              Util.use_pool db
+              Util.Sqlite.use_pool db
               @@ Queries.update_counter ~id:sk.id ~counter:new_counter
             in
             Lwt.return_ok () )
 
 let get_keys_for_user ~did db =
-  Util.use_pool db @@ Queries.get_security_keys_by_did ~did
+  Util.Sqlite.use_pool db @@ Queries.get_security_keys_by_did ~did
 
 let delete_key ~id ~did db =
-  let%lwt () = Util.use_pool db @@ Queries.delete_security_key ~id ~did in
+  let%lwt () = Util.Sqlite.use_pool db @@ Queries.delete_security_key ~id ~did in
   Lwt.return_true
 
 let has_security_keys ~did db =
-  match%lwt Util.use_pool db @@ Queries.has_security_keys ~did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.has_security_keys ~did with
   | Some _ ->
       Lwt.return_true
   | None ->
       Lwt.return_false
 
 let count_security_keys ~did db =
-  Util.use_pool db @@ Queries.count_security_keys ~did
+  Util.Sqlite.use_pool db @@ Queries.count_security_keys ~did
 
 let count_verified_security_keys ~did db =
-  Util.use_pool db @@ Queries.count_verified_security_keys ~did
+  Util.Sqlite.use_pool db @@ Queries.count_verified_security_keys ~did

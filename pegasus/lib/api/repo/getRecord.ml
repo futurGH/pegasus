@@ -9,7 +9,7 @@ let handler =
       match input_did with
       | Ok input_did -> (
           let uri =
-            Util.make_at_uri ~repo:input_did ~collection:input.collection
+            Util.Syntax.make_at_uri ~repo:input_did ~collection:input.collection
               ~rkey:input.rkey ~fragment:None
           in
           let%lwt repo = Repository.load ~ensure_active:true input_did in
@@ -68,6 +68,6 @@ let handler =
             Errors.internal_error ~name:"RecordNotFound"
               ~msg:
                 ( "could not find record "
-                ^ Util.make_at_uri ~repo:input.repo ~collection:input.collection
+                ^ Util.Syntax.make_at_uri ~repo:input.repo ~collection:input.collection
                     ~rkey:input.rkey ~fragment:None )
               () ) )

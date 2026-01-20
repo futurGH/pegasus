@@ -4,7 +4,7 @@ open Oauth.Types
 let get_handler =
   Xrpc.handler (fun ctx ->
       let login_redirect =
-        Uri.make ~path:"/account/login" ~query:(Util.copy_query ctx.req) ()
+        Uri.make ~path:"/account/login" ~query:(Util.Http.copy_query ctx.req) ()
         |> Uri.to_string |> Dream.redirect ctx.req
       in
       let client_id = Dream.query ctx.req "client_id" in
@@ -45,7 +45,7 @@ let get_handler =
                     ^ Uuidm.to_string
                         (Uuidm.v4_gen (Random.State.make_self_init ()) ())
                   in
-                  let expires_at = Util.now_ms () + Constants.code_expiry_ms in
+                  let expires_at = Util.Time.now_ms () + Constants.code_expiry_ms in
                   let%lwt () =
                     Queries.insert_auth_code ctx.db
                       { code
@@ -136,7 +136,7 @@ let get_handler =
                             Option.value current_user
                               ~default:(List.hd logged_in_users)
                           in
-                          Util.render_html ~title:("Authorizing " ^ host)
+                          Util.Html.render_page ~title:("Authorizing " ^ host)
                             (module Frontend.OauthAuthorizePage)
                             ~props:
                               { client_url
@@ -191,7 +191,7 @@ let post_handler =
                               Errors.invalid_request "code already authorized"
                             else if code_rec.used then
                               Errors.invalid_request "code already used"
-                            else if Util.now_ms () > code_rec.expires_at then
+                            else if Util.Time.now_ms () > code_rec.expires_at then
                               Errors.invalid_request "code expired"
                             else if code_rec.request_id <> request_id then
                               Errors.invalid_request "code not for this request"

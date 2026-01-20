@@ -10,7 +10,7 @@ module Make (K : Hashtbl.HashedType) = struct
 
   let default_initial_capacity = 16
 
-  let[@inline] _now_ms () : time_ms = Util.now_ms ()
+  let[@inline] _now_ms () : time_ms = Util.Time.now_ms ()
 
   let create ?capacity ?(initial_capacity = default_initial_capacity)
       default_ttl () : 'a t =

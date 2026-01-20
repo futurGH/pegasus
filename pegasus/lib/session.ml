@@ -198,7 +198,7 @@ let list_logged_in_actors req db =
                         Lwt.return_some
                           { actor with
                             avatar_data_uri=
-                              Some (Util.make_data_uri ~mimetype ~data) }
+                              Some (Util.Html.make_data_uri ~mimetype ~data) }
                     | _ ->
                         Lwt.return_some actor )
                   | _ ->

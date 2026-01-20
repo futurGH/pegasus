@@ -13,7 +13,7 @@ let handler =
       | Some actor -> (
         match (actor.auth_code, actor.auth_code_expires_at) with
         | auth_code, Some auth_expires_at
-          when input.token = auth_code && Util.now_ms () < auth_expires_at -> (
+          when input.token = auth_code && Util.Time.now_ms () < auth_expires_at -> (
           match%lwt Plc.get_audit_log did with
           | Ok log ->
               let latest = Mist.Util.last log |> Option.get in
@@ -21,7 +21,7 @@ let handler =
                 Option.map
                   (fun v ->
                     try
-                      Util.Did_doc_types.string_map_of_yojson v |> Result.get_ok
+                      Util.Types.string_map_of_yojson v |> Result.get_ok
                     with _ -> Errors.invalid_request "invalid request body" )
                   input.verification_methods
               in

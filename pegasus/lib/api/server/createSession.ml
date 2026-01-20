@@ -35,11 +35,11 @@ let handler =
       let key = id ^ "-" ^ Util.request_ip req in
       let _ =
         Xrpc.consume_route_rate_limit ~name:"repo-write-hour"
-          ~duration_ms:Util.day ~max_points:300 ~key ~consume_points
+          ~duration_ms:Util.Time.day ~max_points:300 ~key ~consume_points
       in
       let _ =
         Xrpc.consume_route_rate_limit ~name:"repo-write-day"
-          ~duration_ms:(5 * Util.minute) ~max_points:30 ~key ~consume_points
+          ~duration_ms:(5 * Util.Time.minute) ~max_points:30 ~key ~consume_points
       in
       match%lwt
         Lwt_result.catch @@ fun () -> Data_store.try_login ~id ~password db

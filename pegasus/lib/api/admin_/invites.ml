@@ -11,7 +11,7 @@ let get_handler =
           let%lwt invites = Data_store.list_invites ~limit:100 ctx.db in
           let invites = List.map invite_to_view invites in
           let csrf_token = Dream.csrf_token ctx.req in
-          Util.render_html ~title:"Admin / Invite Codes"
+          Util.Html.render_page ~title:"Admin / Invite Codes"
             (module Frontend.AdminInvitesPage)
             ~props:{invites; csrf_token; error= None; success= None} )
 
@@ -25,7 +25,7 @@ let post_handler =
           let render_page ?error ?success () =
             let%lwt invites = Data_store.list_invites ~limit:100 ctx.db in
             let invites = List.map invite_to_view invites in
-            Util.render_html ~title:"Admin / Invite Codes"
+            Util.Html.render_page ~title:"Admin / Invite Codes"
               (module Frontend.AdminInvitesPage)
               ~props:{invites; csrf_token; error; success}
           in

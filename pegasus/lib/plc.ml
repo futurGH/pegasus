@@ -1,7 +1,7 @@
 open Cohttp
 open Cohttp_lwt
 open Cohttp_lwt_unix
-open Util.Did_doc_types
+open Util.Types
 
 let default_endpoint = "https://plc.directory"
 
@@ -278,7 +278,7 @@ let get_audit_log ?endpoint did : (audit_log, string) Lwt_result.t =
          did
   in
   let headers = Http.Header.init_with "Accept" "application/json" in
-  let%lwt res, body = Util.http_get ~headers uri in
+  let%lwt res, body = Util.Http.get ~headers uri in
   match res.status with
   | `OK ->
       let%lwt body = Body.to_string body in

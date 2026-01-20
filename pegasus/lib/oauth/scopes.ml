@@ -69,8 +69,8 @@ let is_valid_nsid s =
 
 (* check if permission_nsid is under include_nsid's authority *)
 let is_parent_authority_of ~include_nsid ~permission_nsid =
-  let include_authority = Util.nsid_authority include_nsid in
-  let permission_authority = Util.nsid_authority permission_nsid in
+  let include_authority = Util.Syntax.nsid_authority include_nsid in
+  let permission_authority = Util.Syntax.nsid_authority permission_nsid in
   String.equal include_authority permission_authority
   || String.starts_with ~prefix:(include_authority ^ ".") permission_authority
 

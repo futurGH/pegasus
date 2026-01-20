@@ -17,7 +17,7 @@ let check_handle_handler =
           if String.contains handle_input '.' then handle_input
           else handle_input ^ hostname_suffix
         in
-        let validation_result = Util.validate_handle handle in
+        let validation_result = Identity_util.validate_handle handle in
         match validation_result with
         | Error (InvalidFormat e) | Error (TooLong e) | Error (TooShort e) ->
             Dream.json @@ Yojson.Safe.to_string
@@ -44,7 +44,7 @@ let get_handler =
       let csrf_token = Dream.csrf_token ctx.req in
       let invite_required = Env.invite_required in
       let hostname = Env.hostname in
-      Util.render_html ~title:"Sign Up"
+      Util.Html.render_page ~title:"Sign Up"
         (module Frontend.SignupPage)
         ~props:{csrf_token; invite_required; hostname; error= None} )
 
@@ -85,39 +85,39 @@ let post_handler =
               ?invite_code ctx.db
           with
           | Error Server.CreateAccount.InviteCodeRequired ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
                     error= Some "An invite code is required to sign up." }
           | Error Server.CreateAccount.InvalidInviteCode ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:{props with error= Some "Invalid invite code."}
           | Error (Server.CreateAccount.InvalidHandle e) ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:{props with error= Some e}
           | Error Server.CreateAccount.EmailAlreadyExists ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
                     error= Some "An account with that email already exists." }
           | Error Server.CreateAccount.HandleAlreadyExists ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
                     error= Some "An account with that handle already exists." }
           | Error Server.CreateAccount.DidAlreadyExists ->
-              Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+              Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
                     error= Some "An account with that DID already exists." }
           | Error (Server.CreateAccount.PlcError _) ->
-              Util.render_html ~status:`Internal_Server_Error ~title:"Sign Up"
+              Util.Html.render_page ~status:`Internal_Server_Error ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
@@ -126,7 +126,7 @@ let post_handler =
                         "Failed to create your identity. Please try again \
                          later." }
           | Error Server.CreateAccount.InviteUseFailure ->
-              Util.render_html ~status:`Internal_Server_Error ~title:"Sign Up"
+              Util.Html.render_page ~status:`Internal_Server_Error ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
@@ -137,7 +137,7 @@ let post_handler =
               let%lwt () = Session.log_in_did ctx.req did in
               Dream.redirect ctx.req "/account" )
       | _ ->
-          Util.render_html ~status:`Bad_Request ~title:"Sign Up"
+          Util.Html.render_page ~status:`Bad_Request ~title:"Sign Up"
             (module Frontend.SignupPage)
             ~props:
               { props with

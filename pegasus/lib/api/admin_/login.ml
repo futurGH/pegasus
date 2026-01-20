@@ -5,7 +5,7 @@ let get_handler =
           Dream.redirect ctx.req "/admin/users"
       | false ->
           let csrf_token = Dream.csrf_token ctx.req in
-          Util.render_html ~title:"Admin Login"
+          Util.Html.render_page ~title:"Admin Login"
             (module Frontend.AdminLoginPage)
             ~props:{csrf_token; error= None} )
 
@@ -21,10 +21,10 @@ let post_handler =
             let%lwt () = Session.set_admin_authenticated ctx.req true in
             Dream.redirect ctx.req "/admin/users"
           else
-            Util.render_html ~status:`Unauthorized ~title:"Admin Login"
+            Util.Html.render_page ~status:`Unauthorized ~title:"Admin Login"
               (module Frontend.AdminLoginPage)
               ~props:{csrf_token; error= Some "Invalid password."}
       | _ ->
-          Util.render_html ~status:`Unauthorized ~title:"Admin Login"
+          Util.Html.render_page ~status:`Unauthorized ~title:"Admin Login"
             (module Frontend.AdminLoginPage)
             ~props:{csrf_token; error= Some "Invalid form submission."} )

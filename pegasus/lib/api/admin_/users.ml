@@ -49,7 +49,7 @@ let get_handler =
           let actors = List.map actor_to_view actors in
           let csrf_token = Dream.csrf_token ctx.req in
           let hostname = Env.hostname in
-          Util.render_html ~title:"Admin / Users"
+          Util.Html.render_page ~title:"Admin / Users"
             (module Frontend.AdminUsersPage)
             ~props:
               { actors
@@ -96,7 +96,7 @@ let post_handler =
                     None
               else None
             in
-            Util.render_html ~title:"Admin / Users"
+            Util.Html.render_page ~title:"Admin / Users"
               (module Frontend.AdminUsersPage)
               ~props:
                 { actors
@@ -137,7 +137,7 @@ let post_handler =
                       if String.contains handle_input '.' then handle_input
                       else handle_input ^ hostname_suffix
                     in
-                    match Util.validate_handle handle with
+                    match Identity_util.validate_handle handle with
                     | Error (InvalidFormat e)
                     | Error (TooLong e)
                     | Error (TooShort e) ->
@@ -204,7 +204,7 @@ let post_handler =
                     List.assoc_opt "handle" fields |> Option.value ~default:""
                   in
                   match%lwt
-                    Identity.UpdateHandle.update_handle ~did ~handle ctx.db
+                    Identity_util.update_handle ~did ~handle ctx.db
                   with
                   | Ok () ->
                       render_page ~success:"Handle updated." ()

@@ -9,10 +9,10 @@ let confirm_email ~email ~token (actor : Data_store.Types.actor) db =
   else
     match (actor.auth_code, actor.auth_code_expires_at) with
     | Some auth_code, Some expires_at
-      when auth_code = token && Util.now_ms () < expires_at ->
+      when auth_code = token && Util.Time.now_ms () < expires_at ->
         let%lwt () = Data_store.confirm_email ~did:actor.did db in
         Lwt.return_ok ()
-    | Some _, Some expires_at when Util.now_ms () >= expires_at ->
+    | Some _, Some expires_at when Util.Time.now_ms () >= expires_at ->
         Lwt.return_error ExpiredToken
     | _ ->
         Lwt.return_error InvalidToken

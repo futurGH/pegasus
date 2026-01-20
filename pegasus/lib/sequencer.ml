@@ -444,7 +444,7 @@ module Parse = struct
         in
         match kind_result with
         | Ok kind ->
-            Ok {seq= dbe.seq; time= Util.ms_to_iso8601 dbe.time; kind}
+            Ok {seq= dbe.seq; time= Util.Time.ms_to_iso8601 dbe.time; kind}
         | Error e ->
             Error ("failed to parse event: " ^ e) )
     | Error _ ->
@@ -458,7 +458,7 @@ module Bus = struct
 
   let queue_max = 1000
 
-  let notify_interval = 20 * Util.minute
+  let notify_interval = 20 * Util.Time.minute
 
   let ring : item array = Array.make ring_size {seq= 0; bytes= Bytes.empty}
 
@@ -486,7 +486,7 @@ module Bus = struct
         head_seq := it.seq ;
         ring.(it.seq mod ring_size) <- it ;
         if !count < ring_size then incr count ;
-        let now = Util.now_ms () in
+        let now = Util.Time.now_ms () in
         if now - !last_notified > notify_interval then begin
           last_notified := now ;
           List.iter
@@ -726,8 +726,8 @@ end
 let sequence_commit (conn : Data_store.t) ~(did : string) ~(commit : Cid.t)
     ~(rev : string) ?since ~(blocks : bytes) ~(ops : commit_evt_op list)
     ?(prev_data : Cid.t option) () : int Lwt.t =
-  let time_ms = Util.now_ms () in
-  let time_iso = Util.ms_to_iso8601 time_ms in
+  let time_ms = Util.Time.now_ms () in
+  let time_iso = Util.Time.ms_to_iso8601 time_ms in
   let evt : commit_evt =
     { rebase= false
     ; too_big= false
@@ -748,8 +748,8 @@ let sequence_commit (conn : Data_store.t) ~(did : string) ~(commit : Cid.t)
 
 let sequence_sync (conn : Data_store.t) ~(did : string) ~(rev : string)
     ~(blocks : bytes) () : int Lwt.t =
-  let time_ms = Util.now_ms () in
-  let time_iso = Util.ms_to_iso8601 time_ms in
+  let time_ms = Util.Time.now_ms () in
+  let time_iso = Util.Time.ms_to_iso8601 time_ms in
   let evt : sync_evt = {did; rev; blocks} in
   let raw = Dag_cbor.encode_yojson @@ Encode.format_sync evt in
   let%lwt seq = DB.append_event conn ~t:`Sync ~time:time_ms ~data:raw in
@@ -759,8 +759,8 @@ let sequence_sync (conn : Data_store.t) ~(did : string) ~(rev : string)
 
 let sequence_identity (conn : Data_store.t) ~(did : string)
     ?(handle : string option) () : int Lwt.t =
-  let time_ms = Util.now_ms () in
-  let time_iso = Util.ms_to_iso8601 time_ms in
+  let time_ms = Util.Time.now_ms () in
+  let time_iso = Util.Time.ms_to_iso8601 time_ms in
   let evt : identity_evt = {did; handle} in
   let raw = Dag_cbor.encode_yojson @@ Encode.format_identity evt in
   let%lwt seq = DB.append_event conn ~t:`Identity ~time:time_ms ~data:raw in
@@ -770,8 +770,8 @@ let sequence_identity (conn : Data_store.t) ~(did : string)
 
 let sequence_account (conn : Data_store.t) ~(did : string) ~(active : bool)
     ?(status : account_status option) () : int Lwt.t =
-  let time_ms = Util.now_ms () in
-  let time_iso = Util.ms_to_iso8601 time_ms in
+  let time_ms = Util.Time.now_ms () in
+  let time_iso = Util.Time.ms_to_iso8601 time_ms in
   let evt : account_evt = {did; active; status} in
   let raw = Dag_cbor.encode_yojson @@ Encode.format_account evt in
   let%lwt seq = DB.append_event conn ~t:`Account ~time:time_ms ~data:raw in

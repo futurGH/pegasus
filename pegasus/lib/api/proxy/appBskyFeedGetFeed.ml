@@ -7,7 +7,7 @@ type query =
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
       let input = Xrpc.parse_query ctx.req query_of_yojson in
-      match Util.parse_at_uri input.feed with
+      match Util.Syntax.parse_at_uri input.feed with
       | None ->
           Errors.invalid_request ("invalid feed URI " ^ input.feed)
       | Some {repo; collection; rkey; _} -> (

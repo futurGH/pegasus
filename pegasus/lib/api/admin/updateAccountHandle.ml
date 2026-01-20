@@ -7,9 +7,9 @@ let handler =
       | None ->
           Errors.invalid_request "account not found"
       | Some _ -> (
-        match%lwt Identity.UpdateHandle.update_handle ~did ~handle db with
+        match%lwt Identity_util.update_handle ~did ~handle db with
         | Ok () ->
             Dream.empty `OK
         | Error e ->
             Errors.invalid_request ~name:"InvalidHandle"
-              (Identity.UpdateHandle.update_handle_error_to_string e) ) )
+              (Identity_util.update_handle_error_to_string e) ) )

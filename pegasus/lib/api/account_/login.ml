@@ -2,12 +2,12 @@ let get_handler =
   Xrpc.handler (fun ctx ->
       let redirect_url =
         if List.length @@ Dream.all_queries ctx.req > 0 then
-          Uri.make ~path:"/oauth/authorize" ~query:(Util.copy_query ctx.req) ()
+          Uri.make ~path:"/oauth/authorize" ~query:(Util.Http.copy_query ctx.req) ()
           |> Uri.to_string
         else "/account"
       in
       let csrf_token = Dream.csrf_token ctx.req in
-      Util.render_html ~title:"Login"
+      Util.Html.render_page ~title:"Login"
         (module Frontend.LoginPage)
         ~props:
           { redirect_url
@@ -69,7 +69,7 @@ let post_handler =
             with
             | None ->
                 let error = "Session expired. Please try again." in
-                Util.render_html ~status:`Unauthorized ~title:"Login"
+                Util.Html.render_page ~status:`Unauthorized ~title:"Login"
                   (module Frontend.LoginPage)
                   ~props:
                     { redirect_url
@@ -95,7 +95,7 @@ let post_handler =
                     let%lwt methods =
                       Two_factor.get_available_methods ~did:pending.did ctx.db
                     in
-                    Util.render_html ~status:`Unauthorized ~title:"Login"
+                    Util.Html.render_page ~status:`Unauthorized ~title:"Login"
                       (module Frontend.LoginPage)
                       ~props:
                         { redirect_url
@@ -115,7 +115,7 @@ let post_handler =
                   let error =
                     "Invalid username or password. Please try again."
                   in
-                  Util.render_html ~status:`Unauthorized ~title:"Login"
+                  Util.Html.render_page ~status:`Unauthorized ~title:"Login"
                     (module Frontend.LoginPage)
                     ~props:
                       { redirect_url
@@ -145,7 +145,7 @@ let post_handler =
                         Lwt.return ()
                       else Lwt.return ()
                     in
-                    Util.render_html ~title:"Login"
+                    Util.Html.render_page ~title:"Login"
                       (module Frontend.LoginPage)
                       ~props:
                         { redirect_url
@@ -160,7 +160,7 @@ let post_handler =
       | _ ->
           let redirect_url = "/account" in
           let error = "Something went wrong, go back and try again." in
-          Util.render_html ~status:`Unauthorized ~title:"Login"
+          Util.Html.render_page ~status:`Unauthorized ~title:"Login"
             (module Frontend.LoginPage)
             ~props:
               { redirect_url

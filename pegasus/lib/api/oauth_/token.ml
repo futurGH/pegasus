@@ -17,7 +17,7 @@ let post_handler =
             | None ->
                 Errors.invalid_request "invalid code"
             | Some code_rec -> (
-                if Util.now_ms () > code_rec.expires_at then
+                if Util.Time.now_ms () > code_rec.expires_at then
                   Errors.invalid_request "code expired"
                 else
                   match code_rec.authorized_by with
@@ -80,7 +80,7 @@ let post_handler =
                                      () )
                             in
                             let now_sec = int_of_float (Unix.gettimeofday ()) in
-                            let now_ms = Util.now_ms () in
+                            let now_ms = Util.Time.now_ms () in
                             let expires_in =
                               Constants.access_token_expiry_ms / 1000
                             in

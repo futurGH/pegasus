@@ -319,7 +319,7 @@ module Queries = struct
         {sql| INSERT INTO revoked_tokens (did, jti, revoked_at) VALUES (%string{did}, %string{jti}, %int{now}) |sql}]
 end
 
-type t = Util.caqti_pool
+type t = Util.Sqlite.caqti_pool
 
 let pool : t option ref = ref None
 
@@ -339,7 +339,7 @@ let connect ?create () : t Lwt.t =
               if create = Some true then
                 Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
               let%lwt db =
-                Util.connect_sqlite ?create ~write:true
+                Util.Sqlite.connect ?create ~write:true
                   Util.Constants.pegasus_db_location
               in
               let%lwt () = Migrations.run_migrations Data_store db in
@@ -350,32 +350,32 @@ let connect_readonly ?create () =
   if create = Some true then
     Util.mkfile_p Util.Constants.pegasus_db_filepath ~perm:0o644 ;
   let%lwt db =
-    Util.connect_sqlite ?create ~write:false Util.Constants.pegasus_db_location
+    Util.Sqlite.connect ?create ~write:false Util.Constants.pegasus_db_location
   in
   let%lwt () = Migrations.run_migrations Data_store db in
   Lwt.return db
 
 let create_actor ~did ~handle ~email ~password ~signing_key conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
-  let now = Util.now_ms () in
-  Util.use_pool conn
+  let now = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn
   @@ Queries.create_actor ~did ~handle ~email ~password_hash ~signing_key
        ~created_at:now
        ~preferences:(Yojson.Safe.from_string "[]")
 
 let get_actor_by_identifier id conn =
-  Util.use_pool conn @@ Queries.get_actor_by_identifier ~id
+  Util.Sqlite.use_pool conn @@ Queries.get_actor_by_identifier ~id
 
-let activate_actor did conn = Util.use_pool conn @@ Queries.activate_actor ~did
+let activate_actor did conn = Util.Sqlite.use_pool conn @@ Queries.activate_actor ~did
 
 let deactivate_actor did conn =
-  let deactivated_at = Util.now_ms () in
-  Util.use_pool conn @@ Queries.deactivate_actor ~did ~deactivated_at
+  let deactivated_at = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn @@ Queries.deactivate_actor ~did ~deactivated_at
 
-let delete_actor did conn = Util.use_pool conn @@ Queries.delete_actor ~did
+let delete_actor did conn = Util.Sqlite.use_pool conn @@ Queries.delete_actor ~did
 
 let update_actor_handle ~did ~handle conn =
-  Util.use_pool conn @@ Queries.update_actor_handle ~did ~handle
+  Util.Sqlite.use_pool conn @@ Queries.update_actor_handle ~did ~handle
 
 let try_login ~id ~password conn =
   match%lwt get_actor_by_identifier id conn with
@@ -390,98 +390,98 @@ let try_login ~id ~password conn =
           Lwt.return_none )
 
 let list_actors ?(cursor = "") ?(limit = 100) conn =
-  Util.use_pool conn @@ Queries.list_actors ~cursor ~limit
+  Util.Sqlite.use_pool conn @@ Queries.list_actors ~cursor ~limit
 
 let put_preferences ~did ~prefs conn =
-  Util.use_pool conn @@ Queries.put_preferences ~did ~preferences:prefs
+  Util.Sqlite.use_pool conn @@ Queries.put_preferences ~did ~preferences:prefs
 
 (* invite codes *)
 let create_invite ~code ~did ~remaining conn =
-  Util.use_pool conn @@ Queries.create_invite ~code ~did ~remaining
+  Util.Sqlite.use_pool conn @@ Queries.create_invite ~code ~did ~remaining
 
-let get_invite ~code conn = Util.use_pool conn @@ Queries.get_invite ~code
+let get_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.get_invite ~code
 
-let use_invite ~code conn = Util.use_pool conn @@ Queries.use_invite ~code
+let use_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.use_invite ~code
 
 let list_invites ?(limit = 100) conn =
-  Util.use_pool conn @@ Queries.list_invites ~limit
+  Util.Sqlite.use_pool conn @@ Queries.list_invites ~limit
 
-let delete_invite ~code conn = Util.use_pool conn @@ Queries.delete_invite ~code
+let delete_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.delete_invite ~code
 
 let update_invite ~code ~did ~remaining conn =
-  Util.use_pool conn @@ Queries.update_invite ~code ~did ~remaining
+  Util.Sqlite.use_pool conn @@ Queries.update_invite ~code ~did ~remaining
 
 let list_actors_filtered ?(cursor = "") ?(limit = 100) ~filter conn =
   if String.length filter = 0 then
-    Util.use_pool conn @@ Queries.list_all_actors ~cursor ~limit
-  else Util.use_pool conn @@ Queries.list_actors_filtered ~filter ~cursor ~limit
+    Util.Sqlite.use_pool conn @@ Queries.list_all_actors ~cursor ~limit
+  else Util.Sqlite.use_pool conn @@ Queries.list_actors_filtered ~filter ~cursor ~limit
 
 (* reserved keys *)
 let create_reserved_key ~key_did ~did ~private_key conn =
-  let created_at = Util.now_ms () in
-  Util.use_pool conn
+  let created_at = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn
   @@ Queries.create_reserved_key ~key_did ~did ~private_key ~created_at
 
 let get_reserved_key_by_did ~did conn =
-  Util.use_pool conn @@ Queries.get_reserved_key_by_did ~did
+  Util.Sqlite.use_pool conn @@ Queries.get_reserved_key_by_did ~did
 
 let get_reserved_key ~key_did conn =
-  Util.use_pool conn @@ Queries.get_reserved_key ~key_did
+  Util.Sqlite.use_pool conn @@ Queries.get_reserved_key ~key_did
 
 let delete_reserved_key ~key_did conn =
-  Util.use_pool conn @@ Queries.delete_reserved_key ~key_did
+  Util.Sqlite.use_pool conn @@ Queries.delete_reserved_key ~key_did
 
 let delete_reserved_keys_by_did ~did conn =
-  Util.use_pool conn @@ Queries.delete_reserved_keys_by_did ~did
+  Util.Sqlite.use_pool conn @@ Queries.delete_reserved_keys_by_did ~did
 
 (* 2fa *)
 let set_auth_code ~did ~code ~expires_at conn =
-  Util.use_pool conn @@ Queries.set_auth_code ~did ~code ~expires_at
+  Util.Sqlite.use_pool conn @@ Queries.set_auth_code ~did ~code ~expires_at
 
 let set_pending_email ~did ~code ~expires_at ~pending_email conn =
-  Util.use_pool conn
+  Util.Sqlite.use_pool conn
   @@ Queries.set_pending_email ~did ~code ~expires_at ~pending_email
 
 let clear_auth_code ~did conn =
-  Util.use_pool conn @@ Queries.clear_auth_code ~did
+  Util.Sqlite.use_pool conn @@ Queries.clear_auth_code ~did
 
 let get_actor_by_auth_code ~code conn =
-  Util.use_pool conn @@ Queries.get_actor_by_auth_code ~code
+  Util.Sqlite.use_pool conn @@ Queries.get_actor_by_auth_code ~code
 
 let update_password ~did ~password conn =
   let password_hash = Bcrypt.hash password |> Bcrypt.string_of_hash in
-  Util.use_pool conn @@ Queries.update_password ~did ~password_hash
+  Util.Sqlite.use_pool conn @@ Queries.update_password ~did ~password_hash
 
 let update_email ~did ~email conn =
-  Util.use_pool conn @@ Queries.update_email ~did ~email
+  Util.Sqlite.use_pool conn @@ Queries.update_email ~did ~email
 
 let confirm_email ~did conn =
-  let confirmed_at = Util.now_ms () in
-  Util.use_pool conn @@ Queries.confirm_email ~did ~confirmed_at
+  let confirmed_at = Util.Time.now_ms () in
+  Util.Sqlite.use_pool conn @@ Queries.confirm_email ~did ~confirmed_at
 
 (* firehose helpers *)
 let append_firehose_event conn ~time ~t ~data : int Lwt.t =
-  Util.use_pool conn @@ Queries.firehose_insert ~time ~t ~data
+  Util.Sqlite.use_pool conn @@ Queries.firehose_insert ~time ~t ~data
 
 let list_firehose_since conn ~since ~limit : firehose_event list Lwt.t =
-  Util.use_pool conn @@ Queries.firehose_since ~since ~limit
+  Util.Sqlite.use_pool conn @@ Queries.firehose_since ~since ~limit
 
 let next_firehose_event conn ~cursor : firehose_event option Lwt.t =
-  Util.use_pool conn @@ Queries.firehose_next ~cursor
+  Util.Sqlite.use_pool conn @@ Queries.firehose_next ~cursor
 
 let earliest_firehose_after_time conn ~time : firehose_event option Lwt.t =
-  Util.use_pool conn @@ Queries.firehose_earliest_after ~time
+  Util.Sqlite.use_pool conn @@ Queries.firehose_earliest_after ~time
 
 let latest_firehose_seq conn : int option Lwt.t =
-  Util.use_pool conn @@ Queries.firehose_latest_seq
+  Util.Sqlite.use_pool conn @@ Queries.firehose_latest_seq
 
 let next_firehose_seq conn : int Lwt.t =
-  let%lwt seq = Util.use_pool conn Queries.firehose_latest_seq in
+  let%lwt seq = Util.Sqlite.use_pool conn Queries.firehose_latest_seq in
   Option.map succ seq |> Option.value ~default:0 |> Lwt.return
 
 (* jwts *)
 let is_token_revoked conn ~did ~jti =
-  Util.use_pool conn @@ Queries.get_revoked_token ~did ~jti
+  Util.Sqlite.use_pool conn @@ Queries.get_revoked_token ~did ~jti
 
 let revoke_token conn ~did ~jti =
-  Util.use_pool conn @@ Queries.revoke_token ~did ~jti ~now:(Util.now_ms ())
+  Util.Sqlite.use_pool conn @@ Queries.revoke_token ~did ~jti ~now:(Util.Time.now_ms ())

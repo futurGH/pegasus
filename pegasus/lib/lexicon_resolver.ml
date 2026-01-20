@@ -24,14 +24,14 @@ type lexicon_value =
 [@@deriving yojson {strict= false}]
 
 let cache : permission_set Ttl_cache.String_cache.t =
-  Ttl_cache.String_cache.create (3 * Util.hour) ()
+  Ttl_cache.String_cache.create (3 * Util.Time.hour) ()
 
 (* reuse dns client from id_resolver *)
 let dns_client = Id_resolver.Handle.dns_client
 
 (* resolve did authority for nsid *)
 let resolve_did_authority nsid =
-  let authority = Util.nsid_authority nsid in
+  let authority = Util.Syntax.nsid_authority nsid in
   try%lwt
     let%lwt result =
       Dns_client_lwt.getaddrinfo dns_client Dns.Rr_map.Txt

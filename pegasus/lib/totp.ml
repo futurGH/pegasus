@@ -97,16 +97,16 @@ module Backup_codes = struct
     with _ -> false
 
   let store_codes ~did ~codes db =
-    let now = Util.now_ms () in
+    let now = Util.Time.now_ms () in
     Lwt_list.iter_s
       (fun code ->
         let code_hash = hash_code code in
-        Util.use_pool db
+        Util.Sqlite.use_pool db
         @@ Queries.insert_backup_code ~did ~code_hash ~created_at:now )
       codes
 
   let regenerate ~did db =
-    let%lwt () = Util.use_pool db @@ Queries.delete_backup_codes_by_did ~did in
+    let%lwt () = Util.Sqlite.use_pool db @@ Queries.delete_backup_codes_by_did ~did in
     let codes = generate_codes () in
     let%lwt () = store_codes ~did ~codes db in
     Lwt.return (List.map format_code codes)
@@ -114,16 +114,16 @@ module Backup_codes = struct
   let verify_and_consume ~did ~code db =
     let normalized_code = normalize_code code in
     let%lwt codes =
-      Util.use_pool db @@ Queries.get_unused_backup_codes_by_did ~did
+      Util.Sqlite.use_pool db @@ Queries.get_unused_backup_codes_by_did ~did
     in
     let rec check = function
       | [] ->
           Lwt.return_false
       | c :: rest ->
           if verify_code_hash normalized_code c.code_hash then
-            let now = Util.now_ms () in
+            let now = Util.Time.now_ms () in
             let%lwt () =
-              Util.use_pool db
+              Util.Sqlite.use_pool db
               @@ Queries.mark_code_used ~id:c.id ~did ~used_at:now
             in
             Lwt.return_true
@@ -132,7 +132,7 @@ module Backup_codes = struct
     check codes
 
   let get_remaining_count ~did db =
-    Util.use_pool db @@ Queries.count_unused_backup_codes ~did
+    Util.Sqlite.use_pool db @@ Queries.count_unused_backup_codes ~did
 
   let has_backup_codes ~did db =
     let%lwt count = get_remaining_count ~did db in
@@ -244,10 +244,10 @@ let verify_code ~secret ~code =
   check 0
 
 let create_secret ~did ~secret db =
-  Util.use_pool db @@ Queries.set_totp_secret ~did ~secret
+  Util.Sqlite.use_pool db @@ Queries.set_totp_secret ~did ~secret
 
 let get_secret ~did db =
-  match%lwt Util.use_pool db @@ Queries.get_totp_secret ~did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.get_totp_secret ~did with
   | Some (Some secret, verified_at) ->
       Lwt.return_some (secret, verified_at)
   | _ ->
@@ -261,17 +261,17 @@ let verify_and_enable ~did ~code db =
       Lwt.return_error "TOTP is already enabled"
   | Some (secret, None) ->
       if verify_code ~secret ~code then
-        let now = Util.now_ms () in
+        let now = Util.Time.now_ms () in
         let%lwt () =
-          Util.use_pool db @@ Queries.verify_totp_secret ~did ~verified_at:now
+          Util.Sqlite.use_pool db @@ Queries.verify_totp_secret ~did ~verified_at:now
         in
         Lwt.return_ok ()
       else Lwt.return_error "Invalid verification code"
 
-let disable ~did db = Util.use_pool db @@ Queries.clear_totp_secret ~did
+let disable ~did db = Util.Sqlite.use_pool db @@ Queries.clear_totp_secret ~did
 
 let is_enabled ~did db =
-  match%lwt Util.use_pool db @@ Queries.is_totp_enabled ~did with
+  match%lwt Util.Sqlite.use_pool db @@ Queries.is_totp_enabled ~did with
   | Some _ ->
       Lwt.return_true
   | None ->

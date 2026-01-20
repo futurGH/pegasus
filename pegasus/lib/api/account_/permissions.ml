@@ -68,7 +68,7 @@ let get_handler =
                       : Frontend.AccountPermissionsPage.device ) )
                   device_rows
               in
-              Util.render_html ~title:"Permissions"
+              Util.Html.render_page ~title:"Permissions"
                 (module Frontend.AccountPermissionsPage)
                 ~props:
                   { current_user

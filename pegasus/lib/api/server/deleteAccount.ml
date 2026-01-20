@@ -10,8 +10,8 @@ let rec rm_rf path =
 let delete_account ~did db =
   let%lwt () =
     try%lwt
-      Util.use_pool db (fun conn ->
-          Util.transact conn (fun () ->
+      Util.Sqlite.use_pool db (fun conn ->
+          Util.Sqlite.transact conn (fun () ->
               let open Util.Syntax in
               let$! () =
                 Data_store.Queries.delete_reserved_keys_by_did ~did conn
@@ -45,7 +45,7 @@ let handler =
           | Some auth_code, Some auth_expires_at
             when String.starts_with ~prefix:"del-" auth_code
                  && token = auth_code
-                 && Util.now_ms () < auth_expires_at ->
+                 && Util.Time.now_ms () < auth_expires_at ->
               let%lwt _ = delete_account ~did db in
               Dream.empty `OK
           | None, _ | _, None ->
