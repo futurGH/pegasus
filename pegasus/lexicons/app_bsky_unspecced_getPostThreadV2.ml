@@ -67,6 +67,7 @@ module Main = struct
     above: bool option [@default None];
     below: int option [@default None];
     branching_factor: int option [@key "branchingFactor"] [@default None];
+    prioritize_followed_users: bool option [@key "prioritizeFollowedUsers"] [@default None];
     sort: string option [@default None];
   }
 [@@deriving yojson {strict= false}]
@@ -84,9 +85,10 @@ module Main = struct
       ?above
       ?below
       ?branching_factor
+      ?prioritize_followed_users
       ?sort
       (client : Hermes.client) : output Lwt.t =
-    let params : params = {anchor; above; below; branching_factor; sort} in
+    let params : params = {anchor; above; below; branching_factor; prioritize_followed_users; sort} in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
 

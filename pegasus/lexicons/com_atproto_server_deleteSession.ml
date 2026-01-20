@@ -1,6 +1,6 @@
 (* generated from com.atproto.server.deleteSession *)
 
-(** Delete the current session. Requires auth using the 'refreshJwt' (not the 'accessJwt'). *)
+(** Delete the current session. Requires auth. *)
 module Main = struct
   let nsid = "com.atproto.server.deleteSession"
 

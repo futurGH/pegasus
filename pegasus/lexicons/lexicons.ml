@@ -8,23 +8,6 @@ module App = struct
       module GetJobStatus = App_bsky_video_getJobStatus
       module GetUploadLimits = App_bsky_video_getUploadLimits
     end
-    module Contact = struct
-      module Defs = App_bsky_contact_defs
-      module SendNotification = App_bsky_contact_sendNotification
-      module GetSyncStatus = App_bsky_contact_getSyncStatus
-      module StartPhoneVerification = App_bsky_contact_startPhoneVerification
-      module GetMatches = App_bsky_contact_getMatches
-      module ImportContacts = App_bsky_contact_importContacts
-      module DismissMatch = App_bsky_contact_dismissMatch
-      module RemoveData = App_bsky_contact_removeData
-      module VerifyPhone = App_bsky_contact_verifyPhone
-    end
-    module Bookmark = struct
-      module Defs = App_bsky_bookmark_defs
-      module DeleteBookmark = App_bsky_bookmark_deleteBookmark
-      module GetBookmarks = App_bsky_bookmark_getBookmarks
-      module CreateBookmark = App_bsky_bookmark_createBookmark
-    end
     module Embed = struct
       module Defs = App_bsky_embed_defs
       module Record = App_bsky_embed_record
@@ -51,12 +34,10 @@ module App = struct
       module GetSuggestedFeedsSkeleton = App_bsky_unspecced_getSuggestedFeedsSkeleton
       module SearchStarterPacksSkeleton = App_bsky_unspecced_searchStarterPacksSkeleton
       module Defs = App_bsky_unspecced_defs
-      module GetOnboardingSuggestedStarterPacksSkeleton = App_bsky_unspecced_getOnboardingSuggestedStarterPacksSkeleton
       module GetSuggestedUsers = App_bsky_unspecced_getSuggestedUsers
       module GetPostThreadOtherV2 = App_bsky_unspecced_getPostThreadOtherV2
       module GetSuggestedStarterPacks = App_bsky_unspecced_getSuggestedStarterPacks
       module GetSuggestedStarterPacksSkeleton = App_bsky_unspecced_getSuggestedStarterPacksSkeleton
-      module GetOnboardingSuggestedStarterPacks = App_bsky_unspecced_getOnboardingSuggestedStarterPacks
       module GetSuggestedUsersSkeleton = App_bsky_unspecced_getSuggestedUsersSkeleton
       module GetPostThreadV2 = App_bsky_unspecced_getPostThreadV2
       module GetTrends = App_bsky_unspecced_getTrends
@@ -135,12 +116,6 @@ module App = struct
     module Richtext = struct
       module Facet = App_bsky_richtext_facet
     end
-    module Ageassurance = struct
-      module Begin = App_bsky_ageassurance_begin
-      module Defs = App_bsky_ageassurance_defs
-      module GetState = App_bsky_ageassurance_getState
-      module GetConfig = App_bsky_ageassurance_getConfig
-    end
     module Actor = struct
       module SearchActorsTypeahead = App_bsky_actor_searchActorsTypeahead
       module Defs = App_bsky_actor_defs
@@ -163,7 +138,6 @@ end
 module Com = struct
   module Atproto = struct
     module Temp = struct
-      module DereferenceScope = Com_atproto_temp_dereferenceScope
       module AddReservedHandle = Com_atproto_temp_addReservedHandle
       module CheckSignupQueue = Com_atproto_temp_checkSignupQueue
       module CheckHandleAvailability = Com_atproto_temp_checkHandleAvailability
@@ -234,7 +208,6 @@ module Com = struct
       module CreateInviteCode = Com_atproto_server_createInviteCode
     end
     module Lexicon = struct
-      module ResolveLexicon = Com_atproto_lexicon_resolveLexicon
       module Schema = Com_atproto_lexicon_schema
     end
     module Sync = struct

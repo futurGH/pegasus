@@ -68,10 +68,6 @@ type personal_details_pref = App_bsky_shared_1.personal_details_pref
 let personal_details_pref_of_yojson = App_bsky_shared_1.personal_details_pref_of_yojson
 let personal_details_pref_to_yojson = App_bsky_shared_1.personal_details_pref_to_yojson
 
-type declared_age_pref = App_bsky_shared_1.declared_age_pref
-let declared_age_pref_of_yojson = App_bsky_shared_1.declared_age_pref_of_yojson
-let declared_age_pref_to_yojson = App_bsky_shared_1.declared_age_pref_to_yojson
-
 type feed_view_pref = App_bsky_shared_1.feed_view_pref
 let feed_view_pref_of_yojson = App_bsky_shared_1.feed_view_pref_of_yojson
 let feed_view_pref_to_yojson = App_bsky_shared_1.feed_view_pref_to_yojson

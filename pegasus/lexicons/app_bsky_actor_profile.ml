@@ -26,8 +26,6 @@ type main =
   {
     display_name: string option [@key "displayName"] [@default None];
     description: string option [@default None];
-    pronouns: string option [@default None];
-    website: string option [@default None];
     avatar: Hermes.blob option [@default None];
     banner: Hermes.blob option [@default None];
     labels: labels option [@default None];

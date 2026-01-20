@@ -104,7 +104,6 @@ type profile_view_basic = {
   did: string;
   handle: string;
   display_name: string option [@key "displayName"] [@default None];
-  pronouns: string option [@default None];
   avatar: string option [@default None];
   associated: profile_associated option [@default None];
   viewer: actor_viewer_state option [@default None];
@@ -112,7 +111,6 @@ type profile_view_basic = {
   created_at: string option [@key "createdAt"] [@default None];
   verification: verification_state option [@default None];
   status: status_view option [@default None];
-  debug: Yojson.Safe.t option [@default None];
 }
 and actor_viewer_state = {
   muted: bool option [@default None];
@@ -136,7 +134,6 @@ let rec profile_view_basic_of_yojson json =
     let did = json |> member "did" |> to_string in
     let handle = json |> member "handle" |> to_string in
     let display_name = json |> member "displayName" |> to_option to_string in
-    let pronouns = json |> member "pronouns" |> to_option to_string in
     let avatar = json |> member "avatar" |> to_option to_string in
     let associated = json |> member "associated" |> to_option (fun x -> match profile_associated_of_yojson x with Ok v -> Some v | _ -> None) |> Option.join in
     let viewer = json |> member "viewer" |> to_option (fun x -> match actor_viewer_state_of_yojson x with Ok v -> Some v | _ -> None) |> Option.join in
@@ -144,8 +141,7 @@ let rec profile_view_basic_of_yojson json =
     let created_at = json |> member "createdAt" |> to_option to_string in
     let verification = json |> member "verification" |> to_option (fun x -> match verification_state_of_yojson x with Ok v -> Some v | _ -> None) |> Option.join in
     let status = json |> member "status" |> to_option (fun x -> match status_view_of_yojson x with Ok v -> Some v | _ -> None) |> Option.join in
-    let debug = json |> member "debug" |> to_option (fun j -> j) in
-    Ok { did; handle; display_name; pronouns; avatar; associated; viewer; labels; created_at; verification; status; debug }
+    Ok { did; handle; display_name; avatar; associated; viewer; labels; created_at; verification; status }
   with e -> Error (Printexc.to_string e)
 
 and actor_viewer_state_of_yojson json =
@@ -176,15 +172,13 @@ and profile_view_basic_to_yojson (r : profile_view_basic) =
     ("did", (fun s -> `String s) r.did);
     ("handle", (fun s -> `String s) r.handle);
     ("displayName", match r.display_name with Some v -> (fun s -> `String s) v | None -> `Null);
-    ("pronouns", match r.pronouns with Some v -> (fun s -> `String s) v | None -> `Null);
     ("avatar", match r.avatar with Some v -> (fun s -> `String s) v | None -> `Null);
     ("associated", match r.associated with Some v -> profile_associated_to_yojson v | None -> `Null);
     ("viewer", match r.viewer with Some v -> actor_viewer_state_to_yojson v | None -> `Null);
     ("labels", match r.labels with Some v -> (fun l -> `List (List.map Com_atproto_label_defs.label_to_yojson l)) v | None -> `Null);
     ("createdAt", match r.created_at with Some v -> (fun s -> `String s) v | None -> `Null);
     ("verification", match r.verification with Some v -> verification_state_to_yojson v | None -> `Null);
-    ("status", match r.status with Some v -> status_view_to_yojson v | None -> `Null);
-    ("debug", match r.debug with Some v -> (fun j -> j) v | None -> `Null)
+    ("status", match r.status with Some v -> status_view_to_yojson v | None -> `Null)
   ]
 
 and actor_viewer_state_to_yojson (r : actor_viewer_state) =
@@ -211,7 +205,6 @@ type profile_view =
     did: string;
     handle: string;
     display_name: string option [@key "displayName"] [@default None];
-    pronouns: string option [@default None];
     description: string option [@default None];
     avatar: string option [@default None];
     associated: profile_associated option [@default None];
@@ -221,7 +214,6 @@ type profile_view =
     labels: Com_atproto_label_defs.label list option [@default None];
     verification: verification_state option [@default None];
     status: status_view option [@default None];
-    debug: Yojson.Safe.t option [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -245,8 +237,6 @@ type profile_view_detailed =
     handle: string;
     display_name: string option [@key "displayName"] [@default None];
     description: string option [@default None];
-    pronouns: string option [@default None];
-    website: string option [@default None];
     avatar: string option [@default None];
     banner: string option [@default None];
     followers_count: int option [@key "followersCount"] [@default None];
@@ -261,7 +251,6 @@ type profile_view_detailed =
     pinned_post: Com_atproto_repo_strongRef.main option [@key "pinnedPost"] [@default None];
     verification: verification_state option [@default None];
     status: status_view option [@default None];
-    debug: Yojson.Safe.t option [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -422,6 +411,7 @@ type interests_pref =
 type thread_view_pref =
   {
     sort: string option [@default None];
+    prioritize_followed_users: bool option [@key "prioritizeFollowedUsers"] [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -433,14 +423,6 @@ type feed_view_pref =
     hide_replies_by_like_count: int option [@key "hideRepliesByLikeCount"] [@default None];
     hide_reposts: bool option [@key "hideReposts"] [@default None];
     hide_quote_posts: bool option [@key "hideQuotePosts"] [@default None];
-  }
-[@@deriving yojson {strict= false}]
-
-type declared_age_pref =
-  {
-    is_over_age13: bool option [@key "isOverAge13"] [@default None];
-    is_over_age16: bool option [@key "isOverAge16"] [@default None];
-    is_over_age18: bool option [@key "isOverAge18"] [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -493,7 +475,6 @@ type preferences_item =
   | SavedFeedsPref of saved_feeds_pref
   | SavedFeedsPrefV2 of saved_feeds_pref_v2
   | PersonalDetailsPref of personal_details_pref
-  | DeclaredAgePref of declared_age_pref
   | FeedViewPref of feed_view_pref
   | ThreadViewPref of thread_view_pref
   | InterestsPref of interests_pref
@@ -528,10 +509,6 @@ let preferences_item_of_yojson json =
     | "app.bsky.actor.defs#personalDetailsPref" ->
         (match personal_details_pref_of_yojson json with
          | Ok v -> Ok (PersonalDetailsPref v)
-         | Error e -> Error e)
-    | "app.bsky.actor.defs#declaredAgePref" ->
-        (match declared_age_pref_of_yojson json with
-         | Ok v -> Ok (DeclaredAgePref v)
          | Error e -> Error e)
     | "app.bsky.actor.defs#feedViewPref" ->
         (match feed_view_pref_of_yojson json with
@@ -592,10 +569,6 @@ let preferences_item_to_yojson = function
   | PersonalDetailsPref v ->
       (match personal_details_pref_to_yojson v with
        | `Assoc fields -> `Assoc (("$type", `String "app.bsky.actor.defs#personalDetailsPref") :: fields)
-       | other -> other)
-  | DeclaredAgePref v ->
-      (match declared_age_pref_to_yojson v with
-       | `Assoc fields -> `Assoc (("$type", `String "app.bsky.actor.defs#declaredAgePref") :: fields)
        | other -> other)
   | FeedViewPref v ->
       (match feed_view_pref_to_yojson v with
@@ -1016,7 +989,6 @@ type feed_viewer_state =
   {
     repost: string option [@default None];
     like: string option [@default None];
-    bookmarked: bool option [@default None];
     thread_muted: bool option [@key "threadMuted"] [@default None];
     reply_disabled: bool option [@key "replyDisabled"] [@default None];
     embedding_disabled: bool option [@key "embeddingDisabled"] [@default None];
@@ -1089,7 +1061,6 @@ type post_view =
     author: profile_view_basic;
     record: Yojson.Safe.t;
     embed: embeds_item option [@default None];
-    bookmark_count: int option [@key "bookmarkCount"] [@default None];
     reply_count: int option [@key "replyCount"] [@default None];
     repost_count: int option [@key "repostCount"] [@default None];
     like_count: int option [@key "likeCount"] [@default None];
@@ -1098,7 +1069,6 @@ type post_view =
     viewer: feed_viewer_state option [@default None];
     labels: Com_atproto_label_defs.label list option [@default None];
     threadgate: threadgate_view option [@default None];
-    debug: Yojson.Safe.t option [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -1442,10 +1412,6 @@ type relationship =
     did: string;
     following: string option [@default None];
     followed_by: string option [@key "followedBy"] [@default None];
-    blocking: string option [@default None];
-    blocked_by: string option [@key "blockedBy"] [@default None];
-    blocking_by_list: string option [@key "blockingByList"] [@default None];
-    blocked_by_list: string option [@key "blockedByList"] [@default None];
   }
 [@@deriving yojson {strict= false}]
 

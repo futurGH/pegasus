@@ -37,6 +37,7 @@ module Main = struct
   type params =
   {
     anchor: string;
+    prioritize_followed_users: bool option [@key "prioritizeFollowedUsers"] [@default None];
   }
 [@@deriving yojson {strict= false}]
 
@@ -48,8 +49,9 @@ module Main = struct
 
   let call
       ~anchor
+      ?prioritize_followed_users
       (client : Hermes.client) : output Lwt.t =
-    let params : params = {anchor} in
+    let params : params = {anchor; prioritize_followed_users} in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
 

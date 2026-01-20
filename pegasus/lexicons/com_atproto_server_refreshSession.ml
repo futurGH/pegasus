@@ -14,9 +14,6 @@ module Main = struct
     handle: string;
     did: string;
     did_doc: Yojson.Safe.t option [@key "didDoc"] [@default None];
-    email: string option [@default None];
-    email_confirmed: bool option [@key "emailConfirmed"] [@default None];
-    email_auth_factor: bool option [@key "emailAuthFactor"] [@default None];
     active: bool option [@default None];
     status: string option [@default None];
   }
