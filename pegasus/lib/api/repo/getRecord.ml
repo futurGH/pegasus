@@ -23,9 +23,8 @@ let handler =
                    ; cid= Some (Cid.to_string cid)
                    ; value= Repository.Lex.repo_record_to_yojson value }
           | _ ->
-              Errors.internal_error ~name:"RecordNotFound"
-                ~msg:("could not find record " ^ uri)
-                () )
+              Errors.invalid_request ~name:"RecordNotFound"
+                ("could not find record " ^ uri) )
       | Error _ -> (
           let%lwt input_did =
             if String.starts_with ~prefix:"did:" input.repo then
@@ -68,6 +67,7 @@ let handler =
             Errors.internal_error ~name:"RecordNotFound"
               ~msg:
                 ( "could not find record "
-                ^ Util.Syntax.make_at_uri ~repo:input.repo ~collection:input.collection
-                    ~rkey:input.rkey ~fragment:None )
+                ^ Util.Syntax.make_at_uri ~repo:input.repo
+                    ~collection:input.collection ~rkey:input.rkey ~fragment:None
+                )
               () ) )
