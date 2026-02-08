@@ -1,6 +1,25 @@
 open Oauth
 open Oauth.Types
 
+let oauth_redirect req redirect_uri response_mode params =
+  let uri = Uri.of_string redirect_uri in
+  let encoded_params =
+    String.concat "&"
+      (List.map (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v) params)
+  in
+  let url =
+    match response_mode with
+    | Some "fragment" ->
+        Uri.with_fragment uri (Some encoded_params) |> Uri.to_string
+    | _ ->
+        let has_query =
+          match Uri.verbatim_query uri with Some _ -> true | None -> false
+        in
+        let sep = if has_query then "&" else "?" in
+        Uri.to_string uri ^ sep ^ encoded_params
+  in
+  Dream.redirect ~headers:[("Cache-Control", "no-store")] req url
+
 let get_handler =
   Xrpc.handler (fun ctx ->
       let login_redirect =
@@ -204,26 +223,11 @@ let post_handler =
                                 Queries.activate_auth_code ctx.db code did ~ip
                                   ~user_agent
                               in
-                              let params =
+                              oauth_redirect ctx.req req.redirect_uri
+                                req.response_mode
                                 [ ("code", code)
                                 ; ("state", req.state)
                                 ; ("iss", Env.host_endpoint) ]
-                              in
-                              let query =
-                                String.concat "&"
-                                  (List.map
-                                     (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                                     params )
-                              in
-                              let separator =
-                                match req.response_mode with
-                                | Some "fragment" ->
-                                    "#"
-                                | _ ->
-                                    "?"
-                              in
-                              Dream.redirect ctx.req
-                                (req.redirect_uri ^ separator ^ query)
                       else
                         Uri.make ~path:"/account/login"
                           ~query:
@@ -232,19 +236,12 @@ let post_handler =
                           ()
                         |> Uri.to_string |> Dream.redirect ctx.req
                     else
-                      let params =
+                      oauth_redirect ctx.req req.redirect_uri
+                        req.response_mode
                         [ ("error", "access_denied")
                         ; ("error_description", "Unable to authorize user.")
                         ; ("state", req.state)
-                        ; ("iss", Env.host_endpoint) ]
-                      in
-                      let query =
-                        String.concat "&"
-                          (List.map
-                             (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v)
-                             params )
-                      in
-                      Dream.redirect ctx.req (req.redirect_uri ^ "?" ^ query) )
+                        ; ("iss", Env.host_endpoint) ] )
           | _ ->
               Errors.invalid_request "invalid request" )
       | _ ->
