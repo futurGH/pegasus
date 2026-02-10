@@ -270,6 +270,25 @@ module Queries = struct
               LIMIT %int{limit}
         |sql}]
 
+  let delete_blob_refs_for_path path =
+    [%rapper
+      execute
+        {sql| DELETE FROM blobs_records WHERE record_path = %string{path} |sql}]
+      ~path
+
+  let delete_unreferenced_blobs cids =
+    [%rapper
+      get_many
+        {sql| DELETE FROM blobs
+              WHERE cid IN (%list{%CID{cids}})
+              AND NOT EXISTS (
+                  SELECT 1 FROM blobs_records
+                  WHERE blob_cid = blobs.cid
+              )
+              RETURNING @CID{cid}, @string{storage}
+        |sql}]
+      ~cids
+
   let delete_orphaned_blobs_by_record_path path =
     [%rapper
       get_many
@@ -545,11 +564,13 @@ let put_many t bm : (int, exn) Lwt_result.t =
 
 let delete_block t cid : (bool, exn) Lwt_result.t =
   Lwt_result.catch
-  @@ fun () -> Util.Sqlite.use_pool t.db @@ Queries.delete_block cid >|= fun _ -> true
+  @@ fun () ->
+  Util.Sqlite.use_pool t.db @@ Queries.delete_block cid >|= fun _ -> true
 
 let delete_many t cids : (int, exn) Lwt_result.t =
   Lwt_result.catch
-  @@ fun () -> Util.Sqlite.use_pool t.db @@ Queries.delete_blocks cids >|= List.length
+  @@ fun () ->
+  Util.Sqlite.use_pool t.db @@ Queries.delete_blocks cids >|= List.length
 
 let clear_mst t : unit Lwt.t =
   let%lwt () = Util.Sqlite.use_pool t.db Queries.clear_mst in
@@ -557,7 +578,8 @@ let clear_mst t : unit Lwt.t =
 
 (* mst misc *)
 
-let count_blocks t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_blocks ()
+let count_blocks t : int Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.count_blocks ()
 
 (* repo commit *)
 
@@ -606,7 +628,8 @@ let list_records t ?(limit = 100) ?(cursor = "") ?(reverse = false) collection :
   >|= List.map (fun (path, cid, data, since) ->
       {path; cid; value= Lex.of_cbor data; since} )
 
-let count_records t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_records ()
+let count_records t : int Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.count_records ()
 
 let list_collections t : string list Lwt.t =
   Util.Sqlite.use_pool t.db @@ Queries.list_collections
@@ -625,19 +648,16 @@ let put_record_raw t ~path ~cid ~data ~since : unit Lwt.t =
 let delete_record t path : unit Lwt.t =
   Util.Sqlite.use_pool t.db (fun conn ->
       Util.Sqlite.transact conn (fun () ->
-          let del = Queries.delete_record path conn in
-          let$! () = del in
           let$! deleted_blobs =
             Queries.delete_orphaned_blobs_by_record_path path conn
           in
-          let () =
-            List.iter
-              (fun (cid, storage_str) ->
-                let storage = Blob_store.storage_of_string storage_str in
-                delete_blob_file ~did:t.did ~cid ~storage )
-              deleted_blobs
-          in
-          del ) )
+          let$! () = Queries.delete_record path conn in
+          List.iter
+            (fun (cid, storage_str) ->
+              let storage = Blob_store.storage_of_string storage_str in
+              delete_blob_file ~did:t.did ~cid ~storage )
+            deleted_blobs ;
+          Lwt.return_ok () ) )
 
 (* blobs *)
 
@@ -675,7 +695,8 @@ let list_missing_blobs ?(limit = 500) ?(cursor = "") t :
     (string * Cid.t) list Lwt.t =
   Util.Sqlite.use_pool t.db @@ Queries.list_missing_blobs ~limit ~cursor
 
-let count_blobs t : int Lwt.t = Util.Sqlite.use_pool t.db @@ Queries.count_blobs ()
+let count_blobs t : int Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.count_blobs ()
 
 let count_referenced_blobs t : int Lwt.t =
   Util.Sqlite.use_pool t.db @@ Queries.count_referenced_blobs ()
@@ -697,7 +718,8 @@ let delete_blob t cid : unit Lwt.t =
 let delete_orphaned_blobs_by_record_path t path :
     (Cid.t * Blob_store.storage) list Lwt.t =
   let%lwt results =
-    Util.Sqlite.use_pool t.db @@ Queries.delete_orphaned_blobs_by_record_path path
+    Util.Sqlite.use_pool t.db
+    @@ Queries.delete_orphaned_blobs_by_record_path path
   in
   Lwt.return
   @@ List.map
@@ -721,6 +743,22 @@ let put_blob_refs t path cids : (unit, exn) Lwt_result.t =
 let clear_blob_refs t path cids : unit Lwt.t =
   if List.is_empty cids then Lwt.return_unit
   else Util.Sqlite.use_pool t.db @@ Queries.clear_blob_refs path cids
+
+let delete_blob_refs_for_path t path : unit Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.delete_blob_refs_for_path path
+
+let delete_unreferenced_blobs t cids : unit Lwt.t =
+  if List.is_empty cids then Lwt.return_unit
+  else
+    let%lwt results =
+      Util.Sqlite.use_pool t.db @@ Queries.delete_unreferenced_blobs cids
+    in
+    List.iter
+      (fun (cid, storage_str) ->
+        let storage = Blob_store.storage_of_string storage_str in
+        delete_blob_file ~did:t.did ~cid ~storage )
+      results ;
+    Lwt.return_unit
 
 let update_blob_storage t cid storage : unit Lwt.t =
   let storage_str = Blob_store.storage_to_string storage in

@@ -291,21 +291,13 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                 Errors.invalid_request ~name:"InvalidSwap"
                   (Format.sprintf "attempted to update record %s with cid %s"
                      path cid_str ) ) ;
-            let%lwt () =
+            let old_blob_refs =
               match existing_record with
               | Some record ->
-                  let refs =
-                    Util.find_blob_refs record.value
-                    |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
-                  in
-                  if not (List.is_empty refs) then
-                    let%lwt _ =
-                      User_store.delete_orphaned_blobs_by_record_path t.db path
-                    in
-                    Lwt.return_unit
-                  else Lwt.return_unit
+                  Util.find_blob_refs record.value
+                  |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
               | None ->
-                  Lwt.return_unit
+                  []
             in
             let record_with_type : Lex.repo_record =
               if String_map.mem "$type" value then value
@@ -320,16 +312,32 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
               :: !commit_ops_rev ;
             let%lwt new_mst = Cached_mst.add !mst path new_cid in
             mst := new_mst ;
-            let refs =
+            let new_blob_refs =
               Util.find_blob_refs value
               |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
             in
+            let%lwt () = User_store.delete_blob_refs_for_path t.db path in
             let%lwt () =
-              match%lwt User_store.put_blob_refs t.db path refs with
+              match%lwt User_store.put_blob_refs t.db path new_blob_refs with
               | Ok () ->
                   Lwt.return ()
               | Error err ->
                   raise err
+            in
+            let removed_blob_refs =
+              List.filter
+                (* include old refs such that *)
+                (fun old_ref ->
+                  (* there isn't a new ref such that *)
+                  not
+                    (List.exists
+                       (* the new ref equals the old ref *)
+                       (fun new_ref -> Cid.equal old_ref new_ref )
+                       new_blob_refs ) )
+                old_blob_refs
+            in
+            let%lwt () =
+              User_store.delete_unreferenced_blobs t.db removed_blob_refs
             in
             Lwt.return
               (Update
@@ -351,22 +359,6 @@ let apply_writes (t : t) (writes : repo_write list) (swap_commit : Cid.t option)
                 Errors.invalid_request ~name:"InvalidSwap"
                   (Format.sprintf "attempted to delete record %s with cid %s"
                      path cid_str ) ) ;
-            let%lwt () =
-              match existing_record with
-              | Some record ->
-                  let refs =
-                    Util.find_blob_refs record.value
-                    |> List.map (fun (r : Mist.Blob_ref.t) -> r.ref)
-                  in
-                  if not (List.is_empty refs) then
-                    let%lwt _ =
-                      User_store.delete_orphaned_blobs_by_record_path t.db path
-                    in
-                    Lwt.return_unit
-                  else Lwt.return_unit
-              | None ->
-                  Lwt.return_unit
-            in
             let%lwt () = User_store.delete_record t.db path in
             commit_ops_rev :=
               {action= `Delete; path; cid= None; prev= cid} :: !commit_ops_rev ;
