@@ -2,7 +2,9 @@ let get_handler =
   Xrpc.handler (fun ctx ->
       let redirect_url =
         if List.length @@ Dream.all_queries ctx.req > 0 then
-          Uri.make ~path:"/oauth/authorize" ~query:(Util.Http.copy_query ctx.req) ()
+          Uri.make ~path:"/oauth/authorize"
+            ~query:(Util.Http.copy_query ctx.req)
+            ()
           |> Uri.to_string
         else "/account"
       in

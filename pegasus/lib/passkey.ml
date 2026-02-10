@@ -183,7 +183,9 @@ let delete_credential ~id ~did db =
   Lwt.return_true
 
 let rename_credential ~id ~did ~name db =
-  let%lwt () = Util.Sqlite.use_pool db @@ Queries.rename_passkey ~id ~did ~name in
+  let%lwt () =
+    Util.Sqlite.use_pool db @@ Queries.rename_passkey ~id ~did ~name
+  in
   Lwt.return_true
 
 let generate_registration_options ~did ~email ~existing_credentials db =

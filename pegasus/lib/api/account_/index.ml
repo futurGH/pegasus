@@ -133,8 +133,8 @@ let post_handler =
                       (* update handle if changed *)
                       let%lwt handle_result =
                         if new_handle <> actor.handle then
-                          Identity_util.update_handle ~did
-                            ~handle:new_handle ctx.db
+                          Identity_util.update_handle ~did ~handle:new_handle
+                            ctx.db
                         else Lwt.return_ok ()
                       in
                       match handle_result with
@@ -222,7 +222,8 @@ let post_handler =
                       match%lwt
                         match (actor.auth_code, actor.auth_code_expires_at) with
                         | Some code, Some expiry
-                          when Some code = token && expiry > Util.Time.now_ms () ->
+                          when Some code = token && expiry > Util.Time.now_ms ()
+                          ->
                             Server.UpdateEmail.update_email ~token actor ctx.db
                         | _ ->
                             Lwt.return_error Server.UpdateEmail.InvalidToken

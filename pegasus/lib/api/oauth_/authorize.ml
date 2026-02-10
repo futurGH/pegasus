@@ -64,7 +64,9 @@ let get_handler =
                     ^ Uuidm.to_string
                         (Uuidm.v4_gen (Random.State.make_self_init ()) ())
                   in
-                  let expires_at = Util.Time.now_ms () + Constants.code_expiry_ms in
+                  let expires_at =
+                    Util.Time.now_ms () + Constants.code_expiry_ms
+                  in
                   let%lwt () =
                     Queries.insert_auth_code ctx.db
                       { code
@@ -210,8 +212,8 @@ let post_handler =
                               Errors.invalid_request "code already authorized"
                             else if code_rec.used then
                               Errors.invalid_request "code already used"
-                            else if Util.Time.now_ms () > code_rec.expires_at then
-                              Errors.invalid_request "code expired"
+                            else if Util.Time.now_ms () > code_rec.expires_at
+                            then Errors.invalid_request "code expired"
                             else if code_rec.request_id <> request_id then
                               Errors.invalid_request "code not for this request"
                             else
@@ -236,8 +238,7 @@ let post_handler =
                           ()
                         |> Uri.to_string |> Dream.redirect ctx.req
                     else
-                      oauth_redirect ctx.req req.redirect_uri
-                        req.response_mode
+                      oauth_redirect ctx.req req.redirect_uri req.response_mode
                         [ ("error", "access_denied")
                         ; ("error_description", "Unable to authorize user.")
                         ; ("state", req.state)

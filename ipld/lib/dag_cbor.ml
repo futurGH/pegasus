@@ -12,7 +12,8 @@ let ordered_map_keys (m : 'a String_map.t) : string list =
 
 (* returns bindings sorted in dag-cbor canonical order *)
 let ordered_map_bindings (m : 'a String_map.t) : (string * 'a) list =
-  String_map.bindings m |> List.sort (fun (a, _) (b, _) -> dag_cbor_key_compare a b)
+  String_map.bindings m
+  |> List.sort (fun (a, _) (b, _) -> dag_cbor_key_compare a b)
 
 let type_info_length len =
   if len < 24 then 1
@@ -201,9 +202,7 @@ module Encoder = struct
         let len = String_map.cardinal m in
         write_type_and_argument t 5 (Int64.of_int len) ;
         ordered_map_bindings m
-        |> List.iter (fun (k, v) ->
-            write_string t k ;
-            write_value t v )
+        |> List.iter (fun (k, v) -> write_string t k ; write_value t v)
     | `Link cid ->
         write_cid t cid
 

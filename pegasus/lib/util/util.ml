@@ -1,17 +1,10 @@
 module Constants = Constants
-
 module Syntax = Syntax
-
 module Rapper = Rapper_
-
 module Types = Types
-
 module Sqlite = Sqlite_
-
 module Time = Time
-
 module Http = Http_
-
 module Html = Html
 
 (* returns all blob refs in a record *)

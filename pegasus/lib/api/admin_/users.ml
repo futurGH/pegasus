@@ -203,9 +203,7 @@ let post_handler =
                   let handle =
                     List.assoc_opt "handle" fields |> Option.value ~default:""
                   in
-                  match%lwt
-                    Identity_util.update_handle ~did ~handle ctx.db
-                  with
+                  match%lwt Identity_util.update_handle ~did ~handle ctx.db with
                   | Ok () ->
                       render_page ~success:"Handle updated." ()
                   | Error (InvalidFormat e)

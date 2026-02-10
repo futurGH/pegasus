@@ -5,25 +5,18 @@ module Main = struct
   let nsid = "com.atproto.server.reserveSigningKey"
 
   type params = unit
+
   let params_to_yojson () = `Assoc []
 
-  type input =
-    {
-      did: string option [@default None];
-    }
+  type input = {did: string option [@default None]}
   [@@deriving yojson {strict= false}]
 
-  type output =
-  {
-    signing_key: string [@key "signingKey"];
-  }
-[@@deriving yojson {strict= false}]
+  type output = {signing_key: string [@key "signingKey"]}
+  [@@deriving yojson {strict= false}]
 
-  let call
-      ?did
-      (client : Hermes.client) : output Lwt.t =
+  let call ?did (client : Hermes.client) : output Lwt.t =
     let params = () in
     let input = Some ({did} |> input_to_yojson) in
-    Hermes.procedure client nsid (params_to_yojson params) input output_of_yojson
+    Hermes.procedure client nsid (params_to_yojson params) input
+      output_of_yojson
 end
-

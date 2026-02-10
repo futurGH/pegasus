@@ -4,23 +4,13 @@
 module Main = struct
   let nsid = "com.atproto.sync.getRecord"
 
-  type params =
-  {
-    did: string;
-    collection: string;
-    rkey: string;
-  }
-[@@deriving yojson {strict= false}]
+  type params = {did: string; collection: string; rkey: string}
+  [@@deriving yojson {strict= false}]
 
   (** raw bytes output with content type *)
   type output = bytes * string
 
-  let call
-      ~did
-      ~collection
-      ~rkey
-      (client : Hermes.client) : output Lwt.t =
+  let call ~did ~collection ~rkey (client : Hermes.client) : output Lwt.t =
     let params : params = {did; collection; rkey} in
     Hermes.query_bytes client nsid (params_to_yojson params)
 end
-

@@ -2,8 +2,8 @@ open Pegasus
 open Dream
 
 let () =
-  Rate_limiter.Shared.register ~name:"repo-write-hour" ~duration_ms:Util.Time.hour
-    ~points:5000 ;
+  Rate_limiter.Shared.register ~name:"repo-write-hour"
+    ~duration_ms:Util.Time.hour ~points:5000 ;
   Rate_limiter.Shared.register ~name:"repo-write-day" ~duration_ms:Util.Time.day
     ~points:35000
 

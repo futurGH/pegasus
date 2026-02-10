@@ -5,22 +5,18 @@ module Main = struct
   let nsid = "com.atproto.identity.submitPlcOperation"
 
   type params = unit
+
   let params_to_yojson () = `Assoc []
 
-  type input =
-    {
-      operation: Yojson.Safe.t;
-    }
-  [@@deriving yojson {strict= false}]
+  type input = {operation: Yojson.Safe.t} [@@deriving yojson {strict= false}]
 
   type output = unit
+
   let output_of_yojson _ = Ok ()
 
-  let call
-      ~operation
-      (client : Hermes.client) : output Lwt.t =
+  let call ~operation (client : Hermes.client) : output Lwt.t =
     let params = () in
     let input = Some ({operation} |> input_to_yojson) in
-    Hermes.procedure client nsid (params_to_yojson params) input output_of_yojson
+    Hermes.procedure client nsid (params_to_yojson params) input
+      output_of_yojson
 end
-

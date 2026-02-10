@@ -5,25 +5,15 @@ module Main = struct
   let nsid = "app.bsky.actor.searchActorsTypeahead"
 
   type params =
-  {
-    term: string option [@default None];
-    q: string option [@default None];
-    limit: int option [@default None];
-  }
-[@@deriving yojson {strict= false}]
+    { term: string option [@default None]
+    ; q: string option [@default None]
+    ; limit: int option [@default None] }
+  [@@deriving yojson {strict= false}]
 
-  type output =
-  {
-    actors: App_bsky_actor_defs.profile_view_basic list;
-  }
-[@@deriving yojson {strict= false}]
+  type output = {actors: App_bsky_actor_defs.profile_view_basic list}
+  [@@deriving yojson {strict= false}]
 
-  let call
-      ?term
-      ?q
-      ?limit
-      (client : Hermes.client) : output Lwt.t =
+  let call ?term ?q ?limit (client : Hermes.client) : output Lwt.t =
     let params : params = {term; q; limit} in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
-

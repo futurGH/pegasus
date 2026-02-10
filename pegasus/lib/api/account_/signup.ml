@@ -117,7 +117,8 @@ let post_handler =
                   { props with
                     error= Some "An account with that DID already exists." }
           | Error (Server.CreateAccount.PlcError _) ->
-              Util.Html.render_page ~status:`Internal_Server_Error ~title:"Sign Up"
+              Util.Html.render_page ~status:`Internal_Server_Error
+                ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with
@@ -126,7 +127,8 @@ let post_handler =
                         "Failed to create your identity. Please try again \
                          later." }
           | Error Server.CreateAccount.InviteUseFailure ->
-              Util.Html.render_page ~status:`Internal_Server_Error ~title:"Sign Up"
+              Util.Html.render_page ~status:`Internal_Server_Error
+                ~title:"Sign Up"
                 (module Frontend.SignupPage)
                 ~props:
                   { props with

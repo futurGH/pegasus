@@ -8,6 +8,7 @@ module App = struct
       module GetJobStatus = App_bsky_video_getJobStatus
       module GetUploadLimits = App_bsky_video_getUploadLimits
     end
+
     module Embed = struct
       module Defs = App_bsky_embed_defs
       module Record = App_bsky_embed_record
@@ -16,36 +17,46 @@ module App = struct
       module Video = App_bsky_embed_video
       module External = App_bsky_embed_external
     end
+
     module Notification = struct
       module Defs = App_bsky_notification_defs
       module RegisterPush = App_bsky_notification_registerPush
       module PutPreferences = App_bsky_notification_putPreferences
-      module PutActivitySubscription = App_bsky_notification_putActivitySubscription
+      module PutActivitySubscription =
+        App_bsky_notification_putActivitySubscription
       module Declaration = App_bsky_notification_declaration
       module PutPreferencesV2 = App_bsky_notification_putPreferencesV2
       module UpdateSeen = App_bsky_notification_updateSeen
-      module ListActivitySubscriptions = App_bsky_notification_listActivitySubscriptions
+      module ListActivitySubscriptions =
+        App_bsky_notification_listActivitySubscriptions
       module UnregisterPush = App_bsky_notification_unregisterPush
       module GetPreferences = App_bsky_notification_getPreferences
       module ListNotifications = App_bsky_notification_listNotifications
       module GetUnreadCount = App_bsky_notification_getUnreadCount
     end
+
     module Unspecced = struct
-      module GetSuggestedFeedsSkeleton = App_bsky_unspecced_getSuggestedFeedsSkeleton
-      module SearchStarterPacksSkeleton = App_bsky_unspecced_searchStarterPacksSkeleton
+      module GetSuggestedFeedsSkeleton =
+        App_bsky_unspecced_getSuggestedFeedsSkeleton
+      module SearchStarterPacksSkeleton =
+        App_bsky_unspecced_searchStarterPacksSkeleton
       module Defs = App_bsky_unspecced_defs
       module GetSuggestedUsers = App_bsky_unspecced_getSuggestedUsers
       module GetPostThreadOtherV2 = App_bsky_unspecced_getPostThreadOtherV2
-      module GetSuggestedStarterPacks = App_bsky_unspecced_getSuggestedStarterPacks
-      module GetSuggestedStarterPacksSkeleton = App_bsky_unspecced_getSuggestedStarterPacksSkeleton
-      module GetSuggestedUsersSkeleton = App_bsky_unspecced_getSuggestedUsersSkeleton
+      module GetSuggestedStarterPacks =
+        App_bsky_unspecced_getSuggestedStarterPacks
+      module GetSuggestedStarterPacksSkeleton =
+        App_bsky_unspecced_getSuggestedStarterPacksSkeleton
+      module GetSuggestedUsersSkeleton =
+        App_bsky_unspecced_getSuggestedUsersSkeleton
       module GetPostThreadV2 = App_bsky_unspecced_getPostThreadV2
       module GetTrends = App_bsky_unspecced_getTrends
       module SearchActorsSkeleton = App_bsky_unspecced_searchActorsSkeleton
       module GetSuggestionsSkeleton = App_bsky_unspecced_getSuggestionsSkeleton
       module SearchPostsSkeleton = App_bsky_unspecced_searchPostsSkeleton
       module GetAgeAssuranceState = App_bsky_unspecced_getAgeAssuranceState
-      module GetPopularFeedGenerators = App_bsky_unspecced_getPopularFeedGenerators
+      module GetPopularFeedGenerators =
+        App_bsky_unspecced_getPopularFeedGenerators
       module InitAgeAssurance = App_bsky_unspecced_initAgeAssurance
       module GetTrendingTopics = App_bsky_unspecced_getTrendingTopics
       module GetTaggedSuggestions = App_bsky_unspecced_getTaggedSuggestions
@@ -53,11 +64,14 @@ module App = struct
       module GetTrendsSkeleton = App_bsky_unspecced_getTrendsSkeleton
       module GetConfig = App_bsky_unspecced_getConfig
     end
+
     module Graph = struct
       module GetStarterPacks = App_bsky_graph_getStarterPacks
-      module GetSuggestedFollowsByActor = App_bsky_graph_getSuggestedFollowsByActor
+      module GetSuggestedFollowsByActor =
+        App_bsky_graph_getSuggestedFollowsByActor
       module Block = App_bsky_graph_block
-      module GetStarterPacksWithMembership = App_bsky_graph_getStarterPacksWithMembership
+      module GetStarterPacksWithMembership =
+        App_bsky_graph_getStarterPacksWithMembership
       module Follow = App_bsky_graph_follow
       module Defs = App_bsky_graph_defs
       module GetListsWithMembership = App_bsky_graph_getListsWithMembership
@@ -86,6 +100,7 @@ module App = struct
       module UnmuteActor = App_bsky_graph_unmuteActor
       module GetList = App_bsky_graph_getList
     end
+
     module Feed = struct
       module Generator = App_bsky_feed_generator
       module SendInteractions = App_bsky_feed_sendInteractions
@@ -113,9 +128,11 @@ module App = struct
       module GetActorFeeds = App_bsky_feed_getActorFeeds
       module Post = App_bsky_feed_post
     end
+
     module Richtext = struct
       module Facet = App_bsky_richtext_facet
     end
+
     module Actor = struct
       module SearchActorsTypeahead = App_bsky_actor_searchActorsTypeahead
       module Defs = App_bsky_actor_defs
@@ -128,6 +145,7 @@ module App = struct
       module GetPreferences = App_bsky_actor_getPreferences
       module Profile = App_bsky_actor_profile
     end
+
     module Labeler = struct
       module Defs = App_bsky_labeler_defs
       module Service = App_bsky_labeler_service
@@ -135,16 +153,20 @@ module App = struct
     end
   end
 end
+
 module Com = struct
   module Atproto = struct
     module Temp = struct
       module AddReservedHandle = Com_atproto_temp_addReservedHandle
       module CheckSignupQueue = Com_atproto_temp_checkSignupQueue
       module CheckHandleAvailability = Com_atproto_temp_checkHandleAvailability
-      module RequestPhoneVerification = Com_atproto_temp_requestPhoneVerification
-      module RevokeAccountCredentials = Com_atproto_temp_revokeAccountCredentials
+      module RequestPhoneVerification =
+        Com_atproto_temp_requestPhoneVerification
+      module RevokeAccountCredentials =
+        Com_atproto_temp_revokeAccountCredentials
       module FetchLabels = Com_atproto_temp_fetchLabels
     end
+
     module Identity = struct
       module UpdateHandle = Com_atproto_identity_updateHandle
       module Defs = Com_atproto_identity_defs
@@ -153,10 +175,13 @@ module Com = struct
       module ResolveIdentity = Com_atproto_identity_resolveIdentity
       module RefreshIdentity = Com_atproto_identity_refreshIdentity
       module ResolveHandle = Com_atproto_identity_resolveHandle
-      module RequestPlcOperationSignature = Com_atproto_identity_requestPlcOperationSignature
-      module GetRecommendedDidCredentials = Com_atproto_identity_getRecommendedDidCredentials
+      module RequestPlcOperationSignature =
+        Com_atproto_identity_requestPlcOperationSignature
+      module GetRecommendedDidCredentials =
+        Com_atproto_identity_getRecommendedDidCredentials
       module ResolveDid = Com_atproto_identity_resolveDid
     end
+
     module Admin = struct
       module UpdateAccountEmail = Com_atproto_admin_updateAccountEmail
       module GetAccountInfo = Com_atproto_admin_getAccountInfo
@@ -175,12 +200,15 @@ module Com = struct
       module GetAccountInfos = Com_atproto_admin_getAccountInfos
       module DeleteAccount = Com_atproto_admin_deleteAccount
     end
+
     module Label = struct
       module Defs = Com_atproto_label_defs
       module QueryLabels = Com_atproto_label_queryLabels
     end
+
     module Server = struct
-      module RequestEmailConfirmation = Com_atproto_server_requestEmailConfirmation
+      module RequestEmailConfirmation =
+        Com_atproto_server_requestEmailConfirmation
       module ReserveSigningKey = Com_atproto_server_reserveSigningKey
       module Defs = Com_atproto_server_defs
       module GetServiceAuth = Com_atproto_server_getServiceAuth
@@ -207,9 +235,11 @@ module Com = struct
       module DeleteAccount = Com_atproto_server_deleteAccount
       module CreateInviteCode = Com_atproto_server_createInviteCode
     end
+
     module Lexicon = struct
       module Schema = Com_atproto_lexicon_schema
     end
+
     module Sync = struct
       module GetHead = Com_atproto_sync_getHead
       module GetBlob = Com_atproto_sync_getBlob
@@ -228,6 +258,7 @@ module Com = struct
       module ListReposByCollection = Com_atproto_sync_listReposByCollection
       module GetCheckout = Com_atproto_sync_getCheckout
     end
+
     module Repo = struct
       module StrongRef = Com_atproto_repo_strongRef
       module Defs = Com_atproto_repo_defs
@@ -242,6 +273,7 @@ module Com = struct
       module ApplyWrites = Com_atproto_repo_applyWrites
       module ListRecords = Com_atproto_repo_listRecords
     end
+
     module Moderation = struct
       module Defs = Com_atproto_moderation_defs
       module CreateReport = Com_atproto_moderation_createReport

@@ -39,7 +39,8 @@ let handler =
       in
       let _ =
         Xrpc.consume_route_rate_limit ~name:"repo-write-day"
-          ~duration_ms:(5 * Util.Time.minute) ~max_points:30 ~key ~consume_points
+          ~duration_ms:(5 * Util.Time.minute) ~max_points:30 ~key
+          ~consume_points
       in
       match%lwt
         Lwt_result.catch @@ fun () -> Data_store.try_login ~id ~password db
@@ -52,7 +53,9 @@ let handler =
           else
             match auth_factor_token with
             | Some token when token <> "" -> (
-              match%lwt Two_factor.verify_code ~did:actor.did ~code:token db with
+              match%lwt
+                Two_factor.verify_code ~did:actor.did ~code:token db
+              with
               | Ok () ->
                   complete_login actor
               | Error msg ->

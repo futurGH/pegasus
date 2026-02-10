@@ -106,7 +106,9 @@ module Backup_codes = struct
       codes
 
   let regenerate ~did db =
-    let%lwt () = Util.Sqlite.use_pool db @@ Queries.delete_backup_codes_by_did ~did in
+    let%lwt () =
+      Util.Sqlite.use_pool db @@ Queries.delete_backup_codes_by_did ~did
+    in
     let codes = generate_codes () in
     let%lwt () = store_codes ~did ~codes db in
     Lwt.return (List.map format_code codes)
@@ -263,7 +265,8 @@ let verify_and_enable ~did ~code db =
       if verify_code ~secret ~code then
         let now = Util.Time.now_ms () in
         let%lwt () =
-          Util.Sqlite.use_pool db @@ Queries.verify_totp_secret ~did ~verified_at:now
+          Util.Sqlite.use_pool db
+          @@ Queries.verify_totp_secret ~did ~verified_at:now
         in
         Lwt.return_ok ()
       else Lwt.return_error "Invalid verification code"

@@ -13,10 +13,15 @@ let handler =
   Xrpc.handler
     ~rate_limits:
       [ Route
-          {duration_ms= Util.Time.day; points= 50; calc_key= None; calc_points= None}
+          { duration_ms= Util.Time.day
+          ; points= 50
+          ; calc_key= None
+          ; calc_points= None }
       ; Route
-          {duration_ms= Util.Time.hour; points= 15; calc_key= None; calc_points= None}
-      ]
+          { duration_ms= Util.Time.hour
+          ; points= 15
+          ; calc_key= None
+          ; calc_points= None } ]
     (fun {req; auth; db; _} ->
       let%lwt actor_opt =
         match auth with

@@ -2,9 +2,13 @@
 
 (** string type with known values *)
 type reason_type = string
+
 let reason_type_of_yojson = function
-  | `String s -> Ok s
-  | _ -> Error "reason_type: expected string"
+  | `String s ->
+      Ok s
+  | _ ->
+      Error "reason_type: expected string"
+
 let reason_type_to_yojson s = `String s
 
 (** Spam: frequent unwanted promotion, replies, mentions *)
@@ -30,8 +34,11 @@ let reason_appeal = "com.atproto.moderation.defs#reasonAppeal"
 
 (** string type with known values: Tag describing a type of subject that might be reported. *)
 type subject_type = string
-let subject_type_of_yojson = function
-  | `String s -> Ok s
-  | _ -> Error "subject_type: expected string"
-let subject_type_to_yojson s = `String s
 
+let subject_type_of_yojson = function
+  | `String s ->
+      Ok s
+  | _ ->
+      Error "subject_type: expected string"
+
+let subject_type_to_yojson s = `String s

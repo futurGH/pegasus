@@ -123,7 +123,8 @@ let transition_to_plc_token_step ctx ~old_client ~old_pds ~did ~handle ~email
   else
     match session with
     | None ->
-        Util.Html.render_page ~status:`Internal_Server_Error ~title:"Migrate Account"
+        Util.Html.render_page ~status:`Internal_Server_Error
+          ~title:"Migrate Account"
           (module Frontend.MigratePage)
           ~props:
             (make_props ~csrf_token ~invite_required ~hostname ~step:"error"

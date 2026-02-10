@@ -3,7 +3,8 @@ open Lwt.Infix
 module Mem_mst = Mst.Make (Storage.Memory_blockstore)
 module String_map = Dag_cbor.String_map
 
-type timing_result = {name: string; iterations: int; total_s: float; per_iter_s: float}
+type timing_result =
+  {name: string; iterations: int; total_s: float; per_iter_s: float}
 
 let time_it name f : timing_result Lwt.t =
   let start = Unix.gettimeofday () in
@@ -14,17 +15,23 @@ let time_it name f : timing_result Lwt.t =
 let time_it_n name n f : timing_result Lwt.t =
   let start = Unix.gettimeofday () in
   let%lwt () =
-    let rec loop i = if i >= n then Lwt.return_unit else f () >>= fun _ -> loop (i + 1) in
+    let rec loop i =
+      if i >= n then Lwt.return_unit else f () >>= fun _ -> loop (i + 1)
+    in
     loop 0
   in
   let elapsed = Unix.gettimeofday () -. start in
-  Lwt.return {name; iterations= n; total_s= elapsed; per_iter_s= elapsed /. float_of_int n}
+  Lwt.return
+    { name
+    ; iterations= n
+    ; total_s= elapsed
+    ; per_iter_s= elapsed /. float_of_int n }
 
 let print_result r =
   if r.iterations = 1 then Printf.printf "  %-50s %10.4f s\n%!" r.name r.total_s
   else
-    Printf.printf "  %-50s %10.4f s total, %10.6f s/iter (%d iters)\n%!" r.name r.total_s
-      r.per_iter_s r.iterations
+    Printf.printf "  %-50s %10.4f s total, %10.6f s/iter (%d iters)\n%!" r.name
+      r.total_s r.per_iter_s r.iterations
 
 let print_header name = Printf.printf "\n=== %s ===\n%!" name
 
@@ -84,7 +91,8 @@ let bench_of_assoc sizes =
       let store = Storage.Memory_blockstore.create () in
       let%lwt data = generate_bulk_data store size in
       let%lwt r =
-        time_it (Printf.sprintf "of_assoc %d records" size) (fun () -> Mem_mst.of_assoc store data)
+        time_it (Printf.sprintf "of_assoc %d records" size) (fun () ->
+            Mem_mst.of_assoc store data )
       in
       print_result r ; Lwt.return_unit )
     sizes
@@ -98,23 +106,32 @@ let bench_incremental_add sizes =
       let shuffled = shuffle data in
       (* incremental add *)
       let%lwt mst_base =
-        match%lwt Mem_mst.create_empty store with Ok mst -> Lwt.return mst | Error e -> raise e
+        match%lwt Mem_mst.create_empty store with
+        | Ok mst ->
+            Lwt.return mst
+        | Error e ->
+            raise e
       in
       let%lwt r1 =
-        time_it
-          (Printf.sprintf "add (incremental) %d records" size)
-          (fun () -> Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst_base shuffled)
+        time_it (Printf.sprintf "add (incremental) %d records" size) (fun () ->
+            Lwt_list.fold_left_s
+              (fun t (k, v) -> Mem_mst.add t k v)
+              mst_base shuffled )
       in
       print_result r1 ;
       (* add_rebuild for comparison *)
       let%lwt mst_base2 =
-        match%lwt Mem_mst.create_empty store with Ok mst -> Lwt.return mst | Error e -> raise e
+        match%lwt Mem_mst.create_empty store with
+        | Ok mst ->
+            Lwt.return mst
+        | Error e ->
+            raise e
       in
       let%lwt r2 =
-        time_it
-          (Printf.sprintf "add_rebuild %d records" size)
-          (fun () ->
-            Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add_rebuild t k v) mst_base2 shuffled )
+        time_it (Printf.sprintf "add_rebuild %d records" size) (fun () ->
+            Lwt_list.fold_left_s
+              (fun t (k, v) -> Mem_mst.add_rebuild t k v)
+              mst_base2 shuffled )
       in
       print_result r2 ;
       let speedup = r2.total_s /. r1.total_s in
@@ -130,12 +147,17 @@ let bench_incremental_delete sizes =
       let store = Storage.Memory_blockstore.create () in
       let%lwt data = generate_bulk_data store tree_size in
       let%lwt mst = Mem_mst.of_assoc store data in
-      let to_delete = shuffle data |> List.filteri (fun i _ -> i < delete_count) in
+      let to_delete =
+        shuffle data |> List.filteri (fun i _ -> i < delete_count)
+      in
       (* incremental delete *)
       let%lwt r1 =
         time_it
           (Printf.sprintf "delete (incr) %d from %d" delete_count tree_size)
-          (fun () -> Lwt_list.fold_left_s (fun t (k, _) -> Mem_mst.delete t k) mst to_delete)
+          (fun () ->
+            Lwt_list.fold_left_s
+              (fun t (k, _) -> Mem_mst.delete t k)
+              mst to_delete )
       in
       print_result r1 ;
       (* rebuild the tree for delete_rebuild test *)
@@ -144,7 +166,9 @@ let bench_incremental_delete sizes =
         time_it
           (Printf.sprintf "delete_rebuild %d from %d" delete_count tree_size)
           (fun () ->
-            Lwt_list.fold_left_s (fun t (k, _) -> Mem_mst.delete_rebuild t k) mst2 to_delete )
+            Lwt_list.fold_left_s
+              (fun t (k, _) -> Mem_mst.delete_rebuild t k)
+              mst2 to_delete )
       in
       print_result r2 ;
       let speedup = r2.total_s /. r1.total_s in
@@ -163,10 +187,8 @@ let bench_single_add_scaling sizes =
       let%lwt mst = Mem_mst.of_assoc store data in
       let%lwt extra_data = generate_bulk_data store iterations in
       let%lwt r =
-        time_it_n
-          (Printf.sprintf "single add to %d-record tree" size)
-          iterations
-          (fun () ->
+        time_it_n (Printf.sprintf "single add to %d-record tree" size)
+          iterations (fun () ->
             let k, v = List.nth extra_data (Random.int iterations) in
             Mem_mst.add mst k v >|= fun _ -> () )
       in
@@ -184,10 +206,8 @@ let bench_single_delete_scaling sizes =
       let shuffled = shuffle data in
       let idx = ref 0 in
       let%lwt r =
-        time_it_n
-          (Printf.sprintf "single delete from %d-record tree" size)
-          (min iterations size)
-          (fun () ->
+        time_it_n (Printf.sprintf "single delete from %d-record tree" size)
+          (min iterations size) (fun () ->
             let k, _ = List.nth shuffled !idx in
             idx := !idx + 1 ;
             Mem_mst.delete mst k >|= fun _ -> () )
@@ -203,27 +223,28 @@ let bench_traversal sizes =
       let%lwt data = generate_bulk_data store size in
       let%lwt mst = Mem_mst.of_assoc store data in
       let%lwt r1 =
-        time_it (Printf.sprintf "build_map %d records" size) (fun () -> Mem_mst.build_map mst)
+        time_it (Printf.sprintf "build_map %d records" size) (fun () ->
+            Mem_mst.build_map mst )
       in
       print_result r1 ;
       let%lwt r2 =
-        time_it
-          (Printf.sprintf "leaves_of_root %d records" size)
-          (fun () -> Mem_mst.leaves_of_root mst)
+        time_it (Printf.sprintf "leaves_of_root %d records" size) (fun () ->
+            Mem_mst.leaves_of_root mst )
       in
       print_result r2 ;
       let%lwt r3 =
-        time_it (Printf.sprintf "leaf_count %d records" size) (fun () -> Mem_mst.leaf_count mst)
+        time_it (Printf.sprintf "leaf_count %d records" size) (fun () ->
+            Mem_mst.leaf_count mst )
       in
       print_result r3 ;
       let%lwt r4 =
-        time_it (Printf.sprintf "all_nodes %d records" size) (fun () -> Mem_mst.all_nodes mst)
+        time_it (Printf.sprintf "all_nodes %d records" size) (fun () ->
+            Mem_mst.all_nodes mst )
       in
       print_result r4 ;
       let%lwt r5 =
-        time_it
-          (Printf.sprintf "collect_nodes_and_leaves %d records" size)
-          (fun () -> Mem_mst.collect_nodes_and_leaves mst)
+        time_it (Printf.sprintf "collect_nodes_and_leaves %d records" size)
+          (fun () -> Mem_mst.collect_nodes_and_leaves mst )
       in
       print_result r5 ; Lwt.return_unit )
     sizes
@@ -236,17 +257,13 @@ let bench_streaming sizes =
       let%lwt data = generate_bulk_data store size in
       let%lwt mst = Mem_mst.of_assoc store data in
       let%lwt r1 =
-        time_it
-          (Printf.sprintf "to_blocks_stream consume %d" size)
-          (fun () ->
+        time_it (Printf.sprintf "to_blocks_stream consume %d" size) (fun () ->
             let stream = Mem_mst.to_blocks_stream mst in
             Lwt_seq.fold_left_s (fun count _ -> Lwt.return (count + 1)) 0 stream )
       in
       print_result r1 ;
       let%lwt r2 =
-        time_it
-          (Printf.sprintf "to_ordered_stream consume %d" size)
-          (fun () ->
+        time_it (Printf.sprintf "to_ordered_stream consume %d" size) (fun () ->
             let stream = Mem_mst.to_ordered_stream mst in
             Lwt_seq.fold_left_s (fun count _ -> Lwt.return (count + 1)) 0 stream )
       in
@@ -266,14 +283,15 @@ let bench_proof_generation sizes =
       in
       let%lwt r =
         time_it
-          (Printf.sprintf "proof_for_key %d proofs, %d-record tree" num_proofs size)
-          (fun () ->
+          (Printf.sprintf "proof_for_key %d proofs, %d-record tree" num_proofs
+             size ) (fun () ->
             Lwt_list.iter_s
               (fun k -> Mem_mst.proof_for_key mst mst.root k >|= fun _ -> ())
               test_keys )
       in
       print_result r ;
-      Printf.printf "    (%.6f s per proof)\n%!" (r.total_s /. float_of_int num_proofs) ;
+      Printf.printf "    (%.6f s per proof)\n%!"
+        (r.total_s /. float_of_int num_proofs) ;
       Lwt.return_unit )
     sizes
 
@@ -286,9 +304,8 @@ let bench_equality sizes =
       let%lwt mst1 = Mem_mst.of_assoc store data in
       let%lwt mst2 = Mem_mst.of_assoc store (shuffle data) in
       let%lwt r =
-        time_it
-          (Printf.sprintf "equal (identical trees) %d records" size)
-          (fun () -> Mem_mst.equal mst1 mst2)
+        time_it (Printf.sprintf "equal (identical trees) %d records" size)
+          (fun () -> Mem_mst.equal mst1 mst2 )
       in
       print_result r ; Lwt.return_unit )
     sizes
@@ -306,8 +323,7 @@ let bench_mixed_ops () =
       let pending_adds = ref (shuffle extra_data) in
       let%lwt r =
         time_it
-          (Printf.sprintf "mixed %d ops on %d-record tree"
-             num_ops initial_size )
+          (Printf.sprintf "mixed %d ops on %d-record tree" num_ops initial_size)
           (fun () ->
             let rec loop mst i =
               if i >= num_ops then Lwt.return mst
@@ -345,7 +361,8 @@ let bench_mixed_ops () =
             loop mst 0 )
       in
       print_result r ;
-      Printf.printf "    (%.6f s per op avg)\n%!" (r.total_s /. float_of_int num_ops) ;
+      Printf.printf "    (%.6f s per op avg)\n%!"
+        (r.total_s /. float_of_int num_ops) ;
       Lwt.return_unit )
     configs
 
@@ -361,18 +378,23 @@ let bench_batch_add () =
       let%lwt batch_data = generate_bulk_data store batch_size in
       let%lwt r1 =
         time_it
-          (Printf.sprintf "batch add (incremental) %d to %d tree" batch_size tree_size)
-          (fun () -> Lwt_list.fold_left_s (fun t (k, v) -> Mem_mst.add t k v) mst batch_data)
+          (Printf.sprintf "batch add (incremental) %d to %d tree" batch_size
+             tree_size ) (fun () ->
+            Lwt_list.fold_left_s
+              (fun t (k, v) -> Mem_mst.add t k v)
+              mst batch_data )
       in
       print_result r1 ;
       let%lwt r2 =
         time_it
-          (Printf.sprintf "batch add (rebuild) %d to %d tree" batch_size tree_size)
-          (fun () -> Mem_mst.of_assoc store (initial_data @ batch_data))
+          (Printf.sprintf "batch add (rebuild) %d to %d tree" batch_size
+             tree_size ) (fun () ->
+            Mem_mst.of_assoc store (initial_data @ batch_data) )
       in
       print_result r2 ;
       let speedup = r2.total_s /. r1.total_s in
-      Printf.printf "  -> incremental is %.2fx %s for batch of %d\n%!" (abs_float speedup)
+      Printf.printf "  -> incremental is %.2fx %s for batch of %d\n%!"
+        (abs_float speedup)
         (if speedup > 1.0 then "faster" else "slower")
         batch_size ;
       Lwt.return_unit )
@@ -401,7 +423,9 @@ let bench_key_lookup_patterns sizes =
       print_result r1 ;
       (* last n keys *)
       let late_keys =
-        List.filteri (fun i _ -> i >= List.length sorted_keys - num_lookups) sorted_keys
+        List.filteri
+          (fun i _ -> i >= List.length sorted_keys - num_lookups)
+          sorted_keys
       in
       let%lwt r2 =
         time_it
@@ -413,7 +437,9 @@ let bench_key_lookup_patterns sizes =
       in
       print_result r2 ;
       (* random keys *)
-      let random_keys = shuffle sorted_keys |> List.filteri (fun i _ -> i < num_lookups) in
+      let random_keys =
+        shuffle sorted_keys |> List.filteri (fun i _ -> i < num_lookups)
+      in
       let%lwt r3 =
         time_it
           (Printf.sprintf "proof random keys (%d from %d tree)" num_lookups size)
@@ -442,10 +468,9 @@ let bench_serialization sizes =
       in
       let iterations = 100 in
       let%lwt r =
-        time_it_n
-          (Printf.sprintf "serialize root node (%d-record tree)" size)
-          iterations
-          (fun () -> Mem_mst.serialize mst root_node >|= fun _ -> ())
+        time_it_n (Printf.sprintf "serialize root node (%d-record tree)" size)
+          iterations (fun () ->
+            Mem_mst.serialize mst root_node >|= fun _ -> () )
       in
       print_result r ; Lwt.return_unit )
     sizes
@@ -459,8 +484,8 @@ let bench_layer_ops sizes =
       let%lwt mst = Mem_mst.of_assoc store data in
       let iterations = 1000 in
       let%lwt r =
-        time_it_n (Printf.sprintf "layer query (%d-record tree)" size) iterations (fun () ->
-            Mem_mst.layer mst >|= fun _ -> () )
+        time_it_n (Printf.sprintf "layer query (%d-record tree)" size)
+          iterations (fun () -> Mem_mst.layer mst >|= fun _ -> () )
       in
       print_result r ; Lwt.return_unit )
     sizes

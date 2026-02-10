@@ -5,16 +5,12 @@ module Main = struct
   let nsid = "app.bsky.actor.getPreferences"
 
   type params = unit
+
   let params_to_yojson () = `Assoc []
 
-  type output =
-  {
-    preferences: App_bsky_actor_defs.preferences;
-  }
-[@@deriving yojson {strict= false}]
+  type output = {preferences: App_bsky_actor_defs.preferences}
+  [@@deriving yojson {strict= false}]
 
-  let call
-      (client : Hermes.client) : output Lwt.t =
+  let call (client : Hermes.client) : output Lwt.t =
     Hermes.query client nsid (`Assoc []) output_of_yojson
 end
-

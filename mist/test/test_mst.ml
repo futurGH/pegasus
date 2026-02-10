@@ -876,8 +876,10 @@ let test_get_min_max_keys () =
   let%lwt mst = Mem_mst.add mst "com.example/mmm" cid1 in
   let%lwt min_single = Mem_mst.get_min_key mst mst.root in
   let%lwt max_single = Mem_mst.get_max_key mst mst.root in
-  Alcotest.(check (option string)) "single min" (Some "com.example/mmm") min_single ;
-  Alcotest.(check (option string)) "single max" (Some "com.example/mmm") max_single ;
+  Alcotest.(check (option string))
+    "single min" (Some "com.example/mmm") min_single ;
+  Alcotest.(check (option string))
+    "single max" (Some "com.example/mmm") max_single ;
   (* multiple entries at different layers *)
   let%lwt mst = Mem_mst.add mst "com.example/aaa" cid1 in
   let%lwt mst = Mem_mst.add mst "com.example/zzz" cid1 in
@@ -892,7 +894,8 @@ let test_get_min_max_keys () =
   let%lwt mst = Mem_mst.add mst "com.example.record/3jqfcqzm3fn2j" cid1 in
   let%lwt min_deep = Mem_mst.get_min_key mst mst.root in
   let%lwt max_deep = Mem_mst.get_max_key mst mst.root in
-  Alcotest.(check (option string)) "deep min" (Some "com.example.record/3jqfcqzm3fn2j") min_deep ;
+  Alcotest.(check (option string))
+    "deep min" (Some "com.example.record/3jqfcqzm3fn2j") min_deep ;
   Alcotest.(check (option string)) "deep max" (Some "com.example/zzz") max_deep ;
   Lwt.return_ok ()
 

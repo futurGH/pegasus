@@ -5,18 +5,14 @@ module Main = struct
   let nsid = "com.atproto.repo.uploadBlob"
 
   type params = unit
+
   let params_to_yojson () = `Assoc []
 
-  type output =
-  {
-    blob: Hermes.blob;
-  }
-[@@deriving yojson {strict= false}]
+  type output = {blob: Hermes.blob} [@@deriving yojson {strict= false}]
 
-  let call
-      ?input
-      (client : Hermes.client) : output Lwt.t =
+  let call ?input (client : Hermes.client) : output Lwt.t =
     let params = () in
-    Hermes.procedure_blob client nsid (params_to_yojson params) (Bytes.of_string (Option.value input ~default:"")) ~content_type:"*/*" output_of_yojson
+    Hermes.procedure_blob client nsid (params_to_yojson params)
+      (Bytes.of_string (Option.value input ~default:""))
+      ~content_type:"*/*" output_of_yojson
 end
-

@@ -88,9 +88,7 @@ and record_spec =
   ; record: object_spec
   ; description: string option }
 
-and lex_permission =
-  { resource: string
-  ; extra: (string * Yojson.Safe.t) list }
+and lex_permission = {resource: string; extra: (string * Yojson.Safe.t) list}
 
 and permission_set_spec =
   { title: string option

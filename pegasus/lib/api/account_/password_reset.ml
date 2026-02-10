@@ -25,7 +25,8 @@ let post_handler =
                 List.assoc_opt "password" fields |> Option.value ~default:""
               in
               if String.length token = 0 then
-                Util.Html.render_page ~status:`Bad_Request ~title:"Reset Password"
+                Util.Html.render_page ~status:`Bad_Request
+                  ~title:"Reset Password"
                   (module Frontend.PasswordResetPage)
                   ~props:
                     { csrf_token
@@ -33,7 +34,8 @@ let post_handler =
                     ; email_sent_to= None
                     ; error= Some "Please enter the reset code." }
               else if String.length password < 8 then
-                Util.Html.render_page ~status:`Bad_Request ~title:"Reset Password"
+                Util.Html.render_page ~status:`Bad_Request
+                  ~title:"Reset Password"
                   (module Frontend.PasswordResetPage)
                   ~props:
                     { csrf_token
@@ -54,7 +56,8 @@ let post_handler =
                         ; error= None }
                 | Error Server.ResetPassword.InvalidToken
                 | Error Server.ResetPassword.ExpiredToken ->
-                    Util.Html.render_page ~status:`Bad_Request ~title:"Reset Password"
+                    Util.Html.render_page ~status:`Bad_Request
+                      ~title:"Reset Password"
                       (module Frontend.PasswordResetPage)
                       ~props:
                         { csrf_token
@@ -67,11 +70,11 @@ let post_handler =
           | _ ->
               let email =
                 List.assoc_opt "email" fields
-                |> Option.value ~default:""
-                |> String.lowercase_ascii
+                |> Option.value ~default:"" |> String.lowercase_ascii
               in
               if String.length email = 0 then
-                Util.Html.render_page ~status:`Bad_Request ~title:"Reset Password"
+                Util.Html.render_page ~status:`Bad_Request
+                  ~title:"Reset Password"
                   (module Frontend.PasswordResetPage)
                   ~props:
                     { csrf_token

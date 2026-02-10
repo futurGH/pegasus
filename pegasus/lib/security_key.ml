@@ -196,7 +196,9 @@ let setup_security_key ~did ~name db =
   Lwt.return (id, secret_b32, uri)
 
 let verify_setup ~id ~did ~code db =
-  match%lwt Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did with
+  match%lwt
+    Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did
+  with
   | None ->
       Lwt.return_error "Security key not found"
   | Some sk -> (
@@ -240,7 +242,9 @@ let verify_login ~did ~code db =
   try_keys keys
 
 let resync_key ~id ~did ~code1 ~code2 db =
-  match%lwt Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did with
+  match%lwt
+    Util.Sqlite.use_pool db @@ Queries.get_security_key_by_id id did
+  with
   | None ->
       Lwt.return_error "Security key not found"
   | Some sk -> (
@@ -263,7 +267,9 @@ let get_keys_for_user ~did db =
   Util.Sqlite.use_pool db @@ Queries.get_security_keys_by_did ~did
 
 let delete_key ~id ~did db =
-  let%lwt () = Util.Sqlite.use_pool db @@ Queries.delete_security_key ~id ~did in
+  let%lwt () =
+    Util.Sqlite.use_pool db @@ Queries.delete_security_key ~id ~did
+  in
   Lwt.return_true
 
 let has_security_keys ~did db =

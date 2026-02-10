@@ -366,13 +366,15 @@ let create_actor ~did ~handle ~email ~password ~signing_key conn =
 let get_actor_by_identifier id conn =
   Util.Sqlite.use_pool conn @@ Queries.get_actor_by_identifier ~id
 
-let activate_actor did conn = Util.Sqlite.use_pool conn @@ Queries.activate_actor ~did
+let activate_actor did conn =
+  Util.Sqlite.use_pool conn @@ Queries.activate_actor ~did
 
 let deactivate_actor did conn =
   let deactivated_at = Util.Time.now_ms () in
   Util.Sqlite.use_pool conn @@ Queries.deactivate_actor ~did ~deactivated_at
 
-let delete_actor did conn = Util.Sqlite.use_pool conn @@ Queries.delete_actor ~did
+let delete_actor did conn =
+  Util.Sqlite.use_pool conn @@ Queries.delete_actor ~did
 
 let update_actor_handle ~did ~handle conn =
   Util.Sqlite.use_pool conn @@ Queries.update_actor_handle ~did ~handle
@@ -399,14 +401,17 @@ let put_preferences ~did ~prefs conn =
 let create_invite ~code ~did ~remaining conn =
   Util.Sqlite.use_pool conn @@ Queries.create_invite ~code ~did ~remaining
 
-let get_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.get_invite ~code
+let get_invite ~code conn =
+  Util.Sqlite.use_pool conn @@ Queries.get_invite ~code
 
-let use_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.use_invite ~code
+let use_invite ~code conn =
+  Util.Sqlite.use_pool conn @@ Queries.use_invite ~code
 
 let list_invites ?(limit = 100) conn =
   Util.Sqlite.use_pool conn @@ Queries.list_invites ~limit
 
-let delete_invite ~code conn = Util.Sqlite.use_pool conn @@ Queries.delete_invite ~code
+let delete_invite ~code conn =
+  Util.Sqlite.use_pool conn @@ Queries.delete_invite ~code
 
 let update_invite ~code ~did ~remaining conn =
   Util.Sqlite.use_pool conn @@ Queries.update_invite ~code ~did ~remaining
@@ -414,7 +419,9 @@ let update_invite ~code ~did ~remaining conn =
 let list_actors_filtered ?(cursor = "") ?(limit = 100) ~filter conn =
   if String.length filter = 0 then
     Util.Sqlite.use_pool conn @@ Queries.list_all_actors ~cursor ~limit
-  else Util.Sqlite.use_pool conn @@ Queries.list_actors_filtered ~filter ~cursor ~limit
+  else
+    Util.Sqlite.use_pool conn
+    @@ Queries.list_actors_filtered ~filter ~cursor ~limit
 
 (* reserved keys *)
 let create_reserved_key ~key_did ~did ~private_key conn =
@@ -484,4 +491,5 @@ let is_token_revoked conn ~did ~jti =
   Util.Sqlite.use_pool conn @@ Queries.get_revoked_token ~did ~jti
 
 let revoke_token conn ~did ~jti =
-  Util.Sqlite.use_pool conn @@ Queries.revoke_token ~did ~jti ~now:(Util.Time.now_ms ())
+  Util.Sqlite.use_pool conn
+  @@ Queries.revoke_token ~did ~jti ~now:(Util.Time.now_ms ())
