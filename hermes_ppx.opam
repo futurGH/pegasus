@@ -8,7 +8,7 @@ homepage: "https://github.com/futurGH/pegasus"
 bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml" {= "5.2.1"}
-  "dune" {>= "3.20"}
+  "dune" {>= "3.20" & >= "3.20" & < "3.21"}
   "ppxlib" {>= "0.32.0"}
   "odoc" {with-doc}
 ]

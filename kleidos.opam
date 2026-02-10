@@ -8,7 +8,7 @@ homepage: "https://github.com/futurGH/pegasus"
 bug-reports: "https://github.com/futurGH/pegasus/issues"
 depends: [
   "ocaml" {= "5.2.1"}
-  "dune" {>= "3.20"}
+  "dune" {>= "3.20" & >= "3.20" & < "3.21"}
   "hacl-star" {>= "0.7.2"}
   "mirage-crypto-ec" {>= "2.0.1"}
   "multibase" {>= "0.1.0"}
