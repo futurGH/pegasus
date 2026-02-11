@@ -252,8 +252,15 @@ let public_loader _root path _request =
   | None ->
       Dream.empty `Not_Found
   | Some asset ->
+      let max_age =
+        match Filename.extension path with
+        | ".woff" | ".woff2" | ".ico" ->
+            31536000
+        | _ ->
+            86400
+      in
       Dream.respond
-        ~headers:[("Cache-Control", "public, max-age=31536000")]
+        ~headers:[("Cache-Control", Printf.sprintf "public, max-age=%d" max_age)]
         asset
 
 let static_routes =
