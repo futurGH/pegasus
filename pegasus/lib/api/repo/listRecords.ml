@@ -21,7 +21,7 @@ let handler =
         List.fold_left
           (fun (_cursor, results_rev) (record : User_store.Types.record) ->
             let uri = "at://" ^ input_did ^ "/" ^ record.path in
-            ( record.since
+            ( record.since ^ record.path
             , { uri
               ; cid= Cid.to_string record.cid
               ; value= Repository.Lex.repo_record_to_yojson record.value }
