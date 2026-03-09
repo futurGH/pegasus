@@ -155,8 +155,8 @@ module Queries = struct
       get_many
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
               WHERE path LIKE %string{collection} || '/' || '%'
-              AND (since < %string{cursor} OR %string{cursor} = '')
-              ORDER BY since DESC LIMIT %int{limit}
+              AND (since || path < %string{cursor} OR %string{cursor} = '')
+              ORDER BY since DESC, path DESC LIMIT %int{limit}
         |sql}]
 
   let count_records =
@@ -173,8 +173,8 @@ module Queries = struct
       get_many
         {sql| SELECT @string{path}, @CID{cid}, @Blob{data}, @string{since} FROM records
               WHERE path LIKE %string{collection} || '/' || '%'
-              AND (since > %string{cursor} OR %string{cursor} = '')
-        	  ORDER BY since ASC LIMIT %int{limit}
+              AND (since || path > %string{cursor} OR %string{cursor} = '')
+              ORDER BY since ASC, path ASC LIMIT %int{limit}
         |sql}]
 
   let put_record =

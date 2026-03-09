@@ -550,12 +550,12 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
         mst_node_cids
     in
     (* collect record data for insert *)
-    let since = Tid.now () in
     let record_data, blob_refs =
       List.fold_left
         (fun (acc_data, acc_refs) (path, cid) ->
           match Block_map.get cid all_blocks with
           | Some data ->
+              let since = Tid.now () in
               let record = Lex.of_cbor data in
               let record_refs =
                 Util.find_blob_refs record
