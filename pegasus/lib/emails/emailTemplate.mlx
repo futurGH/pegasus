@@ -14,7 +14,7 @@ let make ~content () : JSX.element =
       style=( "margin: 0; padding: 0; background-color: " ^ Colors.feather_100
             ^ "; font-family: " ^ Fonts.sans ^ ";" )>
       <table
-        role="presentation"
+        role=`presentation
         cellspacing="0"
         cellpadding="0"
         width="100%"
@@ -22,7 +22,7 @@ let make ~content () : JSX.element =
         <tr>
           <td style="padding: 40px 20px;">
             <table
-              role="presentation"
+              role=`presentation
               cellspacing="0"
               cellpadding="0"
               width="600"
