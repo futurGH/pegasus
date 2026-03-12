@@ -12,4 +12,8 @@ let code_expiry_ms = 300_000
 
 let access_token_expiry_ms = 60 * 60 * 1000
 
+let refresh_token_expiry_ms = 30 * 24 * 60 * 60 * 1000
+
+let session_expiry_ms = 365 * 24 * 60 * 60 * 1000
+
 let request_uri_prefix = "urn:ietf:params:oauth:request_uri:"

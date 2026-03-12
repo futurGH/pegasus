@@ -1,4 +1,5 @@
 open Oauth
+module Oauth_token = Oauth.Token
 
 let post_handler =
   Xrpc.handler ~auth:DPoP (fun ctx ->
@@ -65,47 +66,18 @@ let post_handler =
                                 Errors.invalid_request "DPoP key mismatch"
                             | _ ->
                                 () ) ;
-                            let token_id =
-                              "tok-"
-                              ^ Uuidm.to_string
-                                  (Uuidm.v4_gen
-                                     (Random.State.make_self_init ())
-                                     () )
-                            in
-                            let refresh_token =
-                              "ref-"
-                              ^ Uuidm.to_string
-                                  (Uuidm.v4_gen
-                                     (Random.State.make_self_init ())
-                                     () )
-                            in
-                            let now_sec = int_of_float (Unix.gettimeofday ()) in
                             let now_ms = Util.Time.now_ms () in
-                            let expires_in =
-                              Constants.access_token_expiry_ms / 1000
-                            in
-                            let exp_sec = now_sec + expires_in in
-                            let expires_at = exp_sec * 1000 in
+                            let now_sec = now_ms / 1000 in
                             (* expand scopes before creating token *)
                             let%lwt expanded_scopes =
                               let parsed = Scopes.parse_scopes orig_req.scope in
                               let%lwt expanded = Scopes.expand_scopes parsed in
                               Lwt.return (Scopes.scopes_to_string expanded)
                             in
-                            let claims =
-                              `Assoc
-                                [ ("jti", `String token_id)
-                                ; ("sub", `String did)
-                                ; ("iat", `Int now_sec)
-                                ; ("exp", `Int exp_sec)
-                                ; ("scope", `String expanded_scopes)
-                                ; ("aud", `String Env.host_endpoint)
-                                ; ("cnf", `Assoc [("jkt", `String proof.jkt)])
-                                ]
-                            in
-                            let access_token =
-                              Jwt.sign_jwt claims ~typ:"at+jwt"
-                                ~signing_key:Env.jwt_key
+                            let access_token, refresh_token =
+                              Oauth_token.generate_tokens ~did
+                                ~scope:expanded_scopes ~jkt:proof.jkt
+                                ~now:now_sec ()
                             in
                             let auth_ip =
                               Option.value code_rec.authorized_ip ~default:ip
@@ -119,14 +91,16 @@ let post_handler =
                             in
                             let%lwt () =
                               Queries.insert_oauth_token ctx.db
-                                { refresh_token
+                                { refresh_token= refresh_token.token
                                 ; client_id= req.client_id
                                 ; did
                                 ; dpop_jkt= proof.jkt
                                 ; scope= expanded_scopes
                                 ; created_at= now_ms
                                 ; last_refreshed_at= now_ms
-                                ; expires_at
+                                ; session_expires_at=
+                                    Oauth_token.session_expires_at_ms now_ms
+                                ; expires_at= access_token.expires_at
                                 ; last_ip= auth_ip
                                 ; last_user_agent= auth_user_agent }
                             in
@@ -137,10 +111,10 @@ let post_handler =
                                 ; ("Cache-Control", "no-store") ]
                             @@ Yojson.Safe.to_string
                             @@ `Assoc
-                                 [ ("access_token", `String access_token)
+                                 [ ("access_token", `String access_token.token)
                                  ; ("token_type", `String "DPoP")
-                                 ; ("refresh_token", `String refresh_token)
-                                 ; ("expires_in", `Int expires_in)
+                                 ; ("refresh_token", `String refresh_token.token)
+                                 ; ("expires_in", `Int access_token.expires_in)
                                  ; ("scope", `String expanded_scopes)
                                  ; ("sub", `String did) ] ) ) ) ) )
       | "refresh_token" -> (
@@ -148,58 +122,50 @@ let post_handler =
         | None ->
             Errors.invalid_request "refresh_token required"
         | Some refresh_token -> (
-            let%lwt token_record =
-              Queries.get_oauth_token_by_refresh ctx.db refresh_token
-            in
-            match token_record with
-            | None ->
+            let now_ms = Util.Time.now_ms () in
+            let now_sec = now_ms / 1000 in
+            match
+              Oauth_token.verify_refresh_token ~now:now_sec refresh_token
+            with
+            | Error Oauth_token.Expired ->
+                Errors.invalid_request "expired refresh token"
+            | Error (Oauth_token.Invalid _) ->
                 Errors.invalid_request "invalid refresh token"
-            | Some session ->
-                if session.client_id <> req.client_id then
-                  Errors.invalid_request "client_id mismatch"
-                else if session.dpop_jkt <> proof.jkt then
-                  Errors.invalid_request "DPoP key mismatch"
-                else
-                  let new_token_id =
-                    "tok-"
-                    ^ Uuidm.to_string
-                        (Uuidm.v4_gen (Random.State.make_self_init ()) ())
-                  in
-                  let new_refresh =
-                    "ref-"
-                    ^ Uuidm.to_string
-                        (Uuidm.v4_gen (Random.State.make_self_init ()) ())
-                  in
-                  let now_sec = int_of_float (Unix.gettimeofday ()) in
-                  let expires_in = Constants.access_token_expiry_ms / 1000 in
-                  let exp_sec = now_sec + expires_in in
-                  let new_expires_at = exp_sec * 1000 in
-                  let claims =
-                    `Assoc
-                      [ ("jti", `String new_token_id)
-                      ; ("sub", `String session.did)
-                      ; ("iat", `Int now_sec)
-                      ; ("exp", `Int exp_sec)
-                      ; ("scope", `String session.scope)
-                      ; ("aud", `String Env.host_endpoint)
-                      ; ("cnf", `Assoc [("jkt", `String proof.jkt)]) ]
-                  in
-                  let new_access_token =
-                    Jwt.sign_jwt claims ~typ:"at+jwt" ~signing_key:Env.jwt_key
-                  in
-                  let%lwt () =
-                    Queries.update_oauth_token ctx.db
-                      ~old_refresh_token:refresh_token
-                      ~new_refresh_token:new_refresh ~expires_at:new_expires_at
-                  in
-                  Dream.json ~headers:[("Cache-Control", "no-store")]
-                  @@ Yojson.Safe.to_string
-                  @@ `Assoc
-                       [ ("access_token", `String new_access_token)
-                       ; ("token_type", `String "DPoP")
-                       ; ("refresh_token", `String new_refresh)
-                       ; ("expires_in", `Int expires_in)
-                       ; ("scope", `String session.scope)
-                       ; ("sub", `String session.did) ] ) )
+            | Ok verified_refresh -> (
+                let%lwt token_record =
+                  Queries.get_oauth_token_by_refresh ctx.db refresh_token
+                in
+                match token_record with
+                | None ->
+                    Errors.invalid_request "invalid refresh token"
+                | Some session ->
+                    if session.client_id <> req.client_id then
+                      Errors.invalid_request "client_id mismatch"
+                    else if session.dpop_jkt <> proof.jkt then
+                      Errors.invalid_request "DPoP key mismatch"
+                    else if verified_refresh.sub <> session.did then
+                      Errors.invalid_request "refresh token subject mismatch"
+                    else if now_ms >= session.session_expires_at then
+                      Errors.invalid_request "session expired"
+                    else
+                      let access_token, new_refresh =
+                        Oauth_token.generate_tokens ~did:session.did
+                          ~scope:session.scope ~jkt:proof.jkt ~now:now_sec ()
+                      in
+                      let%lwt () =
+                        Queries.update_oauth_token ctx.db
+                          ~old_refresh_token:refresh_token
+                          ~new_refresh_token:new_refresh.token
+                          ~expires_at:access_token.expires_at
+                      in
+                      Dream.json ~headers:[("Cache-Control", "no-store")]
+                      @@ Yojson.Safe.to_string
+                      @@ `Assoc
+                           [ ("access_token", `String access_token.token)
+                           ; ("token_type", `String "DPoP")
+                           ; ("refresh_token", `String new_refresh.token)
+                           ; ("expires_in", `Int access_token.expires_in)
+                           ; ("scope", `String session.scope)
+                           ; ("sub", `String session.did) ] ) ) )
       | _ ->
           Errors.invalid_request ("unsupported grant_type: " ^ req.grant_type) )
