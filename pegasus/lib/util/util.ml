@@ -6,6 +6,7 @@ module Sqlite = Sqlite_
 module Time = Time
 module Http = Http_
 module Html = Html
+module Mime_sniff = Mime_sniff
 
 (* returns all blob refs in a record *)
 let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
