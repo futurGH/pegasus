@@ -33,7 +33,9 @@ let[@react.component] make ?(title = "Pegasus") ?(children = null)
     </head>
     <body
       className="bg-feather-100 font-sans font-normal text-base tracking-normal">
-      <div id="root" className="flex justify-center min-h-screen mb-16">
+      <div
+        id="root"
+        className="flex justify-center min-h-screen box-border pb-16">
         children
       </div>
     </body>
