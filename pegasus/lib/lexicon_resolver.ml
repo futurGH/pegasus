@@ -32,10 +32,13 @@ let dns_client = Id_resolver.Handle.dns_client
 (* resolve did authority for nsid *)
 let resolve_did_authority nsid =
   let authority = Util.Syntax.nsid_authority nsid in
+  let domain =
+    authority |> String.split_on_char '.' |> List.rev |> String.concat "."
+  in
   try%lwt
     let%lwt result =
       Dns_client_lwt.getaddrinfo dns_client Dns.Rr_map.Txt
-        (Domain_name.of_string_exn ("_lexicon." ^ authority))
+        (Domain_name.of_string_exn ("_lexicon." ^ domain))
     in
     match result with
     | Ok (_, t) -> (
