@@ -16,8 +16,8 @@ type permission_set =
   ; permissions: permission list }
 [@@deriving yojson {strict= false}]
 
-type lexicon_value =
-  { type_: string [@key "$type"]
+type lexicon_def =
+  { type_: string [@key "type"]
   ; title: string option [@default None]
   ; detail: string option [@default None]
   ; permissions: permission list option [@default None] }
@@ -77,23 +77,35 @@ let fetch_lexicon ~did ~nsid =
           ) )
   with exn -> Lwt.return_error (Printexc.to_string exn)
 
+(* extract defs.main from a lexicon schema document *)
+let extract_main_def record =
+  match Yojson.Safe.Util.(member "defs" record |> member "main") with
+  | `Null ->
+      Error "lexicon has no defs.main"
+  | main -> (
+    match lexicon_def_of_yojson main with
+    | Error e ->
+        Error ("failed to parse defs.main: " ^ e)
+    | Ok def ->
+        Ok def )
+
 (* parse lexicon record into permission_set *)
 let parse_permission_set record =
-  match lexicon_value_of_yojson record with
+  match extract_main_def record with
   | Error e ->
-      Error ("failed to parse lexicon record: " ^ e)
-  | Ok record -> (
-      if record.type_ <> "permission-set" then
-        Error ("not a permission-set lexicon: " ^ record.type_)
+      Error e
+  | Ok def -> (
+      if def.type_ <> "permission-set" then
+        Error ("not a permission-set lexicon: " ^ def.type_)
       else
-        match record.permissions with
+        match def.permissions with
         | None ->
             Error "permission-set has no permissions"
         | Some permissions ->
             Ok
-              { title= record.title
+              { title= def.title
               ; title_lang= None (* skip localized titles for now *)
-              ; detail= record.detail
+              ; detail= def.detail
               ; detail_lang= None (* skip localized details for now *)
               ; permissions } )
 
