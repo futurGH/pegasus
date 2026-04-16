@@ -167,12 +167,29 @@ let parse_query (req : Dream.request)
     (of_yojson : Yojson.Safe.t -> ('a, string) result) : 'a =
   try
     let queries = Dream.all_queries req in
+    (* group repeated keys into JSON arrays, single keys stay as strings *)
+    let tbl = Hashtbl.create 16 in
+    let order = ref [] in
+    List.iter
+      (fun (k, v) ->
+        if not (Hashtbl.mem tbl k) then order := k :: !order ;
+        let prev = try Hashtbl.find tbl k with Not_found -> [] in
+        Hashtbl.replace tbl k (prev @ [v]) )
+      queries ;
     let query_json =
       `Assoc
-        (List.map
-           (fun (k, v) ->
-             (k, try Yojson.Safe.from_string v with _ -> `String v) )
-           queries )
+        (List.rev_map
+           (fun k ->
+             let vs = Hashtbl.find tbl k in
+             let v =
+               match vs with
+               | [v] ->
+                   `String v
+               | vs ->
+                   `List (List.map (fun v -> `String v) vs)
+             in
+             (k, v) )
+           !order )
     in
     match query_json |> of_yojson with
     | Error e ->

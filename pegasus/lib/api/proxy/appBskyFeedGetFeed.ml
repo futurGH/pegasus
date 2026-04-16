@@ -1,12 +1,8 @@
-type query =
-  { feed: string
-  ; limit: int option [@default None]
-  ; cursor: string option [@default None] }
-[@@deriving yojson {strict= false}]
+open Lexicons.App.Bsky.Feed.GetFeed.Main
 
 let handler =
   Xrpc.handler ~auth:Authorization (fun ctx ->
-      let input = Xrpc.parse_query ctx.req query_of_yojson in
+      let input = Xrpc.parse_query ctx.req params_of_yojson in
       match Util.Syntax.parse_at_uri input.feed with
       | None ->
           Errors.invalid_request ("invalid feed URI " ^ input.feed)
