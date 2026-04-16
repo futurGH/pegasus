@@ -53,7 +53,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   lwt
   (aws-s3-lwt (>= 4.8.1))
   (caqti (>= 1.9.0))
@@ -89,7 +89,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   lwt
   melange
   melange-json
@@ -105,7 +105,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   lwt
   (core_unix (>= 0.16.0))
   (re (>= 1.13.2))
@@ -121,7 +121,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   lwt
   (digestif (>= 1.2.0))
   (multibase (>= 0.1.0))
@@ -135,7 +135,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   (hacl-star (>= 0.7.2))
   (mirage-crypto-ec (>= 2.0.1))
   (multibase (>= 0.1.0))))
@@ -147,7 +147,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   lwt
   (cohttp-lwt-unix (>= 6.1.1))
   (uri (>= 4.4.0))
@@ -162,7 +162,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   (cmdliner (>= 1.2.0))
   (yojson (>= 3.0.0))
   (fmt (>= 0.9.0))
@@ -174,7 +174,7 @@
  (allow_empty)
  (depends
   (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (dune (>= 3.22))
   (ppxlib (>= 0.32.0))))
 
 (package
