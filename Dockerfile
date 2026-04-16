@@ -1,4 +1,4 @@
-FROM ocaml/opam:debian-12-ocaml-5.2 AS build
+FROM ocaml/opam:debian-12-ocaml-5.4 AS build
 
 ARG NODE_VERSION=v24.11.1
 ARG OPAM_VERSION=2.5
