@@ -25,7 +25,8 @@ Hermes provides three components:
     - [Union Types](#union-types)
 - [hermes_ppx](#hermes-ppx)
     - [Setup](#setup)
-    - [Usage](#ppx-usage)
+    - [`[%xrpc ...]`](#ppx-xrpc)
+    - [`[@@xrpc_query]`](#ppx-xrpc-query)
 
 ## quick start
 
@@ -242,7 +243,8 @@ Each endpoint module contains:
 module Main = struct
   type params = {
     actor: string;
-  } [@@deriving yojson]
+    limit: int option [@default None];
+  } [@@xrpc_query]
 
   type output = {
     did: string;
@@ -253,10 +255,19 @@ module Main = struct
 
   let nsid = "app.bsky.actor.getProfile"
 
-  let call ~actor (client : Hermes.client) : output Lwt.t =
-    let params = { actor } in
+  let call ~actor ?limit (client : Hermes.client) : output Lwt.t =
+    let params = { actor; limit } in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
+```
+
+The generated `dune` file pulls in the required preprocessors:
+
+```lisp
+(library
+ (name lexicons)
+ (libraries hermes yojson lwt)
+ (preprocess (pps hermes_ppx ppx_deriving_yojson)))
 ```
 
 ### type mappings
@@ -294,7 +305,7 @@ type relationship_union =
 
 <h2 id="hermes-ppx">hermes_ppx (PPX extension)</h2>
 
-transforms `[%xrpc ...]` into generated module calls.
+provides two rewrites: `[%xrpc ...]` for ergonomic API calls, and `[@@xrpc_query]` for XRPC server implementations.
 
 ### setup
 
@@ -302,10 +313,14 @@ transforms `[%xrpc ...]` into generated module calls.
 (library
  (name my_app)
  (libraries hermes hermes_ppx lwt)
- (preprocess (pps hermes_ppx)))
+ (preprocess (pps hermes_ppx ppx_deriving_yojson)))
 ```
 
-<h3 id="ppx-usage">usage</h3>
+If you use `[@@xrpc_query]`, you must include the `ppx_deriving_yojson` preprocessor after the `hermes_ppx` preprocessor.
+
+<h3 id="ppx-xrpc"><code>[%xrpc ...]</code></h3>
+
+transforms `[%xrpc ...]` into generated module calls.
 
 ```ocaml
 let get_followers ~actor ~limit client =
@@ -326,3 +341,17 @@ let create_post ~text client =
     ])
     client
 ```
+
+<h3 id="ppx-xrpc-query"><code>[@@xrpc_query]</code></h3>
+
+allows parsing query strings to yojson.
+
+```ocaml
+type params = {
+  actor: string;
+  limit: int option [@default None];
+  collections: string list option [@default None];
+} [@@xrpc_query]
+```
+
+Under the hood, the PPX assigns custom to_yojson/of_yojson functions to the record's fields, allowing for correctly parsing from an `Assoc` containing string or string list entries to the types specified in the record.

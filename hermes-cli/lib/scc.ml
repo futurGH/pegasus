@@ -80,14 +80,14 @@ let rec collect_local_refs nsid acc = function
         (* local ref: #foo *)
         let def_name = String.sub ref_ 1 (String.length ref_ - 1) in
         def_name :: acc
-      else begin
+      else
         (* check if it's a self-reference: nsid#foo *)
-        match String.split_on_char '#' ref_ with
+        begin match String.split_on_char '#' ref_ with
         | [ext_nsid; def_name] when ext_nsid = nsid ->
             def_name :: acc
         | _ ->
             acc
-      end
+        end
   | Union {refs; _} ->
       List.fold_left
         (fun a r ->
@@ -168,13 +168,13 @@ let get_external_nsids (doc : lexicon_doc) : string list =
     | Array {items; _} ->
         collect_from_type items
     | Ref {ref_; _} ->
-        if String.length ref_ > 0 && ref_.[0] <> '#' then begin
-          match String.split_on_char '#' ref_ with
+        if String.length ref_ > 0 && ref_.[0] <> '#' then
+          begin match String.split_on_char '#' ref_ with
           | ext_nsid :: _ ->
               add_nsid ext_nsid
           | [] ->
               ()
-        end
+          end
     | Union {refs; _} ->
         List.iter
           (fun r ->

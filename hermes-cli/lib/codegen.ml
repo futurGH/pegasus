@@ -72,9 +72,9 @@ and gen_ref_type nsid out ref_str : string =
     let def_name = String.sub ref_str 1 (String.length ref_str - 1) in
     Naming.type_name def_name
   end
-  else begin
+  else
     (* external ref: com.example.defs#someDef *)
-    match String.split_on_char '#' ref_str with
+    begin match String.split_on_char '#' ref_str with
     | [ext_nsid; def_name] ->
         if ext_nsid = nsid then
           (* ref to same nsid, treat as local *)
@@ -94,7 +94,7 @@ and gen_ref_type nsid out ref_str : string =
         end
     | _ ->
         "invalid_ref"
-  end
+    end
 
 and gen_union_type_name refs = Naming.union_type_name refs
 
@@ -299,30 +299,6 @@ let is_json_encoding encoding = encoding = "application/json" || encoding = ""
 let is_bytes_encoding encoding =
   encoding <> "" && encoding <> "application/json"
 
-(* generate custom of_yojson/to_yojson attrs for query param array types *)
-let gen_query_array_yojson_attrs ~is_required (type_def : type_def) =
-  match type_def with
-  | Array {items; _} -> (
-    match items with
-    | String _ ->
-        if is_required then
-          ( " [@of_yojson Hermes_util.query_string_list_of_yojson]"
-          , " [@to_yojson Hermes_util.query_string_list_to_yojson]" )
-        else
-          ( " [@of_yojson Hermes_util.query_string_list_option_of_yojson]"
-          , " [@to_yojson Hermes_util.query_string_list_option_to_yojson]" )
-    | Integer _ ->
-        if is_required then
-          ( " [@of_yojson Hermes_util.query_int_list_of_yojson]"
-          , " [@to_yojson Hermes_util.query_int_list_to_yojson]" )
-        else
-          ( " [@of_yojson Hermes_util.query_int_list_option_of_yojson]"
-          , " [@to_yojson Hermes_util.query_int_list_option_to_yojson]" )
-    | _ ->
-        ("", "") )
-  | _ ->
-      ("", "")
-
 (* generate params type for query/procedure *)
 let gen_params_type nsid out (spec : params_spec) =
   let required = Option.value spec.required ~default:[] in
@@ -336,15 +312,12 @@ let gen_params_type nsid out (spec : params_spec) =
       let type_str = if is_required then base_type else base_type ^ " option" in
       let key_attr = Naming.key_annotation prop_name ocaml_name in
       let default_attr = if is_required then "" else " [@default None]" in
-      let of_yojson_attr, to_yojson_attr =
-        gen_query_array_yojson_attrs ~is_required prop.type_def
-      in
       emitln out
-        (Printf.sprintf "    %s: %s%s%s%s%s;" ocaml_name type_str key_attr
-           default_attr of_yojson_attr to_yojson_attr ) )
+        (Printf.sprintf "    %s: %s%s%s;" ocaml_name type_str key_attr
+           default_attr ) )
     spec.properties ;
   emitln out "  }" ;
-  emitln out "[@@deriving yojson {strict= false}]" ;
+  emitln out "[@@xrpc_query]" ;
   emit_newline out
 
 (* generate output type for query/procedure *)
@@ -633,9 +606,9 @@ let gen_procedure nsid out name (spec : procedure_spec) =
   | _ ->
       emitln out "    let params = () in" ) ;
   (* generate the call based on input/output types *)
-  if input_is_bytes then begin
+  if input_is_bytes then
     (* bytes input - choose between procedure_blob and procedure_bytes *)
-    if output_is_bytes then
+    begin if output_is_bytes then
       (* bytes-in, bytes-out: use procedure_bytes *)
       emitln out
         (Printf.sprintf
@@ -659,7 +632,7 @@ let gen_procedure nsid out name (spec : procedure_spec) =
             (Bytes.of_string (Option.value input ~default:\"\")) \
             ~content_type:\"%s\" output_of_yojson"
            input_content_type )
-  end
+    end
   else begin
     (* json input - build input and use procedure *)
     ( match spec.input with
@@ -1135,8 +1108,8 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
       let def_name = String.sub ref_str 1 (String.length ref_str - 1) in
       get_unique_type_name current_nsid def_name
     end
-    else begin
-      match String.split_on_char '#' ref_str with
+    else
+      begin match String.split_on_char '#' ref_str with
       | [ext_nsid; def_name] ->
           if List.mem ext_nsid merged_nsids then
             (* ref to another nsid in the merged group - use unique name *)
@@ -1156,7 +1129,7 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
           end
       | _ ->
           "invalid_ref"
-    end
+      end
   in
   (* generate converter expression for reading a type from json *)
   (* returns (converter_expr, needs_result_unwrap) - if needs_result_unwrap is true, caller should apply Result.get_ok *)
@@ -1377,14 +1350,14 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
             (* local ref: #foo -> current_nsid#foo *)
             let def_name = String.sub ref_ 1 (String.length ref_ - 1) in
             (current_nsid ^ "#" ^ def_name) :: acc
-          else begin
-            match String.split_on_char '#' ref_ with
+          else
+            begin match String.split_on_char '#' ref_ with
             | [ext_nsid; def_name] when List.mem ext_nsid merged_nsids ->
                 (* cross-nsid ref within merged group *)
                 (ext_nsid ^ "#" ^ def_name) :: acc
             | _ ->
                 acc
-          end
+            end
       | Union {refs; _} ->
           List.fold_left
             (fun a r ->
@@ -1823,8 +1796,8 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
             let is_required = List.mem prop_name required in
             let is_nullable = List.mem prop_name nullable in
             let is_optional = (not is_required) || is_nullable in
-            if is_optional then begin
-              if needs_unwrap then
+            if is_optional then
+              begin if needs_unwrap then
                 emitln out
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> to_option (fun x \
@@ -1836,9 +1809,9 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> to_option %s in"
                      ocaml_name prop_name conv_expr )
-            end
-            else begin
-              if needs_unwrap then
+              end
+            else
+              begin if needs_unwrap then
                 emitln out
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> %s |> \
@@ -1848,7 +1821,7 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
                 emitln out
                   (Printf.sprintf "    let %s = json |> member \"%s\" |> %s in"
                      ocaml_name prop_name conv_expr )
-            end )
+              end )
           spec.properties ;
         emit out "    Ok { " ;
         emit out
@@ -1950,10 +1923,11 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
       let regular_defs_in_scc =
         List.filter_map (function `RegularDef x -> Some x | _ -> None) scc
       in
-      if inline_unions_in_scc = [] then begin
+      if inline_unions_in_scc = [] then
         (* no inline unions - use standard generation with [@@deriving yojson] *)
-        if regular_defs_in_scc <> [] then gen_merged_scc regular_defs_in_scc
-      end
+        begin if regular_defs_in_scc <> [] then
+          gen_merged_scc regular_defs_in_scc
+        end
       else begin
         (* has inline unions - generate all types first, then all converters *)
         (* register inline union names *)
@@ -1969,9 +1943,9 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
           @ List.map (fun x -> `Regular x) regular_defs_in_scc
         in
         let n = List.length all_items in
-        if n = 1 then begin
+        if n = 1 then
           (* single item - generate normally *)
-          match List.hd all_items with
+          begin match List.hd all_items with
           | `Inline (nsid, name, refs, spec) ->
               let unique_name = get_unique_inline_union_name nsid name in
               gen_inline_union_type_only nsid unique_name refs spec ;
@@ -1991,7 +1965,7 @@ let gen_merged_lexicon_module (docs : lexicon_doc list) : string =
                 gen_object_converters nsid def.name rspec.record
             | _ ->
                 gen_merged_scc [(nsid, def)] )
-        end
+          end
         else begin
           (* multiple items - generate as mutually recursive types *)
           (* first pass: register inline unions from objects *)
@@ -2312,8 +2286,8 @@ let gen_shared_module (docs : lexicon_doc list) : string =
       let def_name = String.sub ref_str 1 (String.length ref_str - 1) in
       get_shared_type_name current_nsid def_name
     end
-    else begin
-      match String.split_on_char '#' ref_str with
+    else
+      begin match String.split_on_char '#' ref_str with
       | [ext_nsid; def_name] ->
           if List.mem ext_nsid shared_nsids then
             (* ref to another nsid in the shared group *)
@@ -2333,7 +2307,7 @@ let gen_shared_module (docs : lexicon_doc list) : string =
           end
       | _ ->
           "invalid_ref"
-    end
+      end
   in
   (* generate type uri for shared context *)
   let gen_shared_type_uri current_nsid ref_str =
@@ -2559,14 +2533,14 @@ let gen_shared_module (docs : lexicon_doc list) : string =
             (* local ref: #foo -> current_nsid#foo *)
             let def_name = String.sub ref_ 1 (String.length ref_ - 1) in
             (current_nsid ^ "#" ^ def_name) :: acc
-          else begin
-            match String.split_on_char '#' ref_ with
+          else
+            begin match String.split_on_char '#' ref_ with
             | [ext_nsid; def_name] when List.mem ext_nsid shared_nsids ->
                 (* cross-nsid ref within shared group *)
                 (ext_nsid ^ "#" ^ def_name) :: acc
             | _ ->
                 acc
-          end
+            end
       | Union {refs; _} ->
           List.fold_left
             (fun a r ->
@@ -2748,8 +2722,8 @@ let gen_shared_module (docs : lexicon_doc list) : string =
             let is_required = List.mem prop_name required in
             let is_nullable = List.mem prop_name nullable in
             let is_optional = (not is_required) || is_nullable in
-            if is_optional then begin
-              if needs_unwrap then
+            if is_optional then
+              begin if needs_unwrap then
                 emitln out
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> to_option (fun x \
@@ -2761,9 +2735,9 @@ let gen_shared_module (docs : lexicon_doc list) : string =
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> to_option %s in"
                      ocaml_name prop_name conv_expr )
-            end
-            else begin
-              if needs_unwrap then
+              end
+            else
+              begin if needs_unwrap then
                 emitln out
                   (Printf.sprintf
                      "    let %s = json |> member \"%s\" |> %s |> \
@@ -2773,7 +2747,7 @@ let gen_shared_module (docs : lexicon_doc list) : string =
                 emitln out
                   (Printf.sprintf "    let %s = json |> member \"%s\" |> %s in"
                      ocaml_name prop_name conv_expr )
-            end )
+              end )
           spec.properties ;
         emit out "    Ok { " ;
         emit out
@@ -3016,9 +2990,9 @@ let gen_shared_module (docs : lexicon_doc list) : string =
       let regular_defs_in_scc =
         List.filter_map (function `RegularDef x -> Some x | _ -> None) scc
       in
-      if inline_unions_in_scc = [] then begin
+      if inline_unions_in_scc = [] then
         (* no inline unions - check if we still need mutual recursion *)
-        match regular_defs_in_scc with
+        begin match regular_defs_in_scc with
         | [] ->
             ()
         | [(nsid, def)] ->
@@ -3104,7 +3078,7 @@ let gen_shared_module (docs : lexicon_doc list) : string =
                       () )
                 obj_defs
             end
-      end
+        end
       else begin
         (* has inline unions - generate all types first, then all converters *)
         List.iter
@@ -3117,8 +3091,8 @@ let gen_shared_module (docs : lexicon_doc list) : string =
           @ List.map (fun x -> `Regular x) regular_defs_in_scc
         in
         let n = List.length all_items in
-        if n = 1 then begin
-          match List.hd all_items with
+        if n = 1 then
+          begin match List.hd all_items with
           | `Inline (nsid, name, refs, spec) ->
               gen_shared_inline_union_type_only nsid name refs spec ;
               emit_newline out ;
@@ -3137,7 +3111,7 @@ let gen_shared_module (docs : lexicon_doc list) : string =
                 gen_shared_object_converters nsid def.name rspec.record
             | _ ->
                 gen_shared_single_def (nsid, def) )
-        end
+          end
         else begin
           (* multiple items - generate as mutually recursive types *)
           List.iter

@@ -62,4 +62,5 @@ let blob_of_yojson = Types.blob_of_yojson
 module Jwt = Jwt
 module Http_backend = Http_backend
 module Client = Client
+module Query = Query
 module Credential_manager = Credential_manager

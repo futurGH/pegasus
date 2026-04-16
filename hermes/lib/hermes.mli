@@ -181,6 +181,36 @@ module Client : sig
   module Make (_ : Http_backend.S) : S
 end
 
+module Query : sig
+  val query_int_of_yojson : Yojson.Safe.t -> (int, string) result
+
+  val query_int_option_of_yojson : Yojson.Safe.t -> (int option, string) result
+
+  val query_bool_of_yojson : Yojson.Safe.t -> (bool, string) result
+
+  val query_bool_option_of_yojson :
+    Yojson.Safe.t -> (bool option, string) result
+
+  val query_string_list_of_yojson :
+    Yojson.Safe.t -> (string list, string) result
+
+  val query_string_list_to_yojson : string list -> Yojson.Safe.t
+
+  val query_int_list_of_yojson : Yojson.Safe.t -> (int list, string) result
+
+  val query_int_list_to_yojson : int list -> Yojson.Safe.t
+
+  val query_string_list_option_of_yojson :
+    Yojson.Safe.t -> (string list option, string) result
+
+  val query_string_list_option_to_yojson : string list option -> Yojson.Safe.t
+
+  val query_int_list_option_of_yojson :
+    Yojson.Safe.t -> (int list option, string) result
+
+  val query_int_list_option_to_yojson : int list option -> Yojson.Safe.t
+end
+
 module Credential_manager : sig
   type t = credential_manager
 
