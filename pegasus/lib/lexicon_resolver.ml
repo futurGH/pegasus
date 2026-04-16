@@ -26,6 +26,10 @@ type lexicon_def =
 let cache : permission_set Ttl_cache.String_cache.t =
   Ttl_cache.String_cache.create (3 * Util.Time.hour) ()
 
+let schema_cache : Hermes_cli.Lexicon_types.lexicon_doc Ttl_cache.String_cache.t
+    =
+  Ttl_cache.String_cache.create (3 * Util.Time.hour) ()
+
 (* reuse dns client from id_resolver *)
 let dns_client = Id_resolver.Handle.dns_client
 
@@ -131,3 +135,25 @@ let resolve nsid =
             Lwt.return_ok ps ) ) )
 
 let clear_cache nsid = Ttl_cache.String_cache.remove cache nsid
+
+(* resolve and parse a lexicon document from nsid *)
+let resolve_schema nsid =
+  match Ttl_cache.String_cache.get schema_cache nsid with
+  | Some cached ->
+      Lwt.return_ok cached
+  | None -> (
+    match%lwt resolve_did_authority nsid with
+    | Error e ->
+        Lwt.return_error ("DNS resolution failed: " ^ e)
+    | Ok did -> (
+      match%lwt fetch_lexicon ~did ~nsid with
+      | Error e ->
+          Lwt.return_error ("lexicon fetch failed: " ^ e)
+      | Ok json -> (
+        try
+          let doc = Hermes_cli.Parser.parse_lexicon_doc json in
+          Ttl_cache.String_cache.set schema_cache nsid doc ;
+          Lwt.return_ok doc
+        with Failure e -> Lwt.return_error ("lexicon parse failed: " ^ e) ) ) )
+
+let clear_schema_cache nsid = Ttl_cache.String_cache.remove schema_cache nsid

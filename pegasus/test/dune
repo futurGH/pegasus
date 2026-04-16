@@ -1,5 +1,5 @@
 (tests
- (names test_sequencer test_scopes)
+ (names test_sequencer test_scopes test_record_validator)
  (package pegasus)
  (libraries ipld pegasus lwt lwt.unix lwt_ppx alcotest str)
  (preprocess

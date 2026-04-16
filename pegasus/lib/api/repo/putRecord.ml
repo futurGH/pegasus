@@ -23,6 +23,20 @@ let handler =
       Auth.assert_repo_scope ctx.auth ~collection:input.collection
         ~action:Oauth.Scopes.Update ;
       let%lwt did = Xrpc.resolve_repo_did_authed ctx input.repo in
+      let%lwt validation_status =
+        match input.validate with
+        | Some true -> (
+          match%lwt
+            Record_validator.validate_record ~nsid:input.collection
+              ~record:input.record
+          with
+          | Ok () ->
+              Lwt.return "valid"
+          | Error msg ->
+              Errors.invalid_request ("record validation failed: " ^ msg) )
+        | Some false | None ->
+            Lwt.return "unknown"
+      in
       let%lwt repo = Repository.load did in
       let write : Repository.repo_write =
         match input.swap_record with
@@ -55,6 +69,6 @@ let handler =
                { uri
                ; cid= Cid.to_string cid
                ; commit= Some {cid= Cid.to_string commit_cid; rev}
-               ; validation_status= Some "valid" }
+               ; validation_status= Some validation_status }
       | _ ->
           Errors.invalid_request "unexpected delete result" )

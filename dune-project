@@ -72,6 +72,7 @@
   (timedesc (>= 3.1.0))
   (uri (>= 4.4.0))
   (uuidm (>= 0.9.10))
+  (uuseg (>= 17.0.0))
   (yojson (>= 3.0.0))
   (lwt_ppx (>= 5.9.1))
   (ppx_deriving_yojson (>= 3.9.1))

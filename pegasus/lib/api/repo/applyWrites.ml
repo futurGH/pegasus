@@ -32,6 +32,29 @@ let handler =
               Auth.assert_repo_scope ctx.auth ~collection
                 ~action:Oauth.Scopes.Delete )
         input.writes ;
+      let%lwt validation_statuses =
+        match input.validate with
+        | Some true ->
+            Lwt_list.map_s
+              (fun w ->
+                match w with
+                | Create {collection; value; _} | Update {collection; value; _}
+                  -> (
+                  match%lwt
+                    Record_validator.validate_record ~nsid:collection
+                      ~record:value
+                  with
+                  | Ok () ->
+                      Lwt.return (Some "valid")
+                  | Error msg ->
+                      Errors.invalid_request
+                        ("record validation failed: " ^ msg) )
+                | Delete _ ->
+                    Lwt.return None )
+              input.writes
+        | Some false | None ->
+            Lwt.return (List.map (fun _ -> Some "unknown") input.writes)
+      in
       let%lwt repo = Repository.load did in
       let repo_writes =
         List.map
@@ -46,11 +69,20 @@ let handler =
       in
       let results =
         Option.some
-        @@ List.map
-             (fun r ->
-               r |> Repository.apply_writes_result_to_yojson
-               |> results_item_of_yojson |> Result.get_ok )
-             aw_results
+        @@ List.map2
+             (fun r status ->
+               let item =
+                 r |> Repository.apply_writes_result_to_yojson
+                 |> results_item_of_yojson |> Result.get_ok
+               in
+               match item with
+               | CreateResult cr ->
+                   CreateResult {cr with validation_status= status}
+               | UpdateResult ur ->
+                   UpdateResult {ur with validation_status= status}
+               | DeleteResult _ ->
+                   item )
+             aw_results validation_statuses
       in
       Dream.json @@ Yojson.Safe.to_string
       @@ output_to_yojson

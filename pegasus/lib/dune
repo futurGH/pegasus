@@ -14,6 +14,7 @@
   emile
   frontend
   hermes
+  hermes_cli
   html_of_jsx
   ipld
   kleidos
@@ -28,6 +29,8 @@
   timedesc
   uri
   uuidm
+  uuseg
+  uuseg.string
   webauthn
   yojson
   hermes_ppx
