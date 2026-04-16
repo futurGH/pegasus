@@ -4,12 +4,19 @@
 module Main = struct
   let nsid = "com.atproto.identity.resolveIdentity"
 
-  type params = {identifier: string} [@@deriving yojson {strict= false}]
+  type params =
+  {
+    identifier: string;
+  }
+[@@xrpc_query]
 
   type output = Com_atproto_identity_defs.identity_info
-  [@@deriving yojson {strict= false}]
+[@@deriving yojson {strict= false}]
 
-  let call ~identifier (client : Hermes.client) : output Lwt.t =
+  let call
+      ~identifier
+      (client : Hermes.client) : output Lwt.t =
     let params : params = {identifier} in
     Hermes.query client nsid (params_to_yojson params) output_of_yojson
 end
+

@@ -2,4 +2,4 @@
  (name lexicons)
  (libraries hermes yojson lwt)
  (preprocess
-  (pps ppx_deriving_yojson)))
+  (pps hermes_ppx ppx_deriving_yojson)))

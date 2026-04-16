@@ -14,4 +14,13 @@ let handler =
       let access_jwt, refresh_jwt = Jwt.generate_jwt did in
       Dream.json @@ Yojson.Safe.to_string
       @@ output_to_yojson
-           {access_jwt; refresh_jwt; handle; did; active; status; did_doc= None} )
+           { access_jwt
+           ; refresh_jwt
+           ; handle
+           ; did
+           ; active
+           ; status
+           ; did_doc= None
+           ; email= None
+           ; email_confirmed= None
+           ; email_auth_factor= None } )

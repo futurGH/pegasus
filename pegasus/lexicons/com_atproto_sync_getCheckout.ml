@@ -4,12 +4,19 @@
 module Main = struct
   let nsid = "com.atproto.sync.getCheckout"
 
-  type params = {did: string} [@@deriving yojson {strict= false}]
+  type params =
+  {
+    did: string;
+  }
+[@@xrpc_query]
 
   (** raw bytes output with content type *)
   type output = bytes * string
 
-  let call ~did (client : Hermes.client) : output Lwt.t =
+  let call
+      ~did
+      (client : Hermes.client) : output Lwt.t =
     let params : params = {did} in
     Hermes.query_bytes client nsid (params_to_yojson params)
 end
+

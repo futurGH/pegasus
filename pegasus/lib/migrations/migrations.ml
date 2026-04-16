@@ -89,8 +89,8 @@ let run_migrations typ conn =
     List.filter_map
       (fun filename ->
         match parse_migration_filename filename with
-        | Some (id, name) when not (List.mem id applied) -> begin
-          match read_migration filename with
+        | Some (id, name) when not (List.mem id applied) ->
+          begin match read_migration filename with
           | Some sql ->
               Some (id, name, sql)
           | None ->
