@@ -1,8 +1,8 @@
-FROM ocaml/opam:debian-12-ocaml-5.4 AS build
+FROM ocaml/opam:debian-12-ocaml-5.2 AS build
 
 ARG NODE_VERSION=v24.11.1
 ARG OPAM_VERSION=2.5
-ARG DUNE_VERSION=3.22.0
+ARG DUNE_VERSION=3.20.2
 
 ARG GIT_REV
 ENV GIT_REV=$GIT_REV

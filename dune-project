@@ -46,18 +46,14 @@
    (name melange-webapi)
    (version v0.21.0)))
 
-(pin ; 0.5.0 not published to opam
- (url "git+https://github.com/ml-in-barcelona/server-reason-react.git#b05bf963fb45b36a4dd4e40958059072d9470ade")
- (package (name server-reason-react)))
-
 (package
  (name pegasus)
  (synopsis "An atproto Personal Data Server implementation")
  (description "Eventually")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   lwt
   (aws-s3-lwt (>= 4.8.1))
   (caqti (>= 1.9.0))
@@ -72,7 +68,7 @@
   (html_of_jsx (>= 0.0.7))
   (re (>= 1.13.2))
   (safepass (>= 3.1))
-  (server-reason-react (>= 0.5.0))
+  server-reason-react
   (timedesc (>= 3.1.0))
   (uri (>= 4.4.0))
   (uuidm (>= 0.9.10))
@@ -92,24 +88,24 @@
  (name frontend)
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   lwt
   melange
   melange-json
   melange-json-native
   (mlx (>= 0.11))
-  (reason-react (>= 0.17.0))
-  (reason-react-ppx (>= 0.17.0))
-  (server-reason-react (>= 0.5.0))))
+  (reason-react (>= 0.16.0))
+  (reason-react-ppx (>= 0.16.0))
+  server-reason-react))
 
 (package
  (name mist)
  (synopsis "Atproto repo functionality")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   lwt
   (core_unix (>= 0.16.0))
   (re (>= 1.13.2))
@@ -124,8 +120,8 @@
  (description "Currently includes DAG-CBOR, CIDv1, and CARv1")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   lwt
   (digestif (>= 1.2.0))
   (multibase (>= 0.1.0))
@@ -138,8 +134,8 @@
  (synopsis "Atproto-flavour k256 and p256 signing and verification")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   (hacl-star (>= 0.7.2))
   (mirage-crypto-ec (>= 2.0.1))
   (multibase (>= 0.1.0))))
@@ -150,8 +146,8 @@
  (description "XRPC client with PPX extensions for type-safe API calls")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   lwt
   (cohttp-lwt-unix (>= 6.1.1))
   (uri (>= 4.4.0))
@@ -165,8 +161,8 @@
  (synopsis "Code generator for Hermes from ATProto lexicons")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   (cmdliner (>= 1.2.0))
   (yojson (>= 3.0.0))
   (fmt (>= 0.9.0))
@@ -177,8 +173,8 @@
  (synopsis "PPX extension for Hermes XRPC calls")
  (allow_empty)
  (depends
-  (ocaml (= 5.4.1))
-  (dune (>= 3.22))
+  (ocaml (= 5.2.1))
+  (dune (and (>= 3.20) (< 3.21)))
   (ppxlib (>= 0.32.0))))
 
 (package
