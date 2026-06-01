@@ -1,22 +1,40 @@
 open Oauth
 open Oauth.Types
 
+let percent_encode_query_value value =
+  let buffer = Buffer.create (String.length value) in
+  String.iter
+    (fun c ->
+      match c with
+      | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' | '.' | '~' ->
+          Buffer.add_char buffer c
+      | _ ->
+          Buffer.add_string buffer (Printf.sprintf "%%%02X" (Char.code c)) )
+    value ;
+  Buffer.contents buffer
+
+let encode_query params =
+  String.concat "&"
+    (List.map (fun (k, v) -> k ^ "=" ^ percent_encode_query_value v) params)
+
 let oauth_redirect req redirect_uri response_mode params =
   let uri = Uri.of_string redirect_uri in
-  let encoded_params =
-    String.concat "&"
-      (List.map (fun (k, v) -> k ^ "=" ^ Uri.pct_encode v) params)
-  in
+  let encoded_params = encode_query params in
   let url =
     match response_mode with
     | Some "fragment" ->
         Uri.with_fragment uri (Some encoded_params) |> Uri.to_string
-    | _ ->
-        let has_query =
-          match Uri.verbatim_query uri with Some _ -> true | None -> false
+    | _ -> (
+        let base_uri = Uri.with_fragment uri None in
+        let sep =
+          match Uri.verbatim_query base_uri with Some _ -> "&" | None -> "?"
         in
-        let sep = if has_query then "&" else "?" in
-        Uri.to_string uri ^ sep ^ encoded_params
+        let base = Uri.to_string base_uri ^ sep ^ encoded_params in
+        match Uri.fragment uri with
+        | None ->
+            base
+        | Some fragment ->
+            base ^ "#" ^ fragment )
   in
   Dream.redirect ~headers:[("Cache-Control", "no-store")] req url
 
@@ -207,29 +225,37 @@ let post_handler =
                         match code_record with
                         | None ->
                             Errors.invalid_request "invalid code"
-                        | Some code_rec ->
-                            if code_rec.authorized_by <> None then
-                              Errors.invalid_request "code already authorized"
-                            else if code_rec.used then
+                        | Some code_rec -> (
+                            if code_rec.used then
                               Errors.invalid_request "code already used"
                             else if Util.Time.now_ms () > code_rec.expires_at
                             then Errors.invalid_request "code expired"
                             else if code_rec.request_id <> request_id then
                               Errors.invalid_request "code not for this request"
                             else
-                              let ip = Util.request_ip ctx.req in
-                              let user_agent =
-                                Dream.header ctx.req "User-Agent"
+                              let redirect () =
+                                oauth_redirect ctx.req req.redirect_uri
+                                  req.response_mode
+                                  [ ("iss", Env.host_endpoint)
+                                  ; ("state", req.state)
+                                  ; ("code", code) ]
                               in
-                              let%lwt () =
-                                Queries.activate_auth_code ctx.db code did ~ip
-                                  ~user_agent
-                              in
-                              oauth_redirect ctx.req req.redirect_uri
-                                req.response_mode
-                                [ ("code", code)
-                                ; ("state", req.state)
-                                ; ("iss", Env.host_endpoint) ]
+                              match code_rec.authorized_by with
+                              | Some authorized_did when authorized_did = did ->
+                                  redirect ()
+                              | Some _ ->
+                                  Errors.invalid_request
+                                    "code already authorized"
+                              | None ->
+                                  let ip = Util.request_ip ctx.req in
+                                  let user_agent =
+                                    Dream.header ctx.req "User-Agent"
+                                  in
+                                  let%lwt () =
+                                    Queries.activate_auth_code ctx.db code did
+                                      ~ip ~user_agent
+                                  in
+                                  redirect () )
                       else
                         Uri.make ~path:"/account/login"
                           ~query:
@@ -239,10 +265,10 @@ let post_handler =
                         |> Uri.to_string |> Dream.redirect ctx.req
                     else
                       oauth_redirect ctx.req req.redirect_uri req.response_mode
-                        [ ("error", "access_denied")
-                        ; ("error_description", "Unable to authorize user.")
+                        [ ("iss", Env.host_endpoint)
                         ; ("state", req.state)
-                        ; ("iss", Env.host_endpoint) ] )
+                        ; ("error", "access_denied")
+                        ; ("error_description", "Unable to authorize user.") ] )
           | _ ->
               Errors.invalid_request "invalid request" )
       | _ ->

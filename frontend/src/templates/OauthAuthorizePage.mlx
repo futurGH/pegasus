@@ -908,7 +908,14 @@ let[@react.component] make
     useState (fun () ->
         Option.value logo_uri ~default:("https://" ^ host ^ "/favicon.ico") )
   in
-  <form className="w-full h-auto max-w-lg px-4 sm:px-0 py-16 my-auto">
+  let submitted_ref = useRef false in
+  let handle_submit e =
+    if submitted_ref.current then Event.Form.preventDefault e
+    else submitted_ref.current <- true
+  in
+  <form
+    className="w-full h-auto max-w-lg px-4 sm:px-0 py-16 my-auto"
+    onSubmit=handle_submit>
     <h1 className="text-2xl font-serif text-mana-200 mb-2">
       (string ("authorizing " ^ host))
     </h1>
