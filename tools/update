@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+set -eu
+
+ocaml_version="5.4.1"
+dune_pin="git+https://github.com/futurGH/dune#50fd4c83186300033d30139c82f0e3d288278de2"
+dune_version_marker="50fd4c8"
+
+if ! command -v opam >/dev/null 2>&1; then
+  echo "opam is required. Install it from https://opam.ocaml.org/doc/Install.html" >&2
+  exit 1
+fi
+
+if [ -d _opam ]; then
+  eval "$(opam env --switch=. --set-switch)"
+  current_ocaml="$(ocamlc -version 2>/dev/null || true)"
+else
+  current_ocaml=""
+fi
+
+if [ "$current_ocaml" != "$ocaml_version" ]; then
+  if [ -d _opam ]; then
+    opam switch remove . -y
+  fi
+
+  opam switch create . "$ocaml_version" --no-install
+  eval "$(opam env --switch=. --set-switch)"
+fi
+
+if ! command -v dune >/dev/null 2>&1 || ! dune --version | grep -q "$dune_version_marker"; then
+  opam pin add dune "$dune_pin" -y
+
+  if ! dune --version | grep -q "$dune_version_marker"; then
+    opam reinstall dune -y
+  fi
+fi
+
+dune pkg lock
+dune build

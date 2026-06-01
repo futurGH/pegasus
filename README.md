@@ -5,6 +5,7 @@ is an [atproto PDS](https://atproto.com/guides/glossary#pds-personal-data-server
 ## table of contents
 
 - [Running It](#running-it)
+    - [Updating](#updating)
 - [Environment](#environment)
     - [SMTP](#smtp)
     - [S3](#s3)
@@ -50,6 +51,28 @@ docker compose up -d
 ```
 
 to start the PDS, then navigate to `https://{PDS_HOSTNAME}/admin` to log in with the admin password you specified and create an invite code or a new account on the PDS.
+
+### updating
+
+If you're running pegasus with Docker, update the checkout and rebuild or pull the container:
+
+```
+git pull
+docker compose pull
+docker compose up -d
+```
+
+If you build pegasus from source, make sure to
+
+```
+git pull
+```
+
+then run the update helper:
+
+```
+./tools/update
+```
 
 ## environment
 
@@ -116,20 +139,13 @@ To start developing, you'll need:
 - [`opam`](https://opam.ocaml.org/doc/Install.html), the OCaml Package Manager
 - and the following packages, or their equivalents on your operating system: `cmake git libev-dev libffi-dev libgmp-dev libssl-dev libsqlite3-dev libpcre3-dev pkg-config`
 
-Start by creating an opam switch; similar to a Python virtual environment, storing the dependencies for this project and a specific compiler version. After that, install [`dune`](https://dune.build), the build system/package manager pegasus uses.
+Start by running the update helper. It creates or updates the local opam switch; similar to a Python virtual environment, storing the dependencies for this project and a specific compiler version. It also installs the patched [`dune`](https://dune.build) version currently needed to build pegasus.
 
 ```
-opam switch create . 5.2.1 --no-install
-opam install dune
+./tools/update
 ```
 
-You may need to run `eval $(opam env)` for this to work. Next, run
-
-```
-dune pkg lock
-```
-
-to solve dependencies.
+You may need to run `eval $(opam env --switch=. --set-switch)` after this if `dune` isn't available to your shell.
 
 Set the required environment variables (see [Environment](#environment)), noting that the program won't automatically read from `.env`, then either run
 
