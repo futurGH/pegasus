@@ -1,8 +1,8 @@
-FROM ocaml/opam:debian-12-ocaml-5.2 AS build
+FROM ocaml/opam:debian-12-ocaml-5.4 AS build
 
 ARG NODE_VERSION=v24.11.1
 ARG OPAM_VERSION=2.5
-ARG DUNE_VERSION=3.20.2
+ARG DUNE_PIN=git+https://github.com/futurGH/dune#336d7bdbb107a5982fe271cd1cc252b07285e76e
 
 ARG GIT_REV
 ENV GIT_REV=$GIT_REV
@@ -28,7 +28,7 @@ RUN bash -c "source $NVM_DIR/nvm.sh && pnpm install --frozen-lockfile"
 ENV DUNE_CACHE="enabled"
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
 	--mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
-	opam install dune.$DUNE_VERSION
+	opam pin add dune $DUNE_PIN -y
 RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
 	opam exec dune pkg lock
 RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \

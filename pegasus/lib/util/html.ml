@@ -5,7 +5,9 @@ module type Template = sig
 
   val props_to_json : props -> Yojson.Basic.t
 
-  val make : ?key:string -> props:props -> unit -> React.element
+  val makeProps : props:props -> unit -> < props : props > Js.t
+
+  val make : ?key:string -> < props : props > Js.t -> React.element
 end
 
 let render_page ?status ?title (type props)
@@ -13,7 +15,7 @@ let render_page ?status ?title (type props)
   let module Template = (val template : Template with type props = props) in
   let props_json = Template.props_to_json props |> Yojson.Basic.to_string in
   let page_data = Printf.sprintf "window.__PAGE__ = {props: %s};" props_json in
-  let app = Template.make ~props () in
+  let app = Template.make (Template.makeProps ~props ()) in
   let page =
     Frontend.Layout.make ?title ~favicon:Env.favicon_url ~children:app ()
   in

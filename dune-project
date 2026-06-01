@@ -15,11 +15,11 @@
  (url "git+https://github.com/mcksan/pg_query-ocaml.git")
  (package (name pg_query)))
 
-(pin ; build broken on macOS for some reason
- (url "git+https://github.com/janestreet/bin_prot.git#03c783d682f67db665dca44a1b34d41cd16e1e3f")
+(pin ; pinned to v0.17.0; later versions fail to build on macOS for some reason
+ (url "git+https://github.com/janestreet/bin_prot.git#2cd58a8cd74b5fa1f28d63cbc4deaf6665b82525")
  (package
    (name bin_prot)
-   (version v0.17.0))) ; this is actually v0.16~preview.128.20+135 but core requires >=v0.17
+   (version v0.17.0)))
 
 (pin ; these 4 all need to be pinned or they'll conflict
  (url "git+https://github.com/lthms/dream.git#h2-0-13") ; unmerged patch that prevents conflict with letters
@@ -27,11 +27,11 @@
  (pin
   (url "git+https://github.com/lthms/dream.git#h2-0-13") ; unmerged patch that prevents conflict with letters
   (package (name dream-httpaf)))
-(pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
+(pin ; fork that supports ppxlib >=0.36
+ (url "git+https://github.com/futurGH/ppx_rapper#1b10e5a85424f7d0bad115f6fb086e44002e3822")
  (package (name ppx_rapper)))
-(pin
- (url "git+https://github.com/roddyyaga/ppx_rapper.git#5b0e62def2d5cc6cbe3dedec1ecb289bee350f9a")
+(pin ; fork that supports ppxlib >=0.36
+ (url "git+https://github.com/futurGH/ppx_rapper#1b10e5a85424f7d0bad115f6fb086e44002e3822")
  (package (name ppx_rapper_lwt)))
 
 (pin ; applied fix from anmonteiro/gluten#85
@@ -46,14 +46,18 @@
    (name melange-webapi)
    (version v0.21.0)))
 
+(pin ; 0.5.0 not published to opam
+ (url "git+https://github.com/ml-in-barcelona/server-reason-react.git#b05bf963fb45b36a4dd4e40958059072d9470ade")
+ (package (name server-reason-react)))
+
 (package
  (name pegasus)
  (synopsis "An atproto Personal Data Server implementation")
  (description "Eventually")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   lwt
   (aws-s3-lwt (>= 4.8.1))
   (caqti (>= 1.9.0))
@@ -68,7 +72,7 @@
   (html_of_jsx (>= 0.0.7))
   (re (>= 1.13.2))
   (safepass (>= 3.1))
-  server-reason-react
+  (server-reason-react (>= 0.5.0))
   (timedesc (>= 3.1.0))
   (uri (>= 4.4.0))
   (uuidm (>= 0.9.10))
@@ -88,24 +92,24 @@
  (name frontend)
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   lwt
   melange
   melange-json
   melange-json-native
   (mlx (>= 0.11))
-  (reason-react (>= 0.16.0))
-  (reason-react-ppx (>= 0.16.0))
-  server-reason-react))
+  (reason-react (>= 0.17.0))
+  (reason-react-ppx (>= 0.17.0))
+  (server-reason-react (>= 0.5.0))))
 
 (package
  (name mist)
  (synopsis "Atproto repo functionality")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   lwt
   (core_unix (>= 0.16.0))
   (re (>= 1.13.2))
@@ -120,8 +124,8 @@
  (description "Currently includes DAG-CBOR, CIDv1, and CARv1")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   lwt
   (digestif (>= 1.2.0))
   (multibase (>= 0.1.0))
@@ -134,8 +138,8 @@
  (synopsis "Atproto-flavour k256 and p256 signing and verification")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   (hacl-star (>= 0.7.2))
   (mirage-crypto-ec (>= 2.0.1))
   (multibase (>= 0.1.0))))
@@ -146,8 +150,8 @@
  (description "XRPC client with PPX extensions for type-safe API calls")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   lwt
   (cohttp-lwt-unix (>= 6.1.1))
   (uri (>= 4.4.0))
@@ -161,8 +165,8 @@
  (synopsis "Code generator for Hermes from ATProto lexicons")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   (cmdliner (>= 1.2.0))
   (yojson (>= 3.0.0))
   (fmt (>= 0.9.0))
@@ -173,8 +177,8 @@
  (synopsis "PPX extension for Hermes XRPC calls")
  (allow_empty)
  (depends
-  (ocaml (= 5.2.1))
-  (dune (and (>= 3.20) (< 3.21)))
+  (ocaml (= 5.4.1))
+  (dune (>= 3.23))
   (ppxlib (>= 0.32.0))))
 
 (package
