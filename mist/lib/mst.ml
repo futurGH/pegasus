@@ -100,85 +100,75 @@ let ( >>? ) lazy_opt_lwt f =
   let%lwt result = Lazy.force lazy_opt_lwt in
   f result
 
-(* extracts leaves from a block map *)
+type block_walk_item =
+  | Walk_node of Cid.t * string
+  | Walk_leaf of string * Cid.t
+
+(* walk an in-memory CAR block map once, yielding canonical key order while also
+   collecting the MST blocks *)
+let blocks_and_leaves_from_blocks ?(strict = false) (blocks : Block_map.t)
+    (root : Cid.t) : (Cid.t * bytes) list * (string * Cid.t) list =
+  let leaves_rev = ref [] in
+  let nodes_rev = ref [] in
+  let visited = Hashtbl.create 128 in
+  let stack = Stack.create () in
+  Stack.push (Walk_node (root, "")) stack ;
+  while not (Stack.is_empty stack) do
+    match Stack.pop stack with
+    | Walk_leaf (key, cid) ->
+        leaves_rev := (key, cid) :: !leaves_rev
+    | Walk_node (cid, prefix) ->
+        if not (Hashtbl.mem visited cid) then (
+          Hashtbl.add visited cid () ;
+          match Block_map.get cid blocks with
+          | None ->
+              if strict then
+                failwith ("missing mst node block: " ^ Cid.to_string cid)
+          | Some bytes -> (
+            try
+              let node = decode_block_raw bytes in
+              nodes_rev := (cid, bytes) :: !nodes_rev ;
+              (* build the reverse of [leaf; right subtree; ...]
+                 pushing it in list order makes the stack visit entries
+                 in ascending order *)
+              let last_key = ref prefix in
+              let entry_tasks_rev = ref [] in
+              List.iter
+                (fun (entry : entry_raw) ->
+                  let key_prefix =
+                    if entry.p = 0 then ""
+                    else if entry.p <= String.length !last_key then
+                      String.sub !last_key 0 entry.p
+                    else !last_key
+                  in
+                  let full_key = key_prefix ^ Bytes.to_string entry.k in
+                  last_key := full_key ;
+                  entry_tasks_rev :=
+                    match entry.t with
+                    | Some right_cid ->
+                        Walk_node (right_cid, full_key)
+                        :: Walk_leaf (full_key, entry.v)
+                        :: !entry_tasks_rev
+                    | None ->
+                        Walk_leaf (full_key, entry.v) :: !entry_tasks_rev )
+                node.e ;
+              List.iter (fun item -> Stack.push item stack) !entry_tasks_rev ;
+              Option.iter
+                (fun left_cid -> Stack.push (Walk_node (left_cid, prefix)) stack)
+                node.l
+            with Invalid_argument _ when not strict -> () ) )
+  done ;
+  (List.rev !nodes_rev, List.rev !leaves_rev)
+
+(* extracts leaves from a block map in canonical key order *)
 let leaves_from_blocks (blocks : Block_map.t) (root : Cid.t) :
     (string * Cid.t) list =
-  let leaves = ref [] in
-  let stack = Stack.create () in
-  Stack.push (root, "") stack ;
-  while not (Stack.is_empty stack) do
-    let cid, prefix = Stack.pop stack in
-    match Block_map.get cid blocks with
-    | None ->
-        () (* missing block probably a record *)
-    | Some bytes -> (
-      try
-        let node = decode_block_raw bytes in
-        (* proess left subtree *)
-        ( match node.l with
-        | Some left_cid ->
-            Stack.push (left_cid, prefix) stack
-        | None ->
-            () ) ;
-        (* process entries in reverse order so they come out in correct order *)
-        let last_key = ref prefix in
-        List.iter
-          (fun (entry : entry_raw) ->
-            let key_prefix =
-              if entry.p = 0 then ""
-              else if entry.p <= String.length !last_key then
-                String.sub !last_key 0 entry.p
-              else !last_key
-            in
-            let full_key = key_prefix ^ Bytes.to_string entry.k in
-            last_key := full_key ;
-            leaves := (full_key, entry.v) :: !leaves ;
-            (* push right subtree to stack *)
-            match entry.t with
-            | Some right_cid ->
-                Stack.push (right_cid, full_key) stack
-            | None ->
-                () )
-          node.e
-      with Invalid_argument _ -> () )
-  done ;
-  List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) !leaves
+  snd (blocks_and_leaves_from_blocks blocks root)
 
 (* extracts just mst node cids (non-leaf blocks) from a block map *)
 let mst_node_cids_from_blocks (blocks : Block_map.t) (root : Cid.t) : Cid.t list
     =
-  let nodes = ref [] in
-  let visited = ref Cid.Set.empty in
-  let stack = Stack.create () in
-  Stack.push root stack ;
-  while not (Stack.is_empty stack) do
-    let cid = Stack.pop stack in
-    if not (Cid.Set.mem cid !visited) then (
-      visited := Cid.Set.add cid !visited ;
-      match Block_map.get cid blocks with
-      | None ->
-          ()
-      | Some bytes -> (
-        try
-          let node = decode_block_raw bytes in
-          nodes := cid :: !nodes ;
-          (* add all children to stack *)
-          ( match node.l with
-          | Some left_cid ->
-              Stack.push left_cid stack
-          | None ->
-              () ) ;
-          List.iter
-            (fun (entry : entry_raw) ->
-              match entry.t with
-              | Some right_cid ->
-                  Stack.push right_cid stack
-              | None ->
-                  () )
-            node.e
-        with Invalid_argument _ -> () ) )
-  done ;
-  !nodes
+  blocks_and_leaves_from_blocks blocks root |> fst |> List.map fst
 
 module type Intf = sig
   module Store : Writable_blockstore
@@ -392,20 +382,21 @@ struct
   (* returns a map of key -> cid *)
   let build_map t : Cid.t String_map.t Lwt.t =
     let map = ref String_map.empty in
-    let rec loop queue visited =
+    let visited = Hashtbl.create 128 in
+    let rec loop queue =
       match queue with
       | [] ->
           Lwt.return !map
       | _ ->
           let batch, rest = take_n batch_size queue in
           let to_fetch =
-            List.filter (fun (cid, _) -> not (Cid.Set.mem cid visited)) batch
+            List.filter (fun (cid, _) -> not (Hashtbl.mem visited cid)) batch
           in
           let%lwt blocks = get_blocks_exn t (List.map fst to_fetch) in
-          let visited', next_queue =
+          let next_queue =
             List.fold_left
-              (fun (visited, queue) (cid, prefix) ->
-                if Cid.Set.mem cid visited then (visited, queue)
+              (fun queue (cid, prefix) ->
+                if Hashtbl.mem visited cid then queue
                 else
                   let bytes = Block_map.get cid blocks |> Option.get in
                   let raw = decode_block_raw bytes in
@@ -431,12 +422,13 @@ struct
                       (match raw.l with Some l -> [(l, prefix)] | None -> [])
                       raw.e
                   in
-                  (Cid.Set.add cid visited, List.rev_append next_pairs queue) )
-              (visited, rest) batch
+                  Hashtbl.add visited cid () ;
+                  List.rev_append next_pairs queue )
+              rest batch
           in
-          loop next_queue visited'
+          loop next_queue
     in
-    loop [(t.root, "")] Cid.Set.empty
+    loop [(t.root, "")]
 
   (* returns all non-leaf mst node blocks in order for a car stream
      leaf cids can be obtained via collect_nodes_and_leaves or leaves_of_root *)
@@ -765,6 +757,7 @@ struct
       let keys = List.sort_uniq String.compare keys in
       let cache = ref Block_map.empty in
       let missing = ref Cid.Set.empty in
+      let node_cache = Hashtbl.create 32 in
       let acc = ref Block_map.empty in
       let add_block cid bytes =
         if not (Block_map.has cid !acc) then acc := Block_map.set cid bytes !acc
@@ -784,6 +777,21 @@ struct
                   missing := Cid.Set.add cid !missing ) ;
               Lwt.return bytes_opt
       in
+      let get_node_cached cid =
+        match Hashtbl.find_opt node_cache cid with
+        | Some node ->
+            Lwt.return_some node
+        | None -> (
+          match%lwt get_bytes_cached cid with
+          | None ->
+              Lwt.return_none
+          | Some bytes ->
+              let raw = decode_block_raw bytes in
+              let seq = interleave_raw raw (node_entry_keys raw) in
+              let node = (bytes, seq) in
+              Hashtbl.add node_cache cid node ;
+              Lwt.return_some node )
+      in
       let add_leaf cid_opt =
         match cid_opt with
         | None ->
@@ -796,14 +804,11 @@ struct
               Lwt.return_unit )
       in
       let rec proof_for_key_cached cid key =
-        match%lwt get_bytes_cached cid with
+        match%lwt get_node_cached cid with
         | None ->
             Lwt.return_unit
-        | Some bytes -> (
+        | Some (bytes, seq) -> (
             add_block cid bytes ;
-            let raw = decode_block_raw bytes in
-            let keys = node_entry_keys raw in
-            let seq = interleave_raw raw keys in
             let index = find_gte_leaf_index key seq in
             match List.nth_opt seq index with
             | Some (Leaf (k, _, _)) when k = key ->
@@ -977,20 +982,21 @@ struct
 
   (* returns all nodes sorted by cid *)
   let all_nodes t : (Cid.t * bytes) list Lwt.t =
-    let rec loop queue visited nodes =
+    let visited = Hashtbl.create 128 in
+    let rec loop queue nodes =
       match queue with
       | [] ->
           Lwt.return nodes
       | _ ->
           let batch, rest = take_n batch_size queue in
           let to_fetch =
-            List.filter (fun cid -> not (Cid.Set.mem cid visited)) batch
+            List.filter (fun cid -> not (Hashtbl.mem visited cid)) batch
           in
           let%lwt blocks = get_blocks_exn t to_fetch in
-          let visited', nodes', next_queue =
+          let nodes', next_queue =
             List.fold_left
-              (fun (visited, nodes, queue) cid ->
-                if Cid.Set.mem cid visited then (visited, nodes, queue)
+              (fun (nodes, queue) cid ->
+                if Hashtbl.mem visited cid then (nodes, queue)
                 else
                   let bytes = Block_map.get cid blocks |> Option.get in
                   let raw = decode_block_raw bytes in
@@ -1001,19 +1007,18 @@ struct
                         match e.t with Some r -> r :: acc | None -> acc )
                       acc raw.e
                   in
-                  let visited' = Cid.Set.add cid visited in
-                  ( visited'
-                  , (cid, bytes) :: nodes
-                  , List.rev_append next_cids queue ) )
-              (visited, nodes, rest) batch
+                  Hashtbl.add visited cid () ;
+                  ((cid, bytes) :: nodes, List.rev_append next_cids queue) )
+              (nodes, rest) batch
           in
-          loop next_queue visited' nodes'
+          loop next_queue nodes'
     in
-    let%lwt nodes = loop [t.root] Cid.Set.empty [] in
+    let%lwt nodes = loop [t.root] [] in
     let sorted =
-      List.sort
-        (fun (a, _) (b, _) -> String.compare (Cid.to_string a) (Cid.to_string b))
-        nodes
+      nodes
+      |> List.map (fun (cid, bytes) -> (Cid.to_string cid, cid, bytes))
+      |> List.sort (fun (a, _, _) (b, _, _) -> String.compare a b)
+      |> List.map (fun (_, cid, bytes) -> (cid, bytes))
     in
     Lwt.return sorted
 
@@ -1038,21 +1043,28 @@ struct
       List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) assoc
     in
     List.iter (fun (k, _) -> Util.ensure_valid_key k) sorted ;
-    (* persist_from_sorted returns (cid, layer) for the subtree it creates *)
-    let rec persist_from_sorted (pairs : (string * Cid.t) list) :
-        (Cid.t * int) Lwt.t =
+    (* hash every key once *)
+    let with_layers =
+      List.map (fun (k, v) -> (k, v, Util.leading_zeros_on_hash k)) sorted
+    in
+    (* stage the canonical tree and persist it in one blockstore batch
+       for an SQLite store this avoids a pool checkout and autocommit per MST node *)
+    let pending = ref Block_map.empty in
+    let stage raw =
+      let encoded = Dag_cbor.encode (encode_node_raw raw) in
+      let cid = Cid.create Dcbor encoded in
+      pending := Block_map.set cid encoded !pending ;
+      cid
+    in
+    (* build_from_sorted returns (cid, layer) for the subtree it creates *)
+    let rec build_from_sorted (pairs : (string * Cid.t * int) list) :
+        Cid.t * int =
       match pairs with
       | [] ->
-          let encoded = Dag_cbor.encode (encode_node_raw {l= None; e= []}) in
-          let cid = Cid.create Dcbor encoded in
-          let%lwt () = put_block_exn blockstore cid encoded in
-          Lwt.return (cid, 0)
+          (stage {l= None; e= []}, 0)
       | _ ->
-          let with_layers =
-            List.map (fun (k, v) -> (k, v, Util.leading_zeros_on_hash k)) pairs
-          in
           let root_layer =
-            List.fold_left (fun acc (_, _, lz) -> max acc lz) 0 with_layers
+            List.fold_left (fun acc (_, _, layer) -> max acc layer) 0 pairs
           in
           let left_group, on_layer, right_groups =
             let left_group = ref [] in
@@ -1066,10 +1078,10 @@ struct
                   if not !seen_on then left_group := List.rev !current_group
                   else groups_rev := List.rev !current_group :: !groups_rev ;
                   current_group := [] ;
-                  on_layer_rev := (k, v) :: !on_layer_rev ;
+                  on_layer_rev := (k, v, lz) :: !on_layer_rev ;
                   seen_on := true )
-                else current_group := (k, v) :: !current_group )
-              with_layers ;
+                else current_group := (k, v, lz) :: !current_group )
+              pairs ;
             let on_layer = List.rev !on_layer_rev in
             let right_groups =
               if not !seen_on then []
@@ -1077,73 +1089,60 @@ struct
             in
             (!left_group, on_layer, right_groups)
           in
-          let%lwt l_cid =
+          let l_cid =
             match left_group with
             | [] ->
-                Lwt.return_none
+                None
             | lst ->
                 (* persist left subtree and wrap up to root_layer - 1 *)
-                let%lwt cid, child_layer = persist_from_sorted lst in
+                let cid, child_layer = build_from_sorted lst in
                 let rec wrap cid layer =
-                  if layer >= root_layer - 1 then Lwt.return cid
+                  if layer >= root_layer - 1 then cid
                   else
-                    let encoded =
-                      Dag_cbor.encode (encode_node_raw {l= Some cid; e= []})
-                    in
-                    let cid' = Cid.create Dcbor encoded in
-                    let%lwt () = put_block_exn blockstore cid' encoded in
+                    let cid' = stage {l= Some cid; e= []} in
                     wrap cid' (layer + 1)
                 in
-                let%lwt c = wrap cid child_layer in
-                Lwt.return_some c
+                Some (wrap cid child_layer)
           in
-          let rights =
-            List.map2 (fun (k, _) grp -> (k, grp)) on_layer right_groups
-          in
-          let%lwt t_links =
-            Lwt_list.map_s
-              (fun (_k, grp) ->
+          let t_links =
+            List.map
+              (fun grp ->
                 match grp with
                 | [] ->
-                    Lwt.return_none
+                    None
                 | lst ->
                     (* persist child subtree and wrap up to root_layer - 1 *)
-                    let%lwt cid, child_layer = persist_from_sorted lst in
+                    let cid, child_layer = build_from_sorted lst in
                     let rec wrap cid layer =
-                      if layer >= root_layer - 1 then Lwt.return cid
+                      if layer >= root_layer - 1 then cid
                       else
-                        let encoded =
-                          Dag_cbor.encode (encode_node_raw {l= Some cid; e= []})
-                        in
-                        let cid' = Cid.create Dcbor encoded in
-                        let%lwt () = put_block_exn blockstore cid' encoded in
+                        let cid' = stage {l= Some cid; e= []} in
                         wrap cid' (layer + 1)
                     in
-                    let%lwt c = wrap cid child_layer in
-                    Lwt.return_some c )
-              rights
+                    Some (wrap cid child_layer) )
+              right_groups
           in
           let entries_raw =
             let last_key = ref "" in
-            List.mapi
-              (fun i (k, v) ->
+            List.map2
+              (fun (k, v, _) t ->
                 let p = Util.shared_prefix_length !last_key k in
                 let k_suffix =
                   String.sub k p (String.length k - p) |> Bytes.of_string
                 in
                 last_key := k ;
-                let t = List.nth t_links i in
                 ({p; k= k_suffix; v; t} : entry_raw) )
-              on_layer
+              on_layer t_links
           in
           let node_raw = {l= l_cid; e= entries_raw} in
-          let encoded = Dag_cbor.encode (encode_node_raw node_raw) in
-          let cid = Cid.create Dcbor encoded in
-          let%lwt () = put_block_exn blockstore cid encoded in
-          Lwt.return (cid, root_layer)
+          (stage node_raw, root_layer)
     in
-    let%lwt root, _ = persist_from_sorted sorted in
-    Lwt.return {blockstore; root}
+    let root, _ = build_from_sorted with_layers in
+    match%lwt Store.put_many blockstore !pending with
+    | Ok _ ->
+        Lwt.return {blockstore; root}
+    | Error e ->
+        raise e
 
   (* insert or replace an entry, constructing a new canonical mst from scratch *)
   let add_rebuild t key cid : t Lwt.t =
@@ -1828,71 +1827,75 @@ struct
 
   (* checks that two msts are identical by recursively comparing their entries *)
   let equal (t1 : t) (t2 : t) : bool Lwt.t =
-    let rec nodes_equal (n1 : node) (n2 : node) : bool Lwt.t =
-      if n1.layer <> n2.layer then Lwt.return false
-      else if List.length n1.entries <> List.length n2.entries then
-        Lwt.return false
-      else
-        let%lwt left_equal =
-          n1.left
-          >>? function
-          | Some l1 -> (
-              n2.left
-              >>? function
-              | Some l2 ->
-                  nodes_equal l1 l2
-              | None ->
-                  Lwt.return false )
-          | None -> (
-              n2.left
-              >>? function
-              | Some _ ->
-                  Lwt.return false
-              | None ->
-                  Lwt.return true )
-        in
-        if not left_equal then Lwt.return false
+    if Cid.equal t1.root t2.root then Lwt.return_true
+    else
+      let rec nodes_equal (n1 : node) (n2 : node) : bool Lwt.t =
+        if n1.layer <> n2.layer then Lwt.return false
+        else if List.length n1.entries <> List.length n2.entries then
+          Lwt.return false
         else
-          let rec entries_equal (e1s : entry list) (e2s : entry list) =
-            match (e1s, e2s) with
-            | [], [] ->
-                Lwt.return true
-            | e1 :: rest1, e2 :: rest2 ->
-                if
-                  e1.layer <> e2.layer || e1.key <> e2.key
-                  || not (Cid.equal e1.value e2.value)
-                then Lwt.return false
-                else
-                  let%lwt right_equal =
-                    e1.right
-                    >>? function
-                    | Some r1 -> (
-                        e2.right
-                        >>? function
-                        | Some r2 ->
-                            nodes_equal r1 r2
-                        | None ->
-                            Lwt.return false )
-                    | None -> (
-                        e2.right
-                        >>? function
-                        | Some _ ->
-                            Lwt.return false
-                        | None ->
-                            Lwt.return true )
-                  in
-                  if not right_equal then Lwt.return false
-                  else entries_equal rest1 rest2
-            | _ ->
-                Lwt.return false
+          let%lwt left_equal =
+            n1.left
+            >>? function
+            | Some l1 -> (
+                n2.left
+                >>? function
+                | Some l2 ->
+                    nodes_equal l1 l2
+                | None ->
+                    Lwt.return false )
+            | None -> (
+                n2.left
+                >>? function
+                | Some _ ->
+                    Lwt.return false
+                | None ->
+                    Lwt.return true )
           in
-          entries_equal n1.entries n2.entries
-    in
-    match%lwt Lwt.all [retrieve_node t1 t1.root; retrieve_node t2 t2.root] with
-    | [Some r1; Some r2] ->
-        nodes_equal r1 r2
-    | [None; None] ->
-        Lwt.return true
-    | _ ->
-        Lwt.return false
+          if not left_equal then Lwt.return false
+          else
+            let rec entries_equal (e1s : entry list) (e2s : entry list) =
+              match (e1s, e2s) with
+              | [], [] ->
+                  Lwt.return true
+              | e1 :: rest1, e2 :: rest2 ->
+                  if
+                    e1.layer <> e2.layer || e1.key <> e2.key
+                    || not (Cid.equal e1.value e2.value)
+                  then Lwt.return false
+                  else
+                    let%lwt right_equal =
+                      e1.right
+                      >>? function
+                      | Some r1 -> (
+                          e2.right
+                          >>? function
+                          | Some r2 ->
+                              nodes_equal r1 r2
+                          | None ->
+                              Lwt.return false )
+                      | None -> (
+                          e2.right
+                          >>? function
+                          | Some _ ->
+                              Lwt.return false
+                          | None ->
+                              Lwt.return true )
+                    in
+                    if not right_equal then Lwt.return false
+                    else entries_equal rest1 rest2
+              | _ ->
+                  Lwt.return false
+            in
+            entries_equal n1.entries n2.entries
+      in
+      match%lwt
+        Lwt.all [retrieve_node t1 t1.root; retrieve_node t2 t2.root]
+      with
+      | [Some r1; Some r2] ->
+          nodes_equal r1 r2
+      | [None; None] ->
+          Lwt.return true
+      | _ ->
+          Lwt.return false
 end

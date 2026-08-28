@@ -144,7 +144,7 @@ let of_yojson = function
 
 let compare a b = String.compare (to_string a) (to_string b)
 
-let equal a b = String.equal (to_string a) (to_string b)
+let equal a b = Bytes.equal a.bytes b.bytes
 
 let hash = Hashtbl.hash
 

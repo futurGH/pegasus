@@ -4,7 +4,6 @@ module Lex = Mist.Lex
 module Mst = Mist.Mst.Make (User_store)
 module Cached_store = Mist.Storage.Cache_blockstore (User_store)
 module Cached_mst = Mist.Mst.Make (Cached_store)
-module Mem_mst = Mist.Mst.Make (Mist.Storage.Memory_blockstore)
 module String_map = Lex.String_map
 module Tid = Mist.Tid
 
@@ -478,7 +477,7 @@ let export_car t : Car.stream Lwt.t =
               let cache' =
                 List.fold_left
                   (fun acc (cid, data) -> Block_map.set cid data acc)
-                  cache records
+                  Block_map.empty records
               in
               step (items, cache', stream') )
       | Node (cid, data) :: rest ->
@@ -505,15 +504,20 @@ let export_car t : Car.stream Lwt.t =
 
 let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
   let open Util.Syntax in
-  let%lwt roots, blocks_seq = Car.read_car_stream stream in
-  let root =
-    match roots with [root] -> root | _ -> failwith "invalid number of roots"
-  in
   try%lwt
+    let%lwt roots, blocks_seq = Car.read_car_stream stream in
+    let root =
+      match roots with [root] -> root | _ -> failwith "invalid number of roots"
+    in
     (* collect all blocks into a map *)
     let%lwt all_blocks =
       Lwt_seq.fold_left_s
-        (fun acc (cid, block) -> Lwt.return (Block_map.set cid block acc))
+        (fun acc (cid, block) ->
+          let ({codec; _} : Cid.t) = cid in
+          let actual = Cid.create codec block in
+          if not (Cid.equal actual cid) then
+            failwith ("CAR block does not match cid " ^ Cid.to_string cid) ;
+          Lwt.return (Block_map.set cid block acc) )
         Block_map.empty blocks_seq
     in
     (* parse commit block *)
@@ -534,20 +538,8 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
           failwith ("invalid commit: " ^ e)
     in
     if commit.did <> t.did then failwith "did does not match commit did" ;
-    let leaves = Mist.Mst.leaves_from_blocks all_blocks commit.data in
-    let mst_node_cids =
-      Mist.Mst.mst_node_cids_from_blocks all_blocks commit.data
-    in
-    (* collect mst node blocks for insert *)
-    let mst_blocks =
-      List.filter_map
-        (fun cid ->
-          match Block_map.get cid all_blocks with
-          | Some block ->
-              Some (cid, block)
-          | None ->
-              None )
-        mst_node_cids
+    let mst_blocks, leaves =
+      Mist.Mst.blocks_and_leaves_from_blocks ~strict:true all_blocks commit.data
     in
     (* collect record data for insert *)
     let record_data, blob_refs =

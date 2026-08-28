@@ -34,7 +34,6 @@ let entries = Cid_map.bindings
 let keys m = Cid_map.bindings m |> List.map fst
 
 let merge m m' =
-  let m = Cid_map.fold (fun cid bytes m -> Cid_map.add cid bytes m) m m in
   Cid_map.fold (fun cid bytes m -> Cid_map.add cid bytes m) m' m
 
 let of_seq = Cid_map.of_seq
