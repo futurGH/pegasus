@@ -25,14 +25,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 RUN bash -c "source $NVM_DIR/nvm.sh && pnpm install --frozen-lockfile"
 
-COPY . .
+COPY --chown=opam:opam . .
 
 ENV DUNE_CACHE="enabled"
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
 	--mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
 	opam pin add dune $DUNE_PIN -y
-RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
-	opam exec dune pkg lock
 RUN --mount=type=cache,target=/home/opam/.cache/dune,uid=1000,gid=1000 \
 	bash -c "source $NVM_DIR/nvm.sh && opam exec dune build -- --release --stop-on-first-error"
 

@@ -9,6 +9,8 @@ _opam/
 _build/
 node_modules/
 *.lock
+!dune.lock/
+!dune.lock/**
 *.locks
 *.env
 *.install
