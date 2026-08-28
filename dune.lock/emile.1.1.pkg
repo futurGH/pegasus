@@ -1,0 +1,15 @@
+(version 1.1)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune angstrom ipaddr base64 pecu bigstringaf uutf cmdliner)))
+
+(source
+ (fetch
+  (url
+   https://github.com/dinosaure/emile/releases/download/v1.1/emile-v1.1.tbz)
+  (checksum
+   sha512=b53df652cd9c585d2720cf1ad6b877a11e3779b4edda08d6b965557721d46538cd10dd8a7a3a6316dc6a3785ae66167785529619e31f40e7dfde01faaf692c7f)))

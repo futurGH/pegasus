@@ -1,0 +1,45 @@
+(version dev)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (base-unix
+   bigarray-compat
+   camlp-streams
+   caqti
+   caqti-lwt
+   conf-libev
+   cstruct
+   digestif
+   dream-httpaf
+   dream-pure
+   dune
+   fmt
+   graphql_parser
+   graphql-lwt
+   lambdasoup
+   lwt
+   lwt_ppx
+   lwt_ssl
+   logs
+   magic-mime
+   markup
+   mirage-clock
+   mirage-crypto
+   mirage-crypto-rng
+   multipart_form
+   multipart_form-lwt
+   ocaml
+   ptime
+   ssl
+   uri
+   yojson)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/lthms/dream.git#03c827f9e5f48e273e829af0fd73dc5bf81a037c)))
+
+(dev)

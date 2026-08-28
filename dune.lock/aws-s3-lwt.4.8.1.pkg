@@ -1,0 +1,19 @@
+(version 4.8.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune aws-s3 lwt conduit-lwt-unix)))
+
+(source
+ (fetch
+  (url
+   https://github.com/andersfugmann/aws-s3/releases/download/4.8.1/aws-s3-4.8.1.tbz)
+  (checksum
+   sha512=7e646905202e9f0569bdd95b0e14e89636a69b6c43f9c14ef2268d6f8d565b89bcfe303e1a56b27d6c5ca39ebceb4bb543315f34432eb2096b304e18a7221b83)))

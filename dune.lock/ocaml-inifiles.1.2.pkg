@@ -1,0 +1,46 @@
+(version 1.2)
+
+(install
+ (all_platforms
+  (run %{make} install)))
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (patch ocaml-inifiles.diff)
+     (when (>= %{pkg:ocaml:version} 5.0) (patch fix_lowercase.diff))
+     (when (>= %{pkg:ocaml:version} 5.0) (patch fix_build.diff))
+     (run %{make} all)
+     (run %{make} opt))))))
+
+(depends
+ (all_platforms
+  (ocaml ocamlfind pcre)))
+
+(source
+ (fetch
+  (url
+   http://archive.ubuntu.com/ubuntu/pool/universe/o/ocaml-inifiles/ocaml-inifiles_1.2.orig.tar.gz)
+  (checksum
+   sha256=daceda026ce39a5fcff3a0171f17af6c3310dd3938de1fb6e6d0c07a7d7c1f4a)))
+
+(extra_sources
+ (fix_build.diff
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-inifiles/fix_build.diff)
+   (checksum
+    sha256=32d7a9103e28cdf3a3a880c4ea9a541ff5611eca9c96a4d91f016cad63235c25)))
+ (fix_lowercase.diff
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-inifiles/fix_lowercase.diff)
+   (checksum
+    sha256=442ec4e2d79310e6547ada175770f14387406ef8dc9e02541398776b3b7e9685)))
+ (ocaml-inifiles.diff
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-inifiles/ocaml-inifiles.diff)
+   (checksum
+    sha256=96bff69b422d2532afd2a75c7bea61bfd379696fd36bbe113f286871c298f30c))))

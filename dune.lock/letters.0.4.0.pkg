@@ -1,0 +1,31 @@
+(version 0.4.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune
+   ca-certs
+   colombe
+   containers
+   fmt
+   fpath
+   lwt
+   mrmime
+   ocaml
+   ptime
+   sendmail
+   tls-lwt
+   tls
+   x509)))
+
+(source
+ (fetch
+  (url https://github.com/oxidizing/letters/archive/0.4.0.tar.gz)
+  (checksum
+   sha512=8b1513c52866dc5f582024cb55ca8139ae7f6c62e3d1500e664a9d11ba0ee3877b66335f2137e8052310e3cc5b9f760fd6110952692c619d7517654e7337b9ed)))

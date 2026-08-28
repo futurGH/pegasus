@@ -1,0 +1,19 @@
+(version 5.2.3)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml ppx_protocol_conv ezxmlm dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/andersfugmann/ppx_protocol_conv/releases/download/5.2.3/ppx_protocol_conv-5.2.3.tbz)
+  (checksum
+   sha512=aa8c0798432f097e468996e4fb2e7e936557d013406ba9558c5edd8926172a5499578e4ee7138d9cade1dc6b387f4ddb120499441a4070404fe0d107d639fc3a)))

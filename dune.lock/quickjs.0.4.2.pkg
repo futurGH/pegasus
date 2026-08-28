@@ -1,0 +1,19 @@
+(version 0.4.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml integers ctypes)))
+
+(source
+ (fetch
+  (url
+   https://github.com/ml-in-barcelona/quickjs.ml/releases/download/0.4.2/quickjs-0.4.2.tbz)
+  (checksum
+   sha512=68beb126919a214fa9e46d84566c97e6ff3667c6c4478f352f1145e5bf1888b2a5eaca9855f39d734b2e9dc5bc0c7650f45679d177d546a2b0ba53dced5f2d1f)))

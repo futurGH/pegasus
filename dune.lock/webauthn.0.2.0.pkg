@@ -1,0 +1,30 @@
+(version 0.2.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   yojson
+   ppx_deriving_yojson
+   digestif
+   mirage-crypto-ec
+   mirage-crypto-rng
+   ocplib-endian
+   x509
+   base64
+   cbor
+   ohex)))
+
+(source
+ (fetch
+  (url
+   https://github.com/robur-coop/webauthn/releases/download/v0.2.0/webauthn-0.2.0.tbz)
+  (checksum
+   sha512=71e23aea56e6edc95fa01643cad00c3a3edea2a9cc5c1c921c4afd54bcdeaba4c9768251b8eee9c6a0f5819c9a1780507922d3012b559cf0d5949ca03cac4482)))

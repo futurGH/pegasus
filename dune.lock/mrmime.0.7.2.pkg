@@ -1,0 +1,28 @@
+(version 0.7.2)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   ke
+   bstr
+   unstrctrd
+   ptime
+   uutf
+   rosetta
+   ipaddr
+   emile
+   base64
+   pecu
+   prettym
+   angstrom)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mrmime/releases/download/v0.7.2/mrmime-0.7.2.tbz)
+  (checksum
+   sha512=ddd232788fa80ee0650b22199c14877eb2b6dd08770fe96b37c4e0834ec6ccd7c2c44562eaa1690922203eb75d77a50e5eeda4dce7c3b7120d75fe52df785805)))

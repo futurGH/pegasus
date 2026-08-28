@@ -1,0 +1,57 @@
+(version 4-13)
+
+(build
+ (all_platforms ((action (run sh ./build.sh)))))
+
+(depends
+ (all_platforms (ocaml)))
+
+(depexts
+ ((libev-dev)
+  (= %{os_family} debian))
+ ((libev-dev)
+  (= %{os_family} ubuntu))
+ ((libev)
+  (and_absorb_undefined_var
+   (= %{os} macos)
+   (= %{os_distribution} homebrew)))
+ ((libev-dev)
+  (= %{os_family} alpine))
+ ((libev)
+  (= %{os_family} arch))
+ ((libev-devel)
+  (= %{os_family} fedora))
+ ((libev-devel)
+  (= %{os_distribution} rhel))
+ ((libev-devel)
+  (= %{os_distribution} centos))
+ ((libev-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} ol)
+   (>= %{os_version} 8)))
+ ((libev-devel)
+  (or_absorb_undefined_var
+   (= %{os_family} suse)
+   (= %{os_family} opensuse)))
+ ((libev)
+  (= %{os} freebsd))
+ ((libev)
+  (= %{os} openbsd))
+ ((libev)
+  (= %{os} netbsd))
+ ((libev)
+  (= %{os_distribution} nixos)))
+
+(extra_sources
+ (build.sh
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-libev/build.sh)
+   (checksum
+    sha256=4825462f8f84312caf9a2c797bbd24abc776d8a343de5561330314d846e5cf61)))
+ (discover.ml
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-libev/discover.ml.4-13)
+   (checksum
+    sha256=569e94c09c4722989c3acb0f6b709a5dd6218f79175268c7f40f4bd26abd4fc2))))

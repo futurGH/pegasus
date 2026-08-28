@@ -1,0 +1,26 @@
+(version 0.8.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   angstrom
+   base64
+   unstrctrd
+   uutf
+   pecu
+   prettym
+   fmt
+   logs
+   ke
+   bigstringaf)))
+
+(source
+ (fetch
+  (url
+   https://github.com/dinosaure/multipart_form/releases/download/v0.8.0/multipart_form-0.8.0.tbz)
+  (checksum
+   sha512=5ad9590f2f9c8b97af00b253389ff087373b29627c384359650e5737883e9271e78405f6c009e36eda305f3dd64f6de5ac335d0c384016da6765abdc63161b20)))

@@ -1,0 +1,15 @@
+(version 0.4.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune dune-configurator cmdliner lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/dinosaure/hxd/releases/download/v0.4.0/hxd-0.4.0.tbz)
+  (checksum
+   sha512=7cc6911729d6b030d10b25a6222649bf1275dc18efcaefd170138addf744c790f786ff2772aaae65071b112a00ed6bd51d0c3667d49a185f0399739b5e8cb693)))

@@ -1,0 +1,15 @@
+(version 0.4.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/uuuu/releases/download/v0.4.0/uuuu-0.4.0.tbz)
+  (checksum
+   sha512=dc84dcd3156b5c1fa414c73ad78ef3c9f8b626bfbc3159f262e3d7d17325f098f28dd55d93f7643cb5b8329fa54f2ca876f442fefe399b92afe0a5430134d66f)))

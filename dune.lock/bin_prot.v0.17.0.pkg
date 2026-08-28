@@ -1,0 +1,24 @@
+(version v0.17.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml
+   base
+   ppx_compare
+   ppx_custom_printf
+   ppx_fields_conv
+   ppx_optcomp
+   ppx_sexp_conv
+   ppx_stable_witness
+   ppx_variants_conv
+   dune)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/janestreet/bin_prot.git#2cd58a8cd74b5fa1f28d63cbc4deaf6665b82525)))
+
+(dev)

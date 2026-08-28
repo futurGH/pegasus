@@ -1,0 +1,15 @@
+(version 0.0.4)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/robur-coop/bstr/releases/download/v0.0.4/bstr-0.0.4.tbz)
+  (checksum
+   sha512=1954727f1a386c9909996cdabc1a3b150c23361a96e5632280b0f6e6faf8f0ab6a7ca974352378e757c5136375eb5a53235f95caa69e982f48d3a49907948ddd)))

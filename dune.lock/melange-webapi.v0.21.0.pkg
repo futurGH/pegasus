@@ -1,0 +1,15 @@
+(version v0.21.0)
+
+(build
+ (all_platforms ((dune))))
+
+(depends
+ (all_platforms
+  (ocaml melange melange-fetch reason)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/melange-community/melange-webapi.git#80c6ededd06cc66b75445d1ed5c855e050b156a0)))
+
+(dev)

@@ -1,0 +1,15 @@
+(version 0.3.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/yuscii/releases/download/v0.3.0/yuscii-v0.3.0.tbz)
+  (checksum
+   sha512=d9747ddc01ce0d35be6ec95ff09cf9a0cf67fa53449ce0d700e5c4e31b83e6cf5c8985b0f2e154087bae8ddcce6cb1d4f33819e538570e4308bbba7e21cd669f)))

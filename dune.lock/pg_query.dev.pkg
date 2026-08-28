@@ -1,0 +1,15 @@
+(version dev)
+
+(build
+ (all_platforms ((dune))))
+
+(depends
+ (all_platforms
+  (ocaml dune cmdliner ctypes ctypes-foreign ppx_deriving)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/mcksan/pg_query-ocaml.git#8fa5a7a8dee8ac9e0f31f0e2c56ce1e885bf4e14)))
+
+(dev)

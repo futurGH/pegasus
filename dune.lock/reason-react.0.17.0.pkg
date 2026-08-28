@@ -1,0 +1,19 @@
+(version 0.17.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml melange reason-react-ppx reason)))
+
+(source
+ (fetch
+  (url
+   https://github.com/reasonml/reason-react/releases/download/0.17.0/reason-react-0.17.0.tbz)
+  (checksum
+   sha512=4512a0bbc04065ad0be4a35c4c6abe9d8e10376b4424a3c82f8a692759a57714493e99535f4450372587c85741e828e5b213c9cb404456c81dba4a5da66fefcc)))

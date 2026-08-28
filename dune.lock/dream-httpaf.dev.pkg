@@ -1,0 +1,28 @@
+(version dev)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (dream-pure
+   dune
+   gluten
+   gluten-lwt-unix
+   h2
+   h2-lwt-unix
+   httpun
+   httpun-lwt-unix
+   httpun-ws
+   lwt
+   lwt_ppx
+   lwt_ssl
+   ocaml
+   ssl)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/lthms/dream.git#03c827f9e5f48e273e829af0fd73dc5bf81a037c)))
+
+(dev)

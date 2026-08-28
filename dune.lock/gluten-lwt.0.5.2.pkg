@@ -1,0 +1,15 @@
+(version 0.5.2)
+
+(build
+ (all_platforms ((dune))))
+
+(depends
+ (all_platforms
+  (ocaml gluten lwt)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/futurGH/gluten#956e753dc0ee81dbe53f0979fe89d57d960e7856)))
+
+(dev)

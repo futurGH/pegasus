@@ -1,0 +1,18 @@
+(version 0.3.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune psq)))
+
+(source
+ (fetch
+  (url https://github.com/pqwy/lru/releases/download/v0.3.1/lru-0.3.1.tbz)
+  (checksum
+   sha512=81144e258d6e488d4677ade91132401b6f8871c72aadf2f1c190c4dee918c71c5df10c4e690c5bf1ab0f364d87989d44aec3695310a3477f6473eb17c1261734)))

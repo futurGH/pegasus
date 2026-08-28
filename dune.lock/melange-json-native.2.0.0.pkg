@@ -1,0 +1,19 @@
+(version 2.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml ppxlib yojson)))
+
+(source
+ (fetch
+  (url
+   https://github.com/melange-community/melange-json/releases/download/2.0.0/melange-json-2.0.0.tbz)
+  (checksum
+   sha512=bcad995988dd4f5bfba1824e9ae5d4e12c1ea20dba6a943db04a2a112428dd78d09fd4cc87b5ca2f4fb08b0b5d4165b249953325b210170687d1a0ae47dd18a1)))

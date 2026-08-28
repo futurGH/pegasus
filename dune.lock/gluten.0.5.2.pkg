@@ -1,0 +1,19 @@
+(version 0.5.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml bigstringaf faraday)))
+
+(source
+ (fetch
+  (url
+   https://github.com/anmonteiro/gluten/releases/download/0.5.2/gluten-0.5.2.tbz)
+  (checksum
+   sha512=105e549d5ff83c43be6ab5e71ec1c19b27140a279002f04e02792e778f9e75deaecf4251324e6273e43039e38572b45ea236626b3afa7ef5c3c72baa3002c129)))

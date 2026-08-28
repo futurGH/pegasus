@@ -1,0 +1,15 @@
+(version 0.14.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune menhir fmt re)))
+
+(source
+ (fetch
+  (url
+   https://github.com/andreas/ocaml-graphql-server/releases/download/0.14.0/graphql-0.14.0.tbz)
+  (checksum
+   sha512=1d303d9ab67faecea8081f007b3696e36033aa65eba0854f50067b4d667d9a9ad185ad949371790a03509cb31bf6356b75c58f3066da9c35d82e620df5780185)))

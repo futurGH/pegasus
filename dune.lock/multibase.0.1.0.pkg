@@ -1,0 +1,34 @@
+(version 0.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      build
+      -p
+      %{pkg-self:name}
+      -j
+      %{jobs}
+      --promote-install-files=false
+      @install)
+     (run
+      dune
+      install
+      -p
+      %{pkg-self:name}
+      --create-install-files
+      %{pkg-self:name}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune base64 optint)))
+
+(source
+ (fetch
+  (url
+   https://github.com/patricoferris/ocaml-multibase/releases/download/v0.1.0/multibase-0.1.0.tbz)
+  (checksum
+   sha512=28fcd03934e4de642bf1afaff9cb1e2563345b014601dcbb3e2bfefae8b88b2cda9c738e970bf339bd87bcab7b0b26cfc89bd71585a6ade00ac7ac0a7d92b504)))

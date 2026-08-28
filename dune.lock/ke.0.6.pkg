@@ -1,0 +1,14 @@
+(version 0.6)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt)))
+
+(source
+ (fetch
+  (url https://github.com/mirage/ke/releases/download/v0.6/ke-0.6.tbz)
+  (checksum
+   sha512=be277780a7a6c9109068b6c8d54fa88c35180802ff86951516a32a6b7c0335fd6584753d1c670e02632b3956c09ae31bfec70e3dd5ea94697e9e032ba3b9248b)))

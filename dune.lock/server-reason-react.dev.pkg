@@ -1,0 +1,32 @@
+(version dev)
+
+(build
+ (all_platforms ((dune))))
+
+(depends
+ (all_platforms
+  (ocaml
+   reason
+   melange
+   uucp
+   ppxlib
+   quickjs
+   lwt
+   lwt_ppx
+   uri
+   yojson
+   integers
+   zarith
+   uutf
+   melange-fetch
+   melange-json
+   melange-json-native
+   melange-webapi
+   reason-react)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/ml-in-barcelona/server-reason-react.git#b05bf963fb45b36a4dd4e40958059072d9470ade)))
+
+(dev)

@@ -1,0 +1,15 @@
+(version 1.2.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (base-unix dune lwt ocaml ssl)))
+
+(source
+ (fetch
+  (url
+   https://github.com/ocsigen/lwt_ssl/releases/download/1.2.0/lwt_ssl-1.2.0.tbz)
+  (checksum
+   sha512=cf2ef7d4db26e40c044e743ce85849a10eb57c916cbd7d6291bf4458291689098293bfb4cd7f1023f3ae8bc8e9a68cb2c7470669501a9b44695659405a75aa00)))

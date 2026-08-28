@@ -1,0 +1,14 @@
+(version 0.5)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune base-bytes ocplib-endian)))
+
+(source
+ (fetch
+  (url https://ygrek.org/p/release/ocaml-cbor/ocaml-cbor-0.5.tar.gz)
+  (checksum
+   sha512=13e3c019f620fc069c6dd0b940053b6ab48f3dd1eea7defd40542b6e253017d3fc99756a2c2f314e7425904a4dd9901d54b305019fcbc54e9917ed0789524b2a)))

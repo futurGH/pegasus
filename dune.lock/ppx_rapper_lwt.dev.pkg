@@ -1,0 +1,15 @@
+(version dev)
+
+(build
+ (all_platforms ((dune))))
+
+(depends
+ (all_platforms
+  (ocaml ppx_rapper caqti-lwt lwt)))
+
+(source
+ (fetch
+  (url
+   git+https://github.com/futurGH/ppx_rapper#1b10e5a85424f7d0bad115f6fb086e44002e3822)))
+
+(dev)

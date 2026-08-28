@@ -1,0 +1,56 @@
+(version 1)
+
+(build
+ (all_platforms ((action (run sh -ex configure.sh)))))
+
+(depexts
+ ((cmake)
+  (and_absorb_undefined_var
+   (= %{os_distribution} homebrew)
+   (= %{os} macos)))
+ ((cmake)
+  (and_absorb_undefined_var
+   (= %{os_distribution} macports)
+   (= %{os} macos)))
+ ((cmake)
+  (= %{os_family} debian))
+ ((cmake)
+  (= %{os_family} ubuntu))
+ ((epel-release cmake3)
+  (= %{os_distribution} centos))
+ ((cmake)
+  (= %{os_family} fedora))
+ ((cmake)
+  (= %{os_distribution} alpine))
+ ((cmake)
+  (= %{os_distribution} arch))
+ ((cmake)
+  (or_absorb_undefined_var
+   (= %{os_family} suse)
+   (= %{os_family} opensuse)))
+ ((cmake)
+  (= %{os_distribution} ol))
+ ((dev-util/cmake)
+  (= %{os_distribution} gentoo))
+ ((devel/cmake)
+  (= %{os} freebsd))
+ ((devel/cmake)
+  (= %{os} openbsd))
+ ((devel/cmake)
+  (= %{os} netbsd))
+ ((devel/cmake)
+  (= %{os} dragonfly))
+ ((system:cmake)
+  (= %{os_distribution} cygwinports))
+ ((cmake)
+  (= %{os_distribution} cygwin))
+ ((cmake)
+  (= %{os_distribution} nixos)))
+
+(extra_sources
+ (configure.sh
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-cmake/configure.sh)
+   (checksum
+    sha256=3417a88adeac146a5c2fc6e6d2185f80e319054c9054a2048df43b4644920f4f))))

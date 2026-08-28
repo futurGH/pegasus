@@ -1,0 +1,15 @@
+(version 0.12.1)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt ipaddr angstrom ocaml-syntax-shims emile)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/colombe/releases/download/v0.12.1/colombe-0.12.1.tbz)
+  (checksum
+   sha512=81ba62a76f8265816096e84fbc56780abb5ccf80c883b97be942d8f1ed687babbf45fd56e489646cfa145fbf401383026a3a719d33da1a27dbaa6652f7856b8a)))

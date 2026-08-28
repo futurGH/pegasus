@@ -1,0 +1,23 @@
+(version 0.7.2)
+
+(install
+ (all_platforms
+  (run %{make} -C hacl-star-raw install)))
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (run %{make} -C hacl-star-raw build-c)
+     (run %{make} -C hacl-star-raw build-bindings))))))
+
+(depends
+ (all_platforms
+  (ocaml dune ocamlfind ctypes conf-which conf-cmake)))
+
+(source
+ (fetch
+  (url
+   https://github.com/cryspen/hacl-packages/releases/download/ocaml-v0.7.2/hacl-star.0.7.2.tar.gz)
+  (checksum
+   sha512=3195917cbafe1849281b776c1f9e52c229d9041922ac3dbcc6557241b9c9156bb405dcd9fbe41edbfe224bc7e5dd269f3fe2a7bef6d566daa5fd2662963296c0)))

@@ -1,0 +1,19 @@
+(version 6.0.1-54)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml cmdliner dune-build-info cppo ppxlib menhir)))
+
+(source
+ (fetch
+  (url
+   https://github.com/melange-re/melange/releases/download/6.0.1-54/melange-6.0.1-54.tbz)
+  (checksum
+   sha512=d18244080d0af70eca885bbc11357add73f5a3071c7dac241b7c78f7e451e0eea435aaa61aa87931a0f488c67e4c8d7b6945d0d41b50e506c1b6ab6fc6c4d1d4)))

@@ -1,0 +1,15 @@
+(version 0.1.5)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/coin/releases/download/v0.1.5/coin-0.1.5.tbz)
+  (checksum
+   sha512=ee34fe0881a752094f864b7cb70040e9676ddd05094099c38dcf02363eea9c9596c5a9b1635cd1f5436b9af9199e3f46676d2c7e2c87a06595ceaec63de646fb)))
