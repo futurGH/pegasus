@@ -17,26 +17,32 @@ let encode_query params =
   String.concat "&"
     (List.map (fun (k, v) -> k ^ "=" ^ percent_encode_query_value v) params)
 
-let oauth_redirect req redirect_uri response_mode params =
+let oauth_redirect_url redirect_uri response_mode params =
   let uri = Uri.of_string redirect_uri in
   let encoded_params = encode_query params in
-  let url =
-    match response_mode with
-    | Some "fragment" ->
-        Uri.with_fragment uri (Some encoded_params) |> Uri.to_string
-    | _ -> (
-        let base_uri = Uri.with_fragment uri None in
-        let sep =
-          match Uri.verbatim_query base_uri with Some _ -> "&" | None -> "?"
-        in
-        let base = Uri.to_string base_uri ^ sep ^ encoded_params in
-        match Uri.fragment uri with
-        | None ->
-            base
-        | Some fragment ->
-            base ^ "#" ^ fragment )
-  in
-  Dream.redirect ~headers:[("Cache-Control", "no-store")] req url
+  match response_mode with
+  | Some "fragment" ->
+      (* Uri.with_fragment treats its fragment argument as unencoded
+         so we instead use it to strip the fragment and concat ours manually *)
+      Uri.with_fragment uri None |> Uri.to_string
+      |> fun base -> base ^ "#" ^ encoded_params
+  | _ -> (
+      let base_uri = Uri.with_fragment uri None in
+      let sep =
+        match Uri.verbatim_query base_uri with Some _ -> "&" | None -> "?"
+      in
+      let base = Uri.to_string base_uri ^ sep ^ encoded_params in
+      match Uri.fragment uri with
+      | None ->
+          base
+      | Some fragment ->
+          base ^ "#" ^ fragment )
+
+let oauth_redirect req redirect_uri response_mode params =
+  Dream.redirect
+    ~headers:[("Cache-Control", "no-store")]
+    req
+    (oauth_redirect_url redirect_uri response_mode params)
 
 let get_handler =
   Xrpc.handler (fun ctx ->
