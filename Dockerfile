@@ -21,9 +21,11 @@ ENV CI=true
 
 RUN bash -c "source $NVM_DIR/nvm.sh && nvm install $NODE_VERSION && nvm alias default $NODE_VERSION && nvm use default && corepack enable pnpm"
 
-ADD . .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 RUN bash -c "source $NVM_DIR/nvm.sh && pnpm install --frozen-lockfile"
+
+COPY . .
 
 ENV DUNE_CACHE="enabled"
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
