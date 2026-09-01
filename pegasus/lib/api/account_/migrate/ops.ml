@@ -7,7 +7,7 @@ let create_account ~email ~handle ~password ~did ~service_auth_token
   let open Lwt.Infix in
   let%lwt verified =
     match%lwt
-      Jwt.verify_service_jwt ~nsid:"com.atproto.server.createAccount"
+      Jwt.verify_service_jwt ~nsid:"com.atproto.server.createAccount" ~did
         ~verify_sig:(fun _did pk ->
           Lwt.return
           @@ Jwt.verify_jwt service_auth_token
@@ -95,49 +95,97 @@ let create_account ~email ~handle ~password ~did ~service_auth_token
                 Lwt.return_ok (Kleidos.K256.pubkey_to_did_key signing_pubkey) )
         ) ) )
 
-let bytes_to_car_stream (data : bytes) : Car.stream =
- fun () -> Lwt.return (Lwt_seq.Cons (data, fun () -> Lwt.return Lwt_seq.Nil))
+let friendly_exception = function
+  | Failure message | Invalid_argument message ->
+      message
+  | exn ->
+      Printexc.to_string exn
 
-let import_repo ~did ~car_data =
+let import_repo ~did ~car_stream =
+  let started = Unix.gettimeofday () in
   try%lwt
     let%lwt repo = Repository.load ~create:true did in
-    let stream = bytes_to_car_stream car_data in
-    match%lwt Repository.import_car repo stream with
+    match%lwt Repository.import_car repo car_stream with
     | Ok _ ->
+        Log.info (fun log ->
+            log "migration %s: repository imported in %.3fs" did
+              (Unix.gettimeofday () -. started) ) ;
         Lwt.return_ok ()
     | Error e ->
-        Lwt.return_error ("Failed to import repository: " ^ Printexc.to_string e)
+        Log.err (fun log ->
+            log "migration %s: repository import failed after %.3fs: %s" did
+              (Unix.gettimeofday () -. started)
+              (Printexc.to_string e) ) ;
+        Lwt.return_error ("Failed to import repository: " ^ friendly_exception e)
   with exn ->
-    Lwt.return_error ("Failed to import repository: " ^ Printexc.to_string exn)
+    Log.err (fun log ->
+        log "migration %s: repository import raised after %.3fs: %s" did
+          (Unix.gettimeofday () -. started)
+          (Printexc.to_string exn) ) ;
+    Lwt.return_error ("Failed to import repository: " ^ friendly_exception exn)
 
 let import_blobs_batch ~did ~cids client =
   let%lwt user_db = User_store.connect ~create:true did in
-  let%lwt results =
-    Lwt_list.map_p
-      (fun cid_str ->
-        match%lwt Remote.fetch_blob ~did ~cid:cid_str client with
+  let cids = List.sort_uniq String.compare cids in
+  let pool = Lwt_pool.create 6 (fun () -> Lwt.return_unit) in
+  let fetch_one cid_str =
+    let rec attempt remaining =
+      match%lwt Remote.fetch_blob ~did ~cid:cid_str client with
+      | Error _ when remaining > 1 ->
+          let%lwt () = Lwt_unix.sleep (0.15 *. float_of_int (4 - remaining)) in
+          attempt (remaining - 1)
+      | Error e ->
+          Log.warn (fun log ->
+              log "migration %s: blob %s failed after retries: %s" did cid_str e ) ;
+          Lwt.return_error cid_str
+      | Ok (data, mimetype) -> (
+        match Cid.of_string cid_str with
         | Error e ->
             Log.warn (fun log ->
-                log "migration %s: failed to fetch blob %s: %s" did cid_str e ) ;
+                log "migration %s: source returned invalid blob CID %s: %s" did
+                  cid_str e ) ;
             Lwt.return_error cid_str
-        | Ok (data, mimetype) -> (
-          match Cid.of_string cid_str with
-          | Error _ ->
-              Lwt.return_error cid_str
-          | Ok cid ->
-              let%lwt _ = User_store.put_blob user_db cid mimetype data in
-              Lwt.return_ok cid_str ) )
-      cids
+        | Ok cid -> (
+            let actual = Cid.create cid.codec data in
+            if not (Cid.equal actual cid) then (
+              Log.warn (fun log ->
+                  log "migration %s: blob contents do not match CID %s" did
+                    cid_str ) ;
+              Lwt.return_error cid_str )
+            else
+              try%lwt
+                let%lwt storage = Blob_store.put ~did ~cid ~data in
+                Lwt.return_ok
+                  (cid, mimetype, Blob_store.storage_to_string storage)
+              with exn ->
+                Log.warn (fun log ->
+                    log "migration %s: failed to store blob %s: %s" did cid_str
+                      (Printexc.to_string exn) ) ;
+                Lwt.return_error cid_str ) )
+    in
+    Lwt_pool.use pool (fun () -> attempt 3)
   in
-  let imported =
-    List.filter (function Ok _ -> true | Error _ -> false) results
-    |> List.length
-  in
-  let failed =
-    List.filter (function Error _ -> true | Ok _ -> false) results
-    |> List.length
-  in
-  Lwt.return (imported, failed)
+  let%lwt results = Lwt_list.map_p fetch_one cids in
+  let stored = List.filter_map Result.to_option results in
+  let imported = List.length stored in
+  let failed = List.length cids - imported in
+  match%lwt
+    Lwt.catch
+      (fun () ->
+        let%lwt () = User_store.put_blobs user_db stored in
+        Lwt.return_ok () )
+      (fun exn -> Lwt.return_error exn)
+  with
+  | Ok () ->
+      Log.info (fun log ->
+          log "migration %s: blob batch complete imported=%d failed=%d" did
+            imported failed ) ;
+      Lwt.return (imported, failed)
+  | Error exn ->
+      Log.err (fun log ->
+          log "migration %s: failed to index blob batch: %s" did
+            (Printexc.to_string exn) ) ;
+      Lwt.return (0, List.length cids)
 
 let list_missing_blobs ~did ~limit ?cursor () =
   try%lwt
@@ -163,6 +211,14 @@ let check_account_status ~did =
   with exn ->
     Lwt.return_error
       ("Failed to check account status: " ^ Printexc.to_string exn)
+
+let count_missing_blobs ~did =
+  try%lwt
+    let%lwt {db= us; _} = Repository.load did in
+    let%lwt count = User_store.count_missing_blobs us in
+    Lwt.return_ok count
+  with exn ->
+    Lwt.return_error ("Failed to count missing blobs: " ^ Printexc.to_string exn)
 
 let activate_account did db =
   let%lwt () = Data_store.activate_actor did db in

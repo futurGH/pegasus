@@ -76,8 +76,15 @@ let delete_s3 ~did ~cid : unit Lwt.t =
 
 let put_local ~did ~cid ~data : unit =
   let file = local_path ~did ~cid in
-  Core_unix.mkdir_p (Filename.dirname file) ~perm:0o755 ;
-  Out_channel.with_open_bin file (fun oc -> Out_channel.output_bytes oc data)
+  let dir = Filename.dirname file in
+  Core_unix.mkdir_p dir ~perm:0o755 ;
+  let temp = Filename.temp_file ~temp_dir:dir ".blob-" ".tmp" in
+  try
+    Out_channel.with_open_bin temp (fun oc -> Out_channel.output_bytes oc data) ;
+    Unix.rename temp file
+  with exn ->
+    (try if Sys.file_exists temp then Sys.remove temp with _ -> ()) ;
+    raise exn
 
 let get_local ~did ~cid : bytes option =
   let file = local_path ~did ~cid in
@@ -95,14 +102,18 @@ let put ~did ~cid ~data : storage Lwt.t =
       let%lwt () = put_s3 ~did ~cid:(Cid.to_string cid) ~data in
       Lwt.return S3
   | _ ->
-      put_local ~did ~cid:(Cid.to_string cid) ~data ;
+      let%lwt () =
+        Lwt_preemptive.detach
+          (fun () -> put_local ~did ~cid:(Cid.to_string cid) ~data)
+          ()
+      in
       Lwt.return Local
 
 let get ~did ~cid ~storage : bytes option Lwt.t =
   let cid_str = Cid.to_string cid in
   match storage with
   | Local ->
-      Lwt.return (get_local ~did ~cid:cid_str)
+      Lwt_preemptive.detach (fun () -> get_local ~did ~cid:cid_str) ()
   | S3 ->
       get_s3 ~did ~cid:cid_str
 
@@ -110,7 +121,6 @@ let delete ~did ~cid ~storage : unit Lwt.t =
   let cid_str = Cid.to_string cid in
   match storage with
   | Local ->
-      delete_local ~did ~cid:cid_str ;
-      Lwt.return_unit
+      Lwt_preemptive.detach (fun () -> delete_local ~did ~cid:cid_str) ()
   | S3 ->
       delete_s3 ~did ~cid:cid_str

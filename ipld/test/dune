@@ -1,4 +1,6 @@
 (tests
- (names test_cid test_dag_cbor)
+ (names test_cid test_dag_cbor test_car)
  (package ipld)
- (libraries ipld str alcotest))
+ (libraries ipld lwt.unix str alcotest)
+ (preprocess
+  (pps lwt_ppx)))

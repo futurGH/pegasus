@@ -246,7 +246,11 @@ module Decoder = struct
       invalid_arg "read_uint_32: not enough bytes in buffer" ;
     let i = Bytes.get_int32_be t.buf t.pos in
     t.pos <- t.pos + 4 ;
-    i
+    (* Bytes.get_int32_be returns a signed value, but CBOR additional
+       information 26 is an unsigned 32-bit integer
+       so we mask the sign-extension so that values in [2^31, 2^32 - 1]
+       aren't decoded as negative *)
+    Int64.logand (Int64.of_int32 i) 0xffff_ffffL
 
   let read_uint_53 t =
     if t.pos + 8 > Bytes.length t.buf then
@@ -267,7 +271,7 @@ module Decoder = struct
         | 25L ->
             Int64.of_int (read_uint_16 t)
         | 26L ->
-            Int64.of_int32 (read_uint_32 t)
+            read_uint_32 t
         | 27L ->
             read_uint_53 t
         | _ ->

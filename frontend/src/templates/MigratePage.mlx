@@ -8,6 +8,7 @@ type migration_step =
   | ResumeAvailable
   | Enter2FA
   | ImportingData
+  | BlobFailures
   | EnterPlcToken
   | Complete
   | Error
@@ -21,6 +22,8 @@ let step_of_string = function
       Enter2FA
   | "importing_data" ->
       ImportingData
+  | "blob_failures" ->
+      BlobFailures
   | "enter_plc_token" ->
       EnterPlcToken
   | "complete" ->
@@ -39,6 +42,8 @@ let step_to_label = function
       "two-factor authentication"
   | ImportingData ->
       "importing data"
+  | BlobFailures ->
+      "media needs attention"
   | EnterPlcToken ->
       "confirm identity"
   | Complete ->
@@ -47,7 +52,8 @@ let step_to_label = function
       "error"
 
 let step_to_number = function
-  | EnterCredentials | ResumeAvailable | Enter2FA | ImportingData ->
+  | EnterCredentials | ResumeAvailable | Enter2FA | ImportingData
+  | BlobFailures ->
       1
   | EnterPlcToken ->
       2
@@ -137,6 +143,20 @@ module DidDisplay = struct
       (string "Account DID: ")
       <code className="bg-mist-60/50 px-1 rounded">(string did)</code>
     </p>
+end
+
+module CancelMigration = struct
+  let[@react.component] make ~csrf_token ~label () =
+    <form className="mt-4">
+      <input type_="hidden" name="dream.csrf" value=csrf_token />
+      <input type_="hidden" name="action" value="cancel_migration" />
+      <button
+        type_="submit"
+        formMethod="post"
+        className="text-sm text-mist-100 underline hover:text-mana-100">
+        (string label)
+      </button>
+    </form>
 end
 
 module CredentialsForm = struct
@@ -277,13 +297,7 @@ module ResumeForm = struct
             (string "resume migration")
           </Button>
         </form>
-        <div className="mt-4">
-          <a
-            href="/account/migrate"
-            className="text-sm text-mist-100 underline hover:text-mana-100">
-            (string "Start a new migration instead")
-          </a>
-        </div>
+        <CancelMigration csrf_token label="Start a new migration instead" />
       </div>
     </div>
 end
@@ -337,13 +351,7 @@ module TwoFactorForm = struct
             (string "continue")
           </Button>
         </form>
-        <div className="mt-4">
-          <a
-            href="/account/migrate"
-            className="text-sm text-mist-100 underline hover:text-mana-100">
-            (string "Start over")
-          </a>
-        </div>
+        <CancelMigration csrf_token label="Start over" />
       </div>
     </div>
 end
@@ -394,6 +402,43 @@ module BlobProgress = struct
         | None ->
             null )
       </form>
+    </div>
+end
+
+module BlobFailuresView = struct
+  let[@react.component] make ~csrf_token ~blobs_failed () =
+    <div>
+      <div
+        className="bg-phoenix-100/10 border border-phoenix-100/30 rounded-lg \
+                   p-4 mb-4">
+        <h2 className="font-medium text-phoenix-100 mb-2">
+          (string "Some media could not be copied")
+        </h2>
+        <p className="text-sm text-mist-100">
+          (string
+             (Printf.sprintf
+                "%d media file(s) are still missing. Your original account is \
+                 safe. You can retry now, or continue while leaving the original \
+                 account active so you can recover the media later."
+                blobs_failed ) )
+        </p>
+      </div>
+      <form className="w-full mb-3">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="continue_blobs" />
+        <Button type_="submit" formMethod="post" className="w-full">
+          (string "retry missing media")
+        </Button>
+      </form>
+      <form className="w-full">
+        <input type_="hidden" name="dream.csrf" value=csrf_token />
+        <input type_="hidden" name="action" value="continue_without_blobs" />
+        <Button
+          type_="submit" formMethod="post" kind=`Secondary className="w-full">
+          (string "continue without it")
+        </Button>
+      </form>
+      <CancelMigration csrf_token label="Cancel migration" />
     </div>
 end
 
@@ -523,7 +568,7 @@ module CompleteView = struct
 end
 
 module ErrorView = struct
-  let[@react.component] make () =
+  let[@react.component] make ~csrf_token () =
     <div>
       <p className="text-mist-100 mb-2">
         (string
@@ -536,7 +581,11 @@ module ErrorView = struct
             administrator if the problem persists.\n\n" )
       </p>
       <div className="flex gap-3">
-        <a href="/account/migrate"><Button>(string "try again")</Button></a>
+        <form>
+          <input type_="hidden" name="dream.csrf" value=csrf_token />
+          <input type_="hidden" name="action" value="cancel_migration" />
+          <Button type_="submit" formMethod="post">(string "try again")</Button>
+        </form>
         <a href="/account/login">
           <Button kind=`Secondary>(string "back to login")</Button>
         </a>
@@ -619,6 +668,8 @@ let[@react.component] make
         />
     | ImportingData ->
         <BlobProgress csrf_token did blobs_imported blobs_failed />
+    | BlobFailures ->
+        <BlobFailuresView csrf_token blobs_failed />
     | EnterPlcToken ->
         <PlcTokenForm csrf_token did />
     | Complete ->
@@ -629,5 +680,5 @@ let[@react.component] make
           old_account_deactivation_error
         />
     | Error ->
-        <ErrorView /> )
+        <ErrorView csrf_token /> )
   </main>

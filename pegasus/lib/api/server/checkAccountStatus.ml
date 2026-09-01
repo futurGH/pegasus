@@ -14,7 +14,7 @@ let get_account_status did =
     Lwt.all
       [ User_store.count_blocks us
       ; User_store.count_records us
-      ; User_store.count_blobs us
+      ; User_store.count_imported_blobs us
       ; User_store.count_referenced_blobs us ]
   with
   | [block_count; indexed_records; imported_blobs; expected_blobs] ->

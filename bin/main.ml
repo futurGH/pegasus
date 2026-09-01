@@ -280,7 +280,7 @@ let serve () =
   @@ Logs.Src.list () ;
   let%lwt db = Data_store.connect ~create:true () in
   S3.Backup.start () ;
-  Dream.serve ~interface:"0.0.0.0" ~port:8008
+  Dream.serve ~interface:"0.0.0.0" ~port:Env.port
   @@ Dream.pipeline
        [ Dream.logger
        ; Dream.set_secret (Env.jwt_key |> Kleidos.privkey_to_multikey)

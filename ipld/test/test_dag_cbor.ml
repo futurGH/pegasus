@@ -372,6 +372,20 @@ let test_invalid_numbers () =
         9007199254740991])" ) (fun () ->
       ignore (Dag_cbor.encode (`Integer (-9007199254740992L))) )
 
+let test_uint32_arguments () =
+  [ 2147483647L
+  ; 2147483648L
+  ; 4294967295L
+  ; -2147483648L
+  ; -2147483649L
+  ; -4294967296L ]
+  |> List.iter (fun value ->
+      let encoded = Dag_cbor.encode (`Integer value) in
+      let decoded = Dag_cbor.decode encoded in
+      Alcotest.(check ipld_testable)
+        ("32-bit argument roundtrip: " ^ Int64.to_string value)
+        (`Integer value) decoded )
+
 let test_decode_multiple_objects () =
   let obj1 = `Map (String_map.add "foo" (`Boolean true) String_map.empty) in
   let obj2 = `Map (String_map.add "bar" (`Boolean false) String_map.empty) in
@@ -430,5 +444,6 @@ let () =
         ; ("round_trip", `Quick, test_round_trip)
         ; ("atproto_records", `Quick, test_atproto_post_records)
         ; ("invalid_numbers", `Quick, test_invalid_numbers)
+        ; ("uint32_arguments", `Quick, test_uint32_arguments)
         ; ("decode_multiple", `Quick, test_decode_multiple_objects)
         ; ("yojson_roundtrip", `Quick, test_yojson_roundtrip) ] ) ]

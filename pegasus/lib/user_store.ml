@@ -220,12 +220,13 @@ module Queries = struct
     [%rapper
       get_many
         {sql|
-          SELECT @string{record_path}, @CID{blob_cid}
+          SELECT @string{MIN(record_path)}, @CID{blob_cid}
           FROM blobs_records
           WHERE NOT EXISTS (
             SELECT 1 FROM blobs WHERE cid = blobs_records.blob_cid
           )
           AND blob_cid > %string{cursor}
+          GROUP BY blob_cid
           ORDER BY blob_cid
           LIMIT %int{limit}
         |sql}]
@@ -236,8 +237,26 @@ module Queries = struct
   let count_referenced_blobs =
     [%rapper
       get_one
-        {sql| SELECT @int{COUNT(*)} FROM blobs WHERE cid IN (
-                SELECT blob_cid FROM blobs_records
+        {sql| SELECT @int{COUNT(DISTINCT blob_cid)} FROM blobs_records
+        |sql}]
+
+  let count_imported_blobs =
+    [%rapper
+      get_one
+        {sql| SELECT @int{COUNT(DISTINCT blob_cid)}
+              FROM blobs_records
+              WHERE EXISTS (
+                SELECT 1 FROM blobs WHERE cid = blobs_records.blob_cid
+              )
+        |sql}]
+
+  let count_missing_blobs =
+    [%rapper
+      get_one
+        {sql| SELECT @int{COUNT(DISTINCT blob_cid)}
+              FROM blobs_records
+              WHERE NOT EXISTS (
+                SELECT 1 FROM blobs WHERE cid = blobs_records.blob_cid
               )
         |sql}]
 
@@ -474,6 +493,43 @@ module Bulk = struct
                 Lwt.return_error e )
       in
       process_chunks chunks
+
+  let put_blobs (blobs : (Cid.t * string * string) list) conn =
+    if List.is_empty blobs then Lwt.return_ok ()
+    else
+      let module C = (val conn : Caqti_lwt.CONNECTION) in
+      let chunks = chunk_list 100 blobs in
+      let rec process_chunks = function
+        | [] ->
+            Lwt.return_ok ()
+        | chunk :: rest -> (
+            let values =
+              List.map
+                (fun (cid, mimetype, storage) ->
+                  Printf.sprintf "('%s', '%s', '%s')"
+                    (escape_sql_string (Cid.to_string cid))
+                    (escape_sql_string mimetype)
+                    (escape_sql_string storage) )
+                chunk
+              |> String.concat ", "
+            in
+            let sql =
+              Printf.sprintf
+                "INSERT INTO blobs (cid, mimetype, storage) VALUES %s ON \
+                 CONFLICT (cid) DO UPDATE SET mimetype = excluded.mimetype, \
+                 storage = excluded.storage"
+                values
+            in
+            let query =
+              Caqti_request.Infix.( ->. ) Caqti_type.unit Caqti_type.unit sql
+            in
+            match%lwt C.exec query () with
+            | Ok () ->
+                process_chunks rest
+            | Error e ->
+                Lwt.return_error e )
+      in
+      process_chunks chunks
 end
 
 type t = {did: string; db: Util.Sqlite.caqti_pool}
@@ -701,10 +757,20 @@ let count_blobs t : int Lwt.t =
 let count_referenced_blobs t : int Lwt.t =
   Util.Sqlite.use_pool t.db @@ Queries.count_referenced_blobs ()
 
+let count_imported_blobs t : int Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.count_imported_blobs ()
+
+let count_missing_blobs t : int Lwt.t =
+  Util.Sqlite.use_pool t.db @@ Queries.count_missing_blobs ()
+
 let put_blob t cid mimetype data : Cid.t Lwt.t =
   let%lwt storage = Blob_store.put ~did:t.did ~cid ~data in
   let storage_str = Blob_store.storage_to_string storage in
   Util.Sqlite.use_pool t.db @@ Queries.put_blob cid mimetype storage_str
+
+let put_blobs t blobs : unit Lwt.t =
+  Util.Sqlite.use_pool t.db (fun conn ->
+      Util.Sqlite.transact conn (fun () -> Bulk.put_blobs blobs conn) )
 
 let delete_blob t cid : unit Lwt.t =
   let%lwt blob_opt = get_blob_metadata t cid in

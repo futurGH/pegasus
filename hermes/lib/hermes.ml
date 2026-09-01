@@ -49,6 +49,8 @@ let procedure_blob = Client.procedure_blob
 
 let query_bytes = Client.query_bytes
 
+let query_stream = Client.query_stream
+
 let procedure_bytes = Client.procedure_bytes
 
 let session_to_yojson = Types.session_to_yojson

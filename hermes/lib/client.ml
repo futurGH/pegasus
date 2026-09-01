@@ -38,6 +38,9 @@ module type S = sig
 
   val query_bytes : t -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
 
+  val query_stream :
+    t -> string -> Yojson.Safe.t -> (Cohttp_lwt.Body.t * string) Lwt.t
+
   val procedure_bytes :
        t
     -> string
@@ -259,6 +262,47 @@ module Make (Http : Http_backend.S) : S = struct
       in
       Lwt.return (body, content_type)
     else
+      let payload =
+        try
+          let json = Yojson.Safe.from_string body_str in
+          match Types.xrpc_error_payload_of_yojson json with
+          | Ok p ->
+              p
+          | Error _ ->
+              {error= "UnknownError"; message= Some body_str}
+        with _ -> {error= "UnknownError"; message= Some body_str}
+      in
+      Types.raise_xrpc_error ~status payload
+
+  let query_stream (t : t) (nsid : string) (params : Yojson.Safe.t) :
+      (Cohttp_lwt.Body.t * string) Lwt.t =
+    let* () =
+      match t.on_request with Some f -> f t | None -> Lwt.return_unit
+    in
+    let query = params_to_query params in
+    let uri =
+      Uri.with_path t.service ("/xrpc/" ^ nsid)
+      |> fun u -> Uri.with_query u query
+    in
+    let headers = make_headers ~accept:"*/*" t in
+    let* resp, body =
+      Lwt.catch
+        (fun () -> Lwt_unix.with_timeout 120.0 (fun () -> Http.get ~headers uri))
+        (fun exn ->
+          Types.raise_xrpc_error_raw ~status:0 ~error:"NetworkError"
+            ~message:(Printexc.to_string exn) () )
+    in
+    let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
+    if status >= 200 && status < 300 then
+      let content_type =
+        Cohttp.Response.headers resp
+        |> fun h ->
+        Cohttp.Header.get h "content-type"
+        |> Option.value ~default:"application/octet-stream"
+      in
+      Lwt.return (body, content_type)
+    else
+      let* body_str = Cohttp_lwt.Body.to_string body in
       let payload =
         try
           let json = Yojson.Safe.from_string body_str in

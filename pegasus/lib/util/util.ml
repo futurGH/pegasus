@@ -9,22 +9,19 @@ module Html = Html
 module Mime_sniff = Mime_sniff
 
 (* returns all blob refs in a record *)
-let rec find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
-  let rec aux acc entries =
-    List.fold_left
-      (fun acc value ->
-        match value with
-        | `BlobRef blob ->
-            blob :: acc
-        | `LexMap map ->
-            find_blob_refs map @ acc
-        | `LexArray arr ->
-            aux acc (Array.to_list arr) @ acc
-        | _ ->
-            acc )
-      acc entries
+let find_blob_refs (record : Mist.Lex.repo_record) : Mist.Blob_ref.t list =
+  let rec visit acc (value : Mist.Lex.value) =
+    match value with
+    | `BlobRef blob ->
+        blob :: acc
+    | `LexMap map ->
+        Mist.Lex.String_map.fold (fun _ value acc -> visit acc value) map acc
+    | `LexArray values ->
+        Array.fold_left visit acc values
+    | _ ->
+        acc
   in
-  aux [] (Mist.Lex.String_map.bindings record |> List.map snd)
+  Mist.Lex.String_map.fold (fun _ value acc -> visit acc value) record []
   |> List.sort_uniq (fun (r1 : Mist.Blob_ref.t) r2 -> Cid.compare r1.ref r2.ref)
 
 let mkfile_p path ~perm =

@@ -116,6 +116,25 @@ let test_query_bytes () =
   Test_utils.assert_request_has_header "accept" "*/*" req ;
   Lwt.return_unit
 
+let test_query_stream () =
+  run_lwt
+  @@ fun () ->
+  let response =
+    Mock_http.bytes_response ~content_type:"application/vnd.ipld.car"
+      "chunked-car-data"
+  in
+  let* (body, content_type), requests =
+    Test_utils.with_mock_responses [response] (fun (module C) client ->
+        C.query_stream client "com.atproto.sync.getRepo"
+          (`Assoc [("did", `String "did:plc:123")]) )
+  in
+  let* data = Cohttp_lwt.Body.to_string body in
+  check test_string "data" "chunked-car-data" data ;
+  check test_string "content_type" "application/vnd.ipld.car" content_type ;
+  let req = List.hd requests in
+  Test_utils.assert_request_has_header "accept" "*/*" req ;
+  Lwt.return_unit
+
 (** procedure tests *)
 
 let test_procedure_success () =
@@ -346,7 +365,8 @@ let query_tests =
   ; ("query with multiple params", `Quick, test_query_with_multiple_params)
   ; ("query error response", `Quick, test_query_error_response)
   ; ("query empty response", `Quick, test_query_empty_response)
-  ; ("query bytes", `Quick, test_query_bytes) ]
+  ; ("query bytes", `Quick, test_query_bytes)
+  ; ("query stream", `Quick, test_query_stream) ]
 
 let procedure_tests =
   [ ("procedure success", `Quick, test_procedure_success)

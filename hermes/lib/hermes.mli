@@ -79,6 +79,9 @@ val procedure_blob :
 
 val query_bytes : client -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
 
+val query_stream :
+  client -> string -> Yojson.Safe.t -> (Cohttp_lwt.Body.t * string) Lwt.t
+
 val procedure_bytes :
      client
   -> string
@@ -159,6 +162,9 @@ module Client : sig
       -> 'a Lwt.t
 
     val query_bytes : t -> string -> Yojson.Safe.t -> (bytes * string) Lwt.t
+
+    val query_stream :
+      t -> string -> Yojson.Safe.t -> (Cohttp_lwt.Body.t * string) Lwt.t
 
     val procedure_bytes :
          t

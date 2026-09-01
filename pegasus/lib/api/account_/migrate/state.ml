@@ -9,7 +9,8 @@ type t =
   ; blobs_imported: int
   ; blobs_failed: int
   ; blobs_cursor: string
-  ; plc_requested: bool }
+  ; plc_requested: bool
+  ; blob_failures_blocked: bool [@default false] }
 [@@deriving yojson]
 
 let state_key = "pegasus.migration_state"
@@ -40,9 +41,17 @@ type resume_state =
   | AlreadyActive
 
 let normalize_endpoint s =
-  if String.length s > 0 && s.[String.length s - 1] = '/' then
-    String.sub s 0 (String.length s - 1)
-  else s
+  let uri = Uri.of_string s in
+  let scheme = Uri.scheme uri |> Option.map String.lowercase_ascii in
+  let host = Uri.host uri |> Option.map String.lowercase_ascii in
+  let port =
+    match (scheme, Uri.port uri) with
+    | Some "https", Some 443 | Some "http", Some 80 ->
+        None
+    | _, port ->
+        port
+  in
+  Uri.make ?scheme ?host ?port ~path:"" () |> Uri.to_string
 
 let check_identity_updated did =
   match%lwt Id_resolver.Did.resolve ~skip_cache:true did with
@@ -65,18 +74,19 @@ let check_resume_state ~did db =
   | Some actor when actor.deactivated_at = None ->
       Lwt.return_ok AlreadyActive
   | Some _actor -> (
-    match%lwt check_identity_updated did with
-    | Ok true ->
-        Lwt.return_ok NeedsActivation
-    | _ -> (
-      try%lwt
-        let%lwt us = User_store.connect ~create:false did in
-        let%lwt record_count = User_store.count_records us in
-        if record_count > 0 then
-          match%lwt User_store.count_blobs us with
-          | cnt when cnt > 0 ->
-              Lwt.return_ok NeedsPlcUpdate
+    try%lwt
+      let%lwt us = User_store.connect ~create:false did in
+      match%lwt User_store.get_commit us with
+      | None ->
+          Lwt.return_ok NeedsRepoImport
+      | Some _ -> (
+        match%lwt User_store.count_missing_blobs us with
+        | count when count > 0 ->
+            Lwt.return_ok NeedsBlobImport
+        | _ -> (
+          match%lwt check_identity_updated did with
+          | Ok true ->
+              Lwt.return_ok NeedsActivation
           | _ ->
-              Lwt.return_ok NeedsBlobImport
-        else Lwt.return_ok NeedsRepoImport
-      with _ -> Lwt.return_ok NeedsRepoImport ) )
+              Lwt.return_ok NeedsPlcUpdate ) )
+    with _ -> Lwt.return_ok NeedsRepoImport )

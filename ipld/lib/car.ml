@@ -38,19 +38,21 @@ module Varint = struct
   let decode buf =
     let l = Bytes.length buf in
     let rec aux res shift counter =
-      if counter >= l || shift > 49 then failwith "could not decode varint"
+      if counter >= l || shift >= 63 then failwith "could not decode varint"
       else
         let b = Bytes.get_uint8 buf counter in
-        let new_res =
-          if shift < 28 then res + ((b land rest) lsl shift)
-          else res + (b land rest * (1 lsl shift))
+        let payload = Int64.of_int (b land rest) in
+        let max_payload =
+          Int64.shift_right_logical (Int64.of_int max_int) shift
         in
+        if payload > max_payload then failwith "varint exceeds platform integer" ;
+        let new_res = Int64.logor res (Int64.shift_left payload shift) in
         let new_counter = counter + 1 in
         let new_shift = shift + 7 in
         if b >= msb then aux new_res new_shift new_counter
-        else (new_res, new_counter)
+        else (Int64.to_int new_res, new_counter)
     in
-    let result, final_counter = aux 0 0 0 in
+    let result, final_counter = aux 0L 0 0 in
     (result, final_counter)
 end
 
@@ -92,14 +94,8 @@ let blocks_to_car (root : Cid.t) (blocks : block_stream) : bytes Lwt.t =
    returns (roots, blocks) *)
 let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
   let open Lwt.Infix in
-  let q : bytes option Lwt_mvar.t = Lwt_mvar.create_empty () in
-  let () =
-    Lwt.async (fun () ->
-        Lwt.finalize
-          (fun () ->
-            Lwt_seq.iter_s (fun chunk -> Lwt_mvar.put q (Some chunk)) stream )
-          (fun () -> Lwt_mvar.put q None) )
-  in
+  let max_section_size = 64 * 1024 * 1024 in
+  let source = ref stream in
   let buf = ref Bytes.empty in
   let pos = ref 0 in
   let len = ref 0 in
@@ -107,15 +103,16 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
   let rec refill () =
     if !pos < !len || !eof then Lwt.return_unit
     else
-      Lwt_mvar.take q
+      !source ()
       >>= function
-      | None ->
+      | Lwt_seq.Nil ->
           eof := true ;
           buf := Bytes.empty ;
           pos := 0 ;
           len := 0 ;
           Lwt.return_unit
-      | Some chunk ->
+      | Lwt_seq.Cons (chunk, rest) ->
+          source := rest ;
           buf := chunk ;
           pos := 0 ;
           len := Bytes.length chunk ;
@@ -131,28 +128,33 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
     else Lwt.return_none
   in
   let read_exact n =
-    let out = Buffer.create n in
-    let rec loop remaining =
-      if remaining = 0 then Lwt.return (Buffer.to_bytes out)
-      else
-        refill ()
-        >>= fun () ->
-        if !pos >= !len && !eof then
-          Lwt.fail_with "unexpected end of car stream"
+    if n < 0 || n > max_section_size then
+      Lwt.fail_with
+        (Printf.sprintf "invalid CAR section size %d (maximum %d)" n
+           max_section_size )
+    else
+      let out = Bytes.create n in
+      let rec loop offset remaining =
+        if remaining = 0 then Lwt.return out
         else
-          let avail = !len - !pos in
-          let take = if avail < remaining then avail else remaining in
-          if take = 0 then loop remaining
-          else (
-            Buffer.add_bytes out (Bytes.sub !buf !pos take) ;
-            pos := !pos + take ;
-            loop (remaining - take) )
-    in
-    loop n
+          refill ()
+          >>= fun () ->
+          if !pos >= !len && !eof then
+            Lwt.fail_with "unexpected end of car stream"
+          else
+            let avail = !len - !pos in
+            let take = if avail < remaining then avail else remaining in
+            if take = 0 then loop offset remaining
+            else (
+              Bytes.blit !buf !pos out offset take ;
+              pos := !pos + take ;
+              loop (offset + take) (remaining - take) )
+      in
+      loop 0 n
   in
   let read_varint_stream () =
     let rec aux res shift =
-      if shift > 49 then Lwt.fail_with "could not decode varint"
+      if shift >= 63 then Lwt.fail_with "could not decode varint"
       else
         read_byte ()
         >>= function
@@ -160,14 +162,24 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
             if shift = 0 then Lwt.return_none
             else Lwt.fail_with "could not decode varint"
         | Some b ->
-            let v =
-              if shift < 28 then res + ((b land Varint.rest) lsl shift)
-              else res + (b land Varint.rest * (1 lsl shift))
+            let payload = Int64.of_int (b land Varint.rest) in
+            let max_payload =
+              Int64.shift_right_logical (Int64.of_int max_int) shift
             in
-            if b land Varint.msb <> 0 then aux v (shift + 7)
-            else Lwt.return_some v
+            if payload > max_payload then
+              Lwt.fail_with "CAR varint exceeds platform integer"
+            else
+              let v = Int64.logor res (Int64.shift_left payload shift) in
+              if b land Varint.msb <> 0 then aux v (shift + 7)
+              else
+                let n = Int64.to_int v in
+                if n > max_section_size then
+                  Lwt.fail_with
+                    (Printf.sprintf "CAR section exceeds %d bytes"
+                       max_section_size )
+                else Lwt.return_some n
     in
-    aux 0 0
+    aux 0L 0
   in
   let%lwt header_size_opt = read_varint_stream () in
   let header_size =
@@ -182,26 +194,35 @@ let read_car_stream (stream : stream) : (Cid.t list * block_stream) Lwt.t =
   let roots =
     match header with
     | `Map m -> (
+        let version =
+          try Some (Dag_cbor.String_map.find "version" m)
+          with Not_found -> None
+        in
+        if version <> Some (`Integer 1L) then
+          failwith "CAR header must declare version 1" ;
         let roots_v =
           try Some (Dag_cbor.String_map.find "roots" m) with Not_found -> None
         in
         match roots_v with
         | Some (`Array arr) ->
-            Array.fold_right
-              (fun v acc -> match v with `Link cid -> cid :: acc | _ -> acc)
-              arr []
+            Array.to_list arr
+            |> List.map (function
+              | `Link cid ->
+                  cid
+              | _ ->
+                  failwith "CAR header contains a non-CID root" )
         | _ ->
-            [] )
+            failwith "CAR header is missing roots" )
     | _ ->
-        []
+        failwith "CAR header must be a map"
   in
-  let rec next () =
+  let next () =
     read_varint_stream ()
     >>= function
     | None ->
         Lwt.return_none
     | Some block_size ->
-        if block_size <= 0 then next ()
+        if block_size <= 0 then Lwt.fail_with "CAR block section is empty"
         else
           read_exact block_size
           >>= fun block_bytes ->

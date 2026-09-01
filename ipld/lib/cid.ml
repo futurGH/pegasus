@@ -55,6 +55,8 @@ let create_empty codec =
   ; bytes }
 
 let decode_first bytes =
+  if Bytes.length bytes < 4 then
+    failwith (Printf.sprintf "CID too short %d" (Bytes.length bytes)) ;
   let version = Char.code (Bytes.get bytes 0) in
   let codec = Char.code (Bytes.get bytes 1) in
   let digest_codec = Char.code (Bytes.get bytes 2) in

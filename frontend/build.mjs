@@ -8,6 +8,7 @@ async function build(entryPoints, { env, output }) {
 	const splitting = true;
 
 	const isDev = env === "dev";
+	const nodeEnv = isDev ? "development" : "production";
 
 	try {
 		const result = await viteBuild({
@@ -30,8 +31,8 @@ async function build(entryPoints, { env, output }) {
 			},
 			logLevel: "info",
 			define: {
-				"process.env.NODE_ENV": `"${env}"`,
-				__DEV__: `"${isDev}"`,
+				"process.env.NODE_ENV": `"${nodeEnv}"`,
+				__DEV__: JSON.stringify(isDev),
 			},
 		});
 

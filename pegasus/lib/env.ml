@@ -26,6 +26,8 @@ let hostname = getenv "PDS_HOSTNAME"
 
 let host_endpoint = "https://" ^ hostname
 
+let port = getenv_opt "PDS_PORT" ~default:"8008" |> int_of_string
+
 let did = getenv_opt "PDS_DID" ~default:("did:web:" ^ hostname)
 
 let invite_required =
@@ -141,15 +143,22 @@ let s3_config =
         ~default:(string_of_float default_backup_interval)
       |> float_of_string
     in
-    let endpoint = Sys.getenv_opt "PDS_S3_ENDPOINT" in
+    let nonempty name =
+      match Sys.getenv_opt name with
+      | Some value when value <> "" ->
+          Some value
+      | _ ->
+          None
+    in
+    let endpoint = nonempty "PDS_S3_ENDPOINT" in
     match (blobs_enabled, backups_enabled) with
     | true, _ | _, true -> (
       match
-        ( Sys.getenv_opt "PDS_S3_REGION"
-        , Sys.getenv_opt "PDS_S3_BUCKET"
-        , Sys.getenv_opt "PDS_S3_ACCESS_KEY"
-        , Sys.getenv_opt "PDS_S3_SECRET_KEY"
-        , Sys.getenv_opt "PDS_S3_CDN_URL" )
+        ( nonempty "PDS_S3_REGION"
+        , nonempty "PDS_S3_BUCKET"
+        , nonempty "PDS_S3_ACCESS_KEY"
+        , nonempty "PDS_S3_SECRET_KEY"
+        , nonempty "PDS_S3_CDN_URL" )
       with
       | Some region, Some bucket, Some access_key, Some secret_key, cdn_url ->
           let region_obj =

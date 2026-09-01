@@ -169,6 +169,21 @@ let sign_commit t commit : signed_commit =
   ; prev= commit.prev
   ; signature }
 
+let commit_signing_bytes (commit : signed_commit) =
+  let unsigned_commit : commit =
+    { did= commit.did
+    ; version= commit.version
+    ; data= commit.data
+    ; rev= commit.rev
+    ; prev= commit.prev }
+  in
+  unsigned_commit |> commit_to_yojson |> Dag_cbor.encode_yojson
+
+let verify_commit_signature ~public_key commit =
+  Kleidos.verify ~pubkey:public_key
+    ~msg:(commit_signing_bytes commit)
+    ~signature:commit.signature
+
 let put_commit t ?(previous : signed_commit option = None) mst_root :
     (Cid.t * signed_commit) Lwt.t =
   let tid_now = Tid.now () in
@@ -507,12 +522,21 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
   try%lwt
     let%lwt roots, blocks_seq = Car.read_car_stream stream in
     let root =
-      match roots with [root] -> root | _ -> failwith "invalid number of roots"
+      match roots with
+      | [root] ->
+          root
+      | _ ->
+          failwith "invalid number of roots"
     in
     (* collect all blocks into a map *)
+    let blocks_seen = ref 0 in
     let%lwt all_blocks =
       Lwt_seq.fold_left_s
         (fun acc (cid, block) ->
+          incr blocks_seen ;
+          let%lwt () =
+            if !blocks_seen mod 256 = 0 then Lwt.pause () else Lwt.return_unit
+          in
           let ({codec; _} : Cid.t) = cid in
           let actual = Cid.create codec block in
           if not (Cid.equal actual cid) then
@@ -538,13 +562,40 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
           failwith ("invalid commit: " ^ e)
     in
     if commit.did <> t.did then failwith "did does not match commit did" ;
+    if commit.version <> 3 then failwith "unsupported repository commit version" ;
+    (* A CAR can be internally hash-consistent while still being forged. Verify
+       the signed root commit against the account's current atproto key before
+       any imported data is committed to local storage. *)
+    let%lwt did_doc =
+      match%lwt Id_resolver.Did.resolve ~skip_cache:true commit.did with
+      | Ok doc ->
+          Lwt.return doc
+      | Error e ->
+          Lwt.fail_with ("could not resolve commit signer: " ^ e)
+    in
+    let public_key =
+      match
+        Id_resolver.Did.Document.get_verification_key did_doc "#atproto"
+      with
+      | Some key ->
+          Kleidos.parse_multikey_str key
+      | None ->
+          failwith "DID document is missing the atproto signing key"
+    in
+    if not (verify_commit_signature ~public_key commit) then
+      failwith "repository commit signature is invalid" ;
     let mst_blocks, leaves =
       Mist.Mst.blocks_and_leaves_from_blocks ~strict:true all_blocks commit.data
     in
     (* collect record data for insert *)
-    let record_data, blob_refs =
-      List.fold_left
+    let records_seen = ref 0 in
+    let%lwt record_data, blob_refs =
+      Lwt_list.fold_left_s
         (fun (acc_data, acc_refs) (path, cid) ->
+          incr records_seen ;
+          let%lwt () =
+            if !records_seen mod 256 = 0 then Lwt.pause () else Lwt.return_unit
+          in
           match Block_map.get cid all_blocks with
           | Some data ->
               let since = Tid.now () in
@@ -553,8 +604,9 @@ let import_car t (stream : Car.stream) : (t, exn) Lwt_result.t =
                 Util.find_blob_refs record
                 |> List.map (fun (br : Mist.Blob_ref.t) -> (path, br.ref))
               in
-              ( (path, cid, data, since) :: acc_data
-              , List.rev_append record_refs acc_refs )
+              Lwt.return
+                ( (path, cid, data, since) :: acc_data
+                , List.rev_append record_refs acc_refs )
           | None ->
               failwith ("missing record block: " ^ Cid.to_string cid) )
         ([], []) leaves
