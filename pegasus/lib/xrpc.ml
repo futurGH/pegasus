@@ -250,7 +250,14 @@ let nsid_regex =
     {|^[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+\.[a-zA-Z][a-zA-Z0-9]{0,62}?$|}
   |> Re.compile
 
-let service_proxy ?lxm ?aud (ctx : context) =
+type service_proxy_target =
+  { did: string
+  ; service_did: string
+  ; fragment: string
+  ; token_aud: string
+  ; token_lxm: string }
+
+let prepare_service_proxy ?lxm ?aud (ctx : context) =
   let did = Auth.get_authed_did_exn ctx.auth in
   let nsid = (Dream.path [@warning "-3"]) ctx.req |> List.rev |> List.hd in
   if Re.exec_opt nsid_regex nsid = None then
@@ -263,10 +270,23 @@ let service_proxy ?lxm ?aud (ctx : context) =
         Errors.invalid_request "invalid proxy header"
   in
   let fragment = "#" ^ service_type in
-  let aud = Option.value aud ~default:service_did in
-  let lxm = Option.value lxm ~default:nsid in
-  let rpc_aud = aud ^ fragment in
-  Auth.assert_rpc_scope ctx.auth ~aud:rpc_aud ~lxm ;
+  let token_lxm = Option.value lxm ~default:nsid in
+  (* Both RPC permissions belong to the proxy destination. The delegated
+     credential may have a different audience, as with custom feeds. *)
+  let rpc_aud = service_did ^ fragment in
+  Auth.assert_rpc_scope ctx.auth ~aud:rpc_aud ~lxm:nsid ;
+  if token_lxm <> nsid then
+    Auth.assert_rpc_scope ctx.auth ~aud:rpc_aud ~lxm:token_lxm ;
+  { did
+  ; service_did
+  ; fragment
+  ; token_aud= Option.value aud ~default:service_did
+  ; token_lxm }
+
+let service_proxy ?lxm ?aud (ctx : context) =
+  let {did; service_did; fragment; token_aud; token_lxm} =
+    prepare_service_proxy ?lxm ?aud ctx
+  in
   match%lwt Id_resolver.Did.resolve service_did with
   | Ok did_doc ->
       let scheme, host =
@@ -291,7 +311,9 @@ let service_proxy ?lxm ?aud (ctx : context) =
             Errors.internal_error ~msg:"user not found" ()
       in
       let signing_key = Kleidos.parse_multikey_str signing_multikey in
-      let jwt = Jwt.generate_service_jwt ~did ~aud ~lxm ~signing_key in
+      let jwt =
+        Jwt.generate_service_jwt ~did ~aud:token_aud ~lxm:token_lxm ~signing_key
+      in
       let path, _ = Dream.split_target (Dream.target ctx.req) in
       let query = Util.Http.copy_query ctx.req in
       let uri = Uri.make ~scheme ~host ~path ~query () in

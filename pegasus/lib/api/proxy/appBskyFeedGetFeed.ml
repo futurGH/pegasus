@@ -22,31 +22,32 @@ let handler =
               | None ->
                   Errors.invalid_request "feed publisher has no PDS endpoint"
             in
-            try%lwt
-              let client = Hermes.make_client ~service:pds_host () in
-              let%lwt {value= record; _} =
-                Lexicons.([%xrpc get "com.atproto.repo.getRecord"])
-                  ~repo ~collection ~rkey client
-              in
-              let feed_generator_did =
-                Yojson.Safe.Util.(record |> member "did" |> to_string_option)
-              in
-              match feed_generator_did with
+            let%lwt record =
+              try%lwt
+                let client = Hermes.make_client ~service:pds_host () in
+                let%lwt {value; _} =
+                  Lexicons.([%xrpc get "com.atproto.repo.getRecord"])
+                    ~repo ~collection ~rkey client
+                in
+                Lwt.return value
+              with e ->
+                Log.err (fun log ->
+                    log "failed to fetch feed generator record: %s"
+                      (Printexc.to_string e) ) ;
+                Errors.internal_error
+                  ~msg:"failed to fetch feed generator record" ()
+            in
+            let feed_generator_did =
+              Yojson.Safe.Util.(record |> member "did" |> to_string_option)
+            in
+            match feed_generator_did with
+            | None ->
+                Errors.invalid_request
+                  "feed generator record missing 'did' field"
+            | Some fg_did -> (
+              match Dream.header ctx.req "atproto-proxy" with
+              | Some _ ->
+                  Xrpc.service_proxy ctx ~aud:fg_did
+                    ~lxm:"app.bsky.feed.getFeedSkeleton"
               | None ->
-                  Errors.invalid_request
-                    "feed generator record missing 'did' field"
-              | Some fg_did -> (
-                match Dream.header ctx.req "atproto-proxy" with
-                | Some appview ->
-                    Auth.assert_rpc_scope ctx.auth ~lxm:"app.bsky.feed.getFeed"
-                      ~aud:appview ;
-                    Xrpc.service_proxy ctx ~aud:fg_did
-                      ~lxm:"app.bsky.feed.getFeedSkeleton"
-                | None ->
-                    Errors.invalid_request "missing proxy header" )
-            with e ->
-              Log.err (fun log ->
-                  log "failed to fetch feed generator record: %s"
-                    (Printexc.to_string e) ) ;
-              Errors.internal_error ~msg:"failed to fetch feed generator record"
-                () ) ) )
+                  Errors.invalid_request "missing proxy header" ) ) ) )
