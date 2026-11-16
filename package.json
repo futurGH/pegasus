@@ -1,6 +1,7 @@
 {
 	"name": "pegasus",
 	"version": "1.0.0",
+	"packageManager": "pnpm@10.34.9",
 	"description": "",
 	"main": "index.js",
 	"scripts": {

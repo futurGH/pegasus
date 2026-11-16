@@ -76,7 +76,8 @@ type oauth_code =
 [@@deriving yojson {strict= false}]
 
 type oauth_token =
-  { refresh_token: string
+  { session_id: string
+  ; refresh_token: string
   ; client_id: string
   ; did: string
   ; dpop_jkt: string

@@ -74,10 +74,10 @@ let post_handler =
                               let%lwt expanded = Scopes.expand_scopes parsed in
                               Lwt.return (Scopes.scopes_to_string expanded)
                             in
+                            let session_id = Oauth_token.next_token_id "ses-" in
                             let access_token, refresh_token =
-                              Oauth_token.generate_tokens ~did
-                                ~scope:expanded_scopes ~jkt:proof.jkt
-                                ~now:now_sec ()
+                              Oauth_token.generate_tokens ~did ~session_id
+                                ~jkt:proof.jkt ~now:now_sec ()
                             in
                             let auth_ip =
                               Option.value code_rec.authorized_ip ~default:ip
@@ -91,7 +91,8 @@ let post_handler =
                             in
                             let%lwt () =
                               Queries.insert_oauth_token ctx.db
-                                { refresh_token= refresh_token.token
+                                { session_id
+                                ; refresh_token= refresh_token.token
                                 ; client_id= req.client_id
                                 ; did
                                 ; dpop_jkt= proof.jkt
@@ -150,7 +151,8 @@ let post_handler =
                     else
                       let access_token, new_refresh =
                         Oauth_token.generate_tokens ~did:session.did
-                          ~scope:session.scope ~jkt:proof.jkt ~now:now_sec ()
+                          ~session_id:session.session_id ~jkt:proof.jkt
+                          ~now:now_sec ()
                       in
                       let%lwt () =
                         Queries.update_oauth_token ctx.db

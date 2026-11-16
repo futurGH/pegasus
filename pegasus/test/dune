@@ -4,8 +4,16 @@
   test_scopes
   test_record_validator
   test_oauth_redirect
-  test_migration_util)
+  test_migration_util
+  test_oauth_sessions)
  (package pegasus)
  (libraries ipld pegasus lwt lwt.unix lwt_ppx alcotest str)
  (preprocess
-  (pps lwt_ppx)))
+  (pps lwt_ppx))
+ (action
+  (setenv PDS_HOSTNAME oauth-test.invalid
+   (setenv PDS_ADMIN_PASSWORD test-only
+    (setenv PDS_ROTATION_KEY_MULTIBASE z3vLgZEjxuPfHA7vrBSwGFprfpW9Rwam5j5fH6swEPkcikNv
+     (setenv PDS_JWK_MULTIBASE z3vLgZEjxuPfHA7vrBSwGFprfpW9Rwam5j5fH6swEPkcikNv
+      (setenv PDS_DPOP_NONCE_SECRET AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+       (run %{test}))))))))

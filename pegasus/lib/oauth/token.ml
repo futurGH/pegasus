@@ -17,7 +17,8 @@ let refresh_expires_in_s = Constants.refresh_token_expiry_ms / 1000
 let session_expires_at_ms created_at_ms =
   created_at_ms + Constants.session_expiry_ms
 
-let generate_access ?(now = Util.Time.now_s ()) ?token_id ~did ~scope ~jkt () =
+let generate_access ?(now = Util.Time.now_s ()) ?token_id ~did ~session_id ~jkt
+    () =
   let token_id = Option.value token_id ~default:(next_token_id "tok-") in
   let exp = now + access_expires_in_s in
   let claims =
@@ -26,7 +27,7 @@ let generate_access ?(now = Util.Time.now_s ()) ?token_id ~did ~scope ~jkt () =
       ; ("sub", `String did)
       ; ("iat", `Int now)
       ; ("exp", `Int exp)
-      ; ("scope", `String scope)
+      ; ("sid", `String session_id)
       ; ("aud", `String Env.host_endpoint)
       ; ("cnf", `Assoc [("jkt", `String jkt)]) ]
   in
@@ -51,8 +52,9 @@ let generate_refresh ?(now = Util.Time.now_s ()) ?token_id ~did () =
   ; token_id
   ; expires_at= exp * 1000 }
 
-let generate_tokens ?(now = Util.Time.now_s ()) ?token_id ~did ~scope ~jkt () =
-  ( generate_access ~now ?token_id ~did ~scope ~jkt ()
+let generate_tokens ?(now = Util.Time.now_s ()) ?token_id ~did ~session_id ~jkt
+    () =
+  ( generate_access ~now ?token_id ~did ~session_id ~jkt ()
   , generate_refresh ~now ?token_id ~did () )
 
 let verify_refresh_token ?(now = Util.Time.now_s ()) token =

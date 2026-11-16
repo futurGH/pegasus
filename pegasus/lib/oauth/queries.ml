@@ -87,8 +87,8 @@ let insert_oauth_token conn token =
   @@ [%rapper
        execute
          {sql|
-         INSERT INTO oauth_tokens (refresh_token, client_id, did, dpop_jkt, scope, created_at, last_refreshed_at, session_expires_at, expires_at, last_ip, last_user_agent)
-         VALUES (%string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{created_at}, %int{last_refreshed_at}, %int{session_expires_at}, %int{expires_at}, %string{last_ip}, %string?{last_user_agent})
+         INSERT INTO oauth_tokens (session_id, refresh_token, client_id, did, dpop_jkt, scope, created_at, last_refreshed_at, session_expires_at, expires_at, last_ip, last_user_agent)
+         VALUES (%string{session_id}, %string{refresh_token}, %string{client_id}, %string{did}, %string{dpop_jkt}, %string{scope}, %int{created_at}, %int{last_refreshed_at}, %int{session_expires_at}, %int{expires_at}, %string{last_ip}, %string?{last_user_agent})
       |sql}
          record_in]
        token
@@ -98,7 +98,7 @@ let get_oauth_token_by_refresh conn refresh_token =
   @@ [%rapper
        get_opt
          {sql|
-        SELECT @string{refresh_token}, @string{client_id}, @string{did},
+        SELECT @string{session_id}, @string{refresh_token}, @string{client_id}, @string{did},
                @string{dpop_jkt}, @string{scope}, @int{created_at},
                @int{last_refreshed_at}, @int{session_expires_at}, @int{expires_at},
                @string{last_ip}, @string?{last_user_agent}
@@ -107,6 +107,18 @@ let get_oauth_token_by_refresh conn refresh_token =
       |sql}
          record_out]
        ~refresh_token
+
+let get_oauth_token_by_session conn ~session_id ~did ~dpop_jkt =
+  Util.Sqlite.use_pool conn
+  @@ [%rapper
+       get_opt
+         {sql|
+        SELECT @string{scope}, @int{session_expires_at}
+        FROM oauth_tokens
+        WHERE session_id = %string{session_id}
+          AND did = %string{did} AND dpop_jkt = %string{dpop_jkt}
+      |sql}]
+       ~session_id ~did ~dpop_jkt
 
 let update_oauth_token conn ~old_refresh_token ~new_refresh_token ~expires_at =
   let now_ms = Util.Time.now_ms () in
@@ -136,7 +148,7 @@ let get_oauth_tokens_by_did conn did =
   @@ [%rapper
        get_many
          {sql|
-        SELECT @string{refresh_token}, @string{client_id}, @string{did},
+        SELECT @string{session_id}, @string{refresh_token}, @string{client_id}, @string{did},
                 @string{dpop_jkt}, @string{scope}, @int{created_at},
                @int{last_refreshed_at}, @int{session_expires_at}, @int{expires_at},
                @string{last_ip}, @string?{last_user_agent}

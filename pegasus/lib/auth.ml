@@ -265,6 +265,27 @@ module Verifiers = struct
     | Ok proof ->
         Lwt.return_ok (DPoP {proof})
 
+  let oauth_scope db claims ~did ~jkt ~now =
+    let open Yojson.Safe.Util in
+    match claims |> member "sid" with
+    | `Null ->
+        (* access tokens issued before session ids expire normally
+           refreshing an existing session upgrades it to the compact token format *)
+        Lwt.return_ok
+          ( claims |> member "scope" |> to_string_option
+          |> Option.value ~default:"" )
+    | `String session_id when session_id <> "" -> (
+      match%lwt
+        Oauth.Queries.get_oauth_token_by_session db ~session_id ~did
+          ~dpop_jkt:jkt
+      with
+      | Some (scope, session_expires_at) when now * 1000 < session_expires_at ->
+          Lwt.return_ok scope
+      | _ ->
+          Lwt.return_error (Errors.DpopResourceError "invalid_token") )
+    | _ ->
+        Lwt.return_error (Errors.DpopResourceError "invalid_token")
+
   let oauth : verifier =
    fun {req; db} ->
     match parse_dpop req with
@@ -297,42 +318,47 @@ module Verifiers = struct
               let jkt_claim =
                 claims |> member "cnf" |> member "jkt" |> to_string
               in
-              let scope_str =
-                claims |> member "scope" |> to_string_option
-                |> Option.value ~default:""
-              in
-              let scopes = Oauth.Scopes.of_string scope_str in
               let now = int_of_float (Unix.gettimeofday ()) in
               if jkt_claim <> proof.jkt then
                 Lwt.return_error @@ Errors.invalid_request "dpop key mismatch"
-              else if exp < now then
+              else if exp <= now then
                 Lwt.return_error
                 @@ Errors.invalid_request ~name:"ExpiredToken" "token expired"
               else if Oauth.Dpop.is_token_revoked ~did ~iat then
                 Lwt.return_error @@ Errors.dpop_resource "invalid_token"
-              else if not (Oauth.Scopes.has_atproto scopes) then
-                Lwt.return_error
-                @@ Errors.invalid_request ~name:"InvalidToken"
-                     "oauth token missing 'atproto' scope"
               else
-                let%lwt session =
-                  try%lwt
-                    let%lwt sess = get_session_info did db in
-                    Lwt.return_ok sess
-                  with _ ->
-                    Lwt.return_error
-                    @@ Errors.internal_error ~msg:"invalid credentials" ()
+                let%lwt scope =
+                  oauth_scope db claims ~did ~jkt:proof.jkt ~now
                 in
-                match session with
-                | Ok {active= Some true; _} ->
-                    Lwt.return_ok (OAuth {did; proof; scopes})
-                | Ok _ ->
-                    Lwt.return_error
-                    @@ Errors.invalid_request ~name:"AccountDeactivated"
-                         "account is deactivated"
-                | Error _ ->
-                    Lwt.return_error
-                    @@ Errors.internal_error ~msg:"invalid credentials" ()
+                match scope with
+                | Error e ->
+                    Lwt.return_error e
+                | Ok scope -> (
+                    let scopes = Oauth.Scopes.of_string scope in
+                    if not (Oauth.Scopes.has_atproto scopes) then
+                      Lwt.return_error
+                      @@ Errors.invalid_request ~name:"InvalidToken"
+                           "oauth token missing 'atproto' scope"
+                    else
+                      let%lwt session =
+                        try%lwt
+                          let%lwt sess = get_session_info did db in
+                          Lwt.return_ok sess
+                        with _ ->
+                          Lwt.return_error
+                          @@ Errors.internal_error ~msg:"invalid credentials" ()
+                      in
+                      match session with
+                      | Ok {active= Some true; _} ->
+                          Lwt.return_ok (OAuth {did; proof; scopes})
+                      | Ok _ ->
+                          Lwt.return_error
+                          @@ Errors.invalid_request ~name:"AccountDeactivated"
+                               "account is deactivated"
+                      | Error _ ->
+                          Lwt.return_error
+                          @@ Errors.internal_error ~msg:"invalid credentials" ()
+                    )
             with _ ->
               Lwt.return_error @@ Errors.auth_required "malformed JWT claims" )
         ) )
