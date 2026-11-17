@@ -6,7 +6,8 @@ module Defaults = struct
   let refresh_token_exp = 60 * 60 * 24 * 7 (* 7 days *)
 end
 
-type service_jwt = {iss: string; aud: string; lxm: string; exp: int}
+type service_jwt =
+  {iss: string; aud: string; lxm: string; iat: int; exp: int; jti: string}
 [@@deriving yojson]
 
 type symmetric_jwt =
@@ -118,7 +119,12 @@ let generate_jwt did =
 let generate_service_jwt ~did ~aud ~lxm ~signing_key =
   let now_s = int_of_float (Unix.gettimeofday ()) in
   let exp = now_s + Defaults.service_token_exp in
-  let payload = service_jwt_to_yojson {iss= did; aud; lxm; exp} in
+  let jti =
+    Uuidm.v4_gen (Random.State.make_self_init ()) () |> Uuidm.to_string
+  in
+  let payload =
+    service_jwt_to_yojson {iss= did; aud; lxm; iat= now_s; exp; jti}
+  in
   sign_jwt payload ~signing_key
 
 type verify_jwt_error =
