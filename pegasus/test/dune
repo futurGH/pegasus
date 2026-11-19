@@ -4,6 +4,7 @@
   test_scopes
   test_record_validator
   test_oauth_redirect
+  test_oauth_client
   test_migration_util
   test_oauth_sessions)
  (package pegasus)

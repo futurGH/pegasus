@@ -34,6 +34,15 @@ let test_query_response () =
     "https://client.example/callback?existing=1&iss=https%3A%2F%2Fpegasuspds.com&state=state%20with%20spaces&code=cod-123#registered-fragment"
     actual
 
+let test_private_use_scheme_response () =
+  let actual =
+    Pegasus.Api.Oauth_.Authorize.oauth_redirect_url
+      "com.example.parfait:/oauth/callback" None params
+  in
+  check string "a native app's scheme keeps its single slash"
+    "com.example.parfait:/oauth/callback?iss=https%3A%2F%2Fpegasuspds.com&state=state%20with%20spaces&code=cod-123"
+    actual
+
 let () =
   run "oauth redirect"
     [ ( "response modes"
@@ -41,4 +50,7 @@ let () =
         ; ( "fragment replaces registered fragment"
           , `Quick
           , test_fragment_replaces_registered_fragment )
-        ; ("query", `Quick, test_query_response) ] ) ]
+        ; ("query", `Quick, test_query_response)
+        ; ( "query to a private-use scheme"
+          , `Quick
+          , test_private_use_scheme_response ) ] ) ]
